@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -9,12 +10,23 @@ import 'package:webview_flutter_android/webview_flutter_android.dart';
 import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
 import '../guard/guard_models.dart';
 import '../guard/safe_search_policy.dart';
+import 'reader_article.dart';
+export 'reader_article.dart' show ReaderArticle;
 
 const _nativeChannel = MethodChannel('wingman/browser');
 typedef BrowserGuardRequest = GuardRequest;
 
 /// App-only channel for OS integration. No website JavaScript channel is installed.
 class NativeBrowserService {
+  /// Native protection covers all routes; false cannot weaken that baseline.
+  Future<void> setSensitiveContent(bool sensitive) async {
+    if (!kIsWeb) {
+      await _nativeChannel.invokeMethod<void>('setSensitiveContent', {
+        'sensitive': sensitive,
+      });
+    }
+  }
+
   Future<void> initialize({
     required void Function(Uri) onIncomingUri,
     void Function(String)? onMessage,
@@ -182,6 +194,11 @@ class BrowserEnginePool extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> _queue = Future<void>.value();
   String? _activeId;
   bool _disposed = false;
+  int _pageScale = 100;
+  Future<void>? _pendingSiteDataClear;
+  bool get isClearingSiteData => _pendingSiteDataClear != null;
+  bool get supportsReader =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
   static const maxLiveEngines = 3;
   List<String> get liveTabIds => List.unmodifiable(_entries.keys);
   int get liveEngineCount => _entries.length;
@@ -190,6 +207,61 @@ class BrowserEnginePool extends ChangeNotifier with WidgetsBindingObserver {
       _entries[tabId]?.status ??
       BrowserPageStatus();
   Widget? view(String tabId) => _entries[tabId]?.widget;
+
+  Future<void> setPageScale(int percentage) async {
+    _pageScale = percentage.clamp(75, 200);
+    for (final entry in _entries.values.toList()) {
+      if (!entry.closed && !entry.crashed) {
+        await _native('pageScale', entry, {'percentage': _pageScale});
+      }
+    }
+  }
+
+  /// User-triggered, local extraction from the current rendered main document.
+  /// Unavailable for forms, hidden articles, unsupported layouts or stale tabs.
+  Future<ReaderArticle?> readArticle(String tabId) async {
+    // The installed Android binding cannot evaluate in an isolated world;
+    // website-overridable helpers are not a safe extraction fallback.
+    if (!supportsReader) return null;
+    final entry = _entries[tabId];
+    if (entry == null || !_canPrompt(entry) || entry.status.isLoading) {
+      return null;
+    }
+    final request = _requests[tabId];
+    final url = entry.status.url;
+    try {
+      Object? value = await _nativeChannel
+          .invokeMethod<Object?>('readArticle', {
+            'id': entry.nativeId,
+            'script': readerExtractionScript,
+          })
+          .timeout(const Duration(seconds: 5));
+      // Platform bindings differ in whether a JavaScript string is unquoted.
+      for (var i = 0; i < 2 && value is String; i++) {
+        value = jsonDecode(value);
+      }
+      final current = await entry.controller.currentUrl();
+      if (!_canPrompt(entry) ||
+          _requests[tabId] != request ||
+          entry.status.url != url ||
+          current != url ||
+          value is! Map ||
+          value['url'] != url ||
+          value['text'] is! String) {
+        return null;
+      }
+      final text = value['text'] as String;
+      if (text.length < 120 || text.length > 60000) return null;
+      final title = entry.status.title;
+      return ReaderArticle(
+        title: title.length > 300 ? title.substring(0, 300) : title,
+        text: text,
+        sourceUrl: url,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
 
   int _beginRequest(String tabId, {bool pending = false}) {
     final request = ++_nextRequest;
@@ -379,6 +451,7 @@ class BrowserEnginePool extends ChangeNotifier with WidgetsBindingObserver {
     final url = event['url'] as String? ?? '';
     if (entry.closed ||
         entry.crashed ||
+        event['request'] != _requests[entry.id] ||
         _pendingPublicRequests.containsKey(entry.id) ||
         !_isWebUri(Uri.tryParse(url))) {
       return;
@@ -459,6 +532,12 @@ class BrowserEnginePool extends ChangeNotifier with WidgetsBindingObserver {
   }) async {
     request ??= _requests[tabId] ??= ++_nextRequest;
     if (_disposed || kIsWeb || _requests[tabId] != request) return;
+    if (isClearingSiteData) {
+      onMessage(
+        'Site data is still being cleared. Wait before loading another page.',
+      );
+      return;
+    }
     final policyRevision = await _waitForPolicy();
     if (_guardSyncFailed) {
       onMessage(
@@ -547,6 +626,7 @@ class BrowserEnginePool extends ChangeNotifier with WidgetsBindingObserver {
       entry = created;
       try {
         await _configure(created);
+        await _native('pageScale', created, {'percentage': _pageScale});
         if (_disposed ||
             generation != (_generations[tabId] ?? 0) ||
             _requests[tabId] != request) {
@@ -692,6 +772,15 @@ class BrowserEnginePool extends ChangeNotifier with WidgetsBindingObserver {
               }
               entry.requestedUrl = request.url;
               entry.status.error = null;
+              await _native('prepareGuardNavigation', entry, {
+                'url': request.url,
+              });
+              if (entry.closed ||
+                  entry.crashed ||
+                  _requests[entry.id] != navigationRequest ||
+                  policyRevision != _policyRevision) {
+                return NavigationDecision.prevent;
+              }
             }
             return NavigationDecision.navigate;
           }
@@ -818,6 +907,7 @@ class BrowserEnginePool extends ChangeNotifier with WidgetsBindingObserver {
         },
         onHttpAuthRequest: (request) async {
           final requestedUrl = entry.status.url;
+          final requestIdentity = _requests[entry.id];
           if (!_canPrompt(entry) ||
               !entry.status.url.startsWith('https:') ||
               request.host != _host(entry)) {
@@ -831,8 +921,19 @@ class BrowserEnginePool extends ChangeNotifier with WidgetsBindingObserver {
           );
           if (name == null ||
               !_canPrompt(entry) ||
+              _requests[entry.id] != requestIdentity ||
               entry.status.url != requestedUrl) {
             request.onCancel();
+            if (name == null &&
+                _canPrompt(entry) &&
+                _requests[entry.id] == requestIdentity &&
+                entry.status.url == requestedUrl) {
+              _setPageError(
+                entry,
+                'Website sign-in was cancelled.',
+                failedUrl: requestedUrl,
+              );
+            }
             return;
           }
           final password = await prompt(
@@ -842,8 +943,19 @@ class BrowserEnginePool extends ChangeNotifier with WidgetsBindingObserver {
           );
           if (password == null ||
               !_canPrompt(entry) ||
+              _requests[entry.id] != requestIdentity ||
               entry.status.url != requestedUrl) {
             request.onCancel();
+            if (password == null &&
+                _canPrompt(entry) &&
+                _requests[entry.id] == requestIdentity &&
+                entry.status.url == requestedUrl) {
+              _setPageError(
+                entry,
+                'Website sign-in was cancelled.',
+                failedUrl: requestedUrl,
+              );
+            }
             return;
           }
           request.onProceed(WebViewCredential(user: name, password: password));
@@ -1101,6 +1213,8 @@ class BrowserEnginePool extends ChangeNotifier with WidgetsBindingObserver {
     final entry = _entries[tabId];
     if (entry == null || entry.closed || entry.crashed) return;
     entry.status.error = null;
+    await _native('prepareGuardNavigation', entry, {'url': entry.status.url});
+    if (entry.closed || _requests[tabId] != request) return;
     await entry.controller.goBack();
     _scheduleMetadataRefresh(entry);
   }
@@ -1112,6 +1226,8 @@ class BrowserEnginePool extends ChangeNotifier with WidgetsBindingObserver {
     final entry = _entries[tabId];
     if (entry == null || entry.closed || entry.crashed) return;
     entry.status.error = null;
+    await _native('prepareGuardNavigation', entry, {'url': entry.status.url});
+    if (entry.closed || _requests[tabId] != request) return;
     await entry.controller.goForward();
     _scheduleMetadataRefresh(entry);
   }
@@ -1302,6 +1418,22 @@ class BrowserEnginePool extends ChangeNotifier with WidgetsBindingObserver {
     // Let Flutter unmount its platform view before releasing the native view.
     await Future<void>.delayed(const Duration(milliseconds: 32));
     await _native('close', entry);
+    final platform = entry.controller.platform;
+    if (platform is WebKitWebViewController) {
+      await platform.wingmanDispose();
+      // Pigeon releases its native strong reference asynchronously. Observe
+      // completion instead of letting shared deletion wait on old web processes.
+      for (var attempt = 0; attempt < 100; attempt++) {
+        if (await _nativeChannel.invokeMethod<bool>('closedViewReleased', {
+              'id': entry.nativeId,
+            }) ==
+            true) {
+          return;
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+      }
+      throw StateError('The browser could not finish releasing a closed page.');
+    }
   }
 
   Future<void> clearData({
@@ -1319,6 +1451,37 @@ class BrowserEnginePool extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> _clearDataNow({
+    required bool cookies,
+    required bool cache,
+    required bool storage,
+  }) async {
+    if (_pendingSiteDataClear != null) {
+      throw StateError(
+        'A previous site-data deletion is still pending. Wait for it to finish before choosing another deletion.',
+      );
+    }
+    final operation = _pendingSiteDataClear =
+        _performSiteDataClear(
+          cookies: cookies,
+          cache: cache,
+          storage: storage,
+        ).whenComplete(() {
+          _pendingSiteDataClear = null;
+          _notify();
+        });
+    // WebKit may leave a deletion completion pending. Release the operation
+    // queue with an honest failure, keeping navigation paused until completion.
+    await operation.timeout(
+      const Duration(seconds: 15),
+      onTimeout: () {
+        throw TimeoutException(
+          'Site-data clearing has not finished. Browsing is paused until it completes. Restart Wingman and retry clearing if it remains unavailable.',
+        );
+      },
+    );
+  }
+
+  Future<void> _performSiteDataClear({
     required bool cookies,
     required bool cache,
     required bool storage,
@@ -1346,6 +1509,8 @@ class BrowserEnginePool extends ChangeNotifier with WidgetsBindingObserver {
     try {
       await _nativeChannel.invokeMethod<void>(method, {
         'id': entry.nativeId,
+        if (method == 'prepareGuardNavigation')
+          'request': _requests[entry.id] ?? 0,
         ...extra,
       });
     } on PlatformException {
@@ -1379,6 +1544,18 @@ class BrowserEnginePool extends ChangeNotifier with WidgetsBindingObserver {
   @visibleForTesting
   Future<Object> evaluateForTesting(String tabId, String script) =>
       _entries[tabId]!.controller.runJavaScriptReturningResult(script);
+
+  @visibleForTesting
+  Future<Map<String, dynamic>> platformStateForTesting(
+    String tabId, {
+    bool? shieldVisible,
+  }) async => Map<String, dynamic>.from(
+    await _nativeChannel.invokeMethod<Map>('privacyStateForTesting', {
+          'id': _entries[tabId]?.nativeId,
+          'visible': ?shieldVisible,
+        }) ??
+        const {},
+  );
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {

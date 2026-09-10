@@ -56,6 +56,31 @@ class Bookmark {
   final DateTime createdAt;
 }
 
+/// Explicitly saved metadata, not an offline copy of the page.
+class ReadingListItem {
+  const ReadingListItem({
+    required this.id,
+    required this.url,
+    required this.title,
+    required this.createdAt,
+    this.readAt,
+  });
+  final String id;
+  final String url;
+  final String title;
+  final DateTime createdAt;
+  final DateTime? readAt;
+  bool get isRead => readAt != null;
+
+  ReadingListItem withReadAt(DateTime? value) => ReadingListItem(
+    id: id,
+    url: url,
+    title: title,
+    createdAt: createdAt,
+    readAt: value,
+  );
+}
+
 class BrowserSettings {
   const BrowserSettings({
     this.themeMode = ThemeMode.system,
@@ -64,6 +89,7 @@ class BrowserSettings {
     this.guardJson = '{}',
     this.guardStatsJson = '{}',
     this.localSuggestions = true,
+    this.pageScale = 100,
   });
 
   final ThemeMode themeMode;
@@ -72,6 +98,7 @@ class BrowserSettings {
   final String guardJson;
   final String guardStatsJson;
   final bool localSuggestions;
+  final int pageScale;
 
   BrowserSettings copyWith({
     ThemeMode? themeMode,
@@ -80,6 +107,7 @@ class BrowserSettings {
     String? guardJson,
     String? guardStatsJson,
     bool? localSuggestions,
+    int? pageScale,
   }) => BrowserSettings(
     themeMode: themeMode ?? this.themeMode,
     searchProviderId: searchProviderId ?? this.searchProviderId,
@@ -87,5 +115,6 @@ class BrowserSettings {
     guardJson: guardJson ?? this.guardJson,
     guardStatsJson: guardStatsJson ?? this.guardStatsJson,
     localSuggestions: localSuggestions ?? this.localSuggestions,
+    pageScale: (pageScale ?? this.pageScale).clamp(75, 200),
   );
 }

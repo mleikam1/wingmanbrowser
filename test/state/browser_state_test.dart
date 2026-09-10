@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wingman_browser/data/browser_repository.dart';
 import 'package:wingman_browser/domain/models.dart';
+import 'package:wingman_browser/domain/bookmark_transfer.dart';
 import 'package:wingman_browser/state/browser_state.dart';
 
 void main() {
@@ -19,6 +20,297 @@ void main() {
     await state.flush();
     state.dispose();
   });
+
+  BookmarkImportPreview preview(Iterable<String> urls) => BookmarkImportPreview(
+    entries: urls.map(
+      (url) => BookmarkImportEntry(url: url, title: 'Imported'),
+    ),
+    duplicateCount: 0,
+    rejectedCount: 0,
+  );
+
+  test(
+    'unreadable startup storage cannot report successful library saves',
+    () async {
+      final unavailable = RecordingRepository()..failLoad = true;
+      final broken = BrowserState(repository: unavailable, clock: () => now);
+      await broken.init();
+      broken.navigate('normal.test');
+      await expectLater(
+        broken.importBookmarks(preview(['https://import.test'])),
+        throwsA(isA<LibraryOperationException>()),
+      );
+      await expectLater(
+        broken.toggleBookmark(),
+        throwsA(isA<LibraryOperationException>()),
+      );
+      await expectLater(
+        broken.addToReadingList(),
+        throwsA(isA<LibraryOperationException>()),
+      );
+      expect(unavailable.savedBookmarks, isEmpty);
+      expect(unavailable.readingSaves, isEmpty);
+      expect(broken.bookmarks, isEmpty);
+      expect(broken.readingList, isEmpty);
+      broken.dispose();
+    },
+  );
+
+  test(
+    'explicit reading address saves from normal Home without navigation',
+    () async {
+      final originalId = state.activeId;
+      expect(
+        await state.addReadingListUrl(
+          ' https://READ.test/article ',
+          title: ' A  title ',
+        ),
+        true,
+      );
+      expect(state.readingList.single.url, 'https://read.test/article');
+      expect(state.readingList.single.title, 'A title');
+      expect(await state.addReadingListUrl('https://read.test/article'), false);
+      expect(state.activeId, originalId);
+      expect(state.activeTab.isHome, true);
+      expect(state.history, isEmpty);
+      expect(state.bookmarks, isEmpty);
+      expect(repository.readingSaves.single.isPrivate, false);
+    },
+  );
+
+  test('explicit reading address is unavailable in a private tab', () async {
+    state.newTab(isPrivate: true);
+    expect(
+      await state.addReadingListUrl('https://private.test/article'),
+      false,
+    );
+    expect(state.readingList, isEmpty);
+    expect(repository.readingSaves, isEmpty);
+  });
+
+  test(
+    'explicit reading address rejects searches, credentials and unsafe schemes',
+    () async {
+      for (final url in [
+        '',
+        'example.com',
+        'search words',
+        'https:invalid',
+        'javascript:alert(1)',
+        'file:///secret',
+        'https://name:password@secret.test',
+      ]) {
+        await expectLater(
+          state.addReadingListUrl(url),
+          throwsA(
+            isA<LibraryOperationException>().having(
+              (error) => error.message,
+              'sanitized validation',
+              isNot(contains('password')),
+            ),
+          ),
+        );
+      }
+      expect(repository.readingSaves, isEmpty);
+      expect(state.readingList, isEmpty);
+      expect(state.activeTab.isHome, true);
+    },
+  );
+
+  test(
+    'explicit import waits for commit and failure never reports saved entries',
+    () async {
+      repository.failWrites = true;
+      await expectLater(
+        state.importBookmarks(preview(['https://import.test'])),
+        throwsA(
+          isA<LibraryOperationException>().having(
+            (error) => error.message,
+            'safe message',
+            isNot(contains('secret.example')),
+          ),
+        ),
+      );
+      expect(state.bookmarks, isEmpty);
+      expect(state.storageError, isNot(contains('secret.example')));
+      repository.failWrites = false;
+      expect(await state.importBookmarks(preview(['https://import.test'])), 1);
+      expect(state.bookmarks.single.url, 'https://import.test');
+      expect(repository.savedBookmarks.single.url, 'https://import.test');
+      expect(await state.importBookmarks(preview(['https://import.test'])), 0);
+    },
+  );
+
+  test(
+    'queued imports and captured manual bookmark action cannot overwrite each other',
+    () async {
+      final gate = Completer<void>();
+      repository.writeGate = gate.future;
+      final first = state.importBookmarks(preview(['https://first.test']));
+      final duplicate = state.importBookmarks(preview(['https://first.test']));
+      state.navigate('second.test');
+      final manual = state.toggleBookmark();
+      state.newTab(isPrivate: true, url: 'https://private.test');
+      expect(state.bookmarks, isEmpty, reason: 'No optimistic import success');
+      gate.complete();
+      expect(await first, 1);
+      expect(await duplicate, 0);
+      await manual;
+      await state.flush();
+      expect(state.bookmarks.map((item) => item.url).toSet(), {
+        'https://first.test',
+        'https://second.test',
+      });
+      expect(repository.savedBookmarks.map((item) => item.url).toSet(), {
+        'https://first.test',
+        'https://second.test',
+      });
+      expect(state.activeTab.isPrivate, true);
+    },
+  );
+
+  test(
+    'bookmark remove/toggle failure leaves prior visible metadata intact',
+    () async {
+      state.navigate('saved.test');
+      await state.toggleBookmark();
+      final id = state.bookmarks.single.id;
+      repository.failWrites = true;
+      await expectLater(
+        state.removeBookmark(id),
+        throwsA(isA<LibraryOperationException>()),
+      );
+      await expectLater(
+        state.toggleBookmark(),
+        throwsA(isA<LibraryOperationException>()),
+      );
+      expect(state.bookmarks.single.id, id);
+    },
+  );
+
+  test(
+    'an Add action queued behind import of the same URL remains Add',
+    () async {
+      state.navigate('same.test');
+      await state.flush();
+      final gate = Completer<void>();
+      repository.writeGate = gate.future;
+      final importing = state.importBookmarks(preview(['https://same.test']));
+      final adding = state.toggleBookmark();
+      gate.complete();
+      expect(await importing, 1);
+      await adding;
+      expect(state.bookmarks.single.url, 'https://same.test');
+      expect(repository.savedBookmarks.single.url, 'https://same.test');
+    },
+  );
+
+  test(
+    'commit-time import duplicate and cap checks reject entire excess batch',
+    () async {
+      expect(
+        await state.importBookmarks(
+          preview([for (var i = 0; i < 5000; i++) 'https://saved.test/$i']),
+        ),
+        5000,
+      );
+      await expectLater(
+        state.importBookmarks(
+          preview(['https://saved.test/1', 'https://extra.test']),
+        ),
+        throwsA(isA<LibraryOperationException>()),
+      );
+      expect(state.bookmarks.length, 5000);
+      expect(repository.savedBookmarks.length, 5000);
+      expect(await state.importBookmarks(preview(['https://saved.test/1'])), 0);
+    },
+  );
+
+  test(
+    'constructed invalid preview cannot bypass state address validation',
+    () async {
+      await expectLater(
+        state.importBookmarks(
+          preview(['https://good.test', 'https://name:password@secret.test']),
+        ),
+        throwsA(isA<LibraryOperationException>()),
+      );
+      expect(state.bookmarks, isEmpty);
+      expect(repository.savedBookmarks, isEmpty);
+    },
+  );
+
+  test(
+    'reading list captures explicit normal page and excludes private and Home',
+    () async {
+      expect(await state.addToReadingList(), false);
+      state.newTab(isPrivate: true, url: 'https://private.test');
+      expect(await state.addToReadingList(), false);
+      expect(repository.readingSaves, isEmpty);
+      state.newTab(url: 'https://read.test/article');
+      final gate = Completer<void>();
+      repository.writeGate = gate.future;
+      final saving = state.addToReadingList();
+      state.newTab(isPrivate: true, url: 'https://later-private.test');
+      gate.complete();
+      expect(await saving, true);
+      expect(state.readingList.single.url, 'https://read.test/article');
+      expect(repository.readingSaves.single.isPrivate, false);
+      expect(() => state.readingList.clear(), throwsUnsupportedError);
+      final id = state.readingList.single.id;
+      await state.setReadingListRead(id, true);
+      expect(state.readingList.single.readAt, now);
+      await state.clearHistory();
+      expect(state.readingList.single.id, id);
+      await state.setReadingListRead(id, false);
+      expect(state.readingList.single.isRead, false);
+      await state.removeReadingListItem(id);
+      expect(state.readingList, isEmpty);
+    },
+  );
+
+  test(
+    'reading list failures preserve saved state and queued operations recover',
+    () async {
+      state.navigate('read.test');
+      repository.failWrites = true;
+      await expectLater(
+        state.addToReadingList(),
+        throwsA(isA<LibraryOperationException>()),
+      );
+      expect(state.readingList, isEmpty);
+      repository.failWrites = false;
+      expect(await state.addToReadingList(), true);
+      expect(await state.addToReadingList(), false);
+      final id = state.readingList.single.id;
+      repository.failWrites = true;
+      await expectLater(
+        state.setReadingListRead(id, true),
+        throwsA(isA<LibraryOperationException>()),
+      );
+      await expectLater(
+        state.removeReadingListItem(id),
+        throwsA(isA<LibraryOperationException>()),
+      );
+      expect(state.readingList.single.isRead, false);
+      repository.failWrites = false;
+      await state.removeReadingListItem(id);
+      expect(state.readingList, isEmpty);
+    },
+  );
+
+  test(
+    'page size update clamps and persists without changing independent settings',
+    () async {
+      state.saveSettings(
+        state.settings.copyWith(pageScale: 300, guardJson: '{"kept":true}'),
+      );
+      await state.flush();
+      expect(state.settings.pageScale, 200);
+      expect(repository.settings?.pageScale, 200);
+      expect(repository.settings?.guardJson, '{"kept":true}');
+    },
+  );
 
   test(
     'immutable models and unique tab IDs survive rapid create/close',
@@ -68,7 +360,7 @@ void main() {
         title: 'Private title',
         completed: true,
       );
-      state.toggleBookmark();
+      await state.toggleBookmark();
       state.closeTab(private.id);
       // A completion arriving after engine teardown must not resurrect data.
       state.pageChanged(
@@ -170,15 +462,15 @@ void main() {
 
   test('bookmarks toggle and remain separate from clearing history', () async {
     state.navigate('example.com');
-    state.toggleBookmark();
+    await state.toggleBookmark();
     expect(state.isBookmarked, isTrue);
     final bookmarkId = state.bookmarks.single.id;
     await state.clearHistory();
     expect(state.bookmarks.single.id, bookmarkId);
-    state.toggleBookmark();
+    await state.toggleBookmark();
     expect(state.bookmarks, isEmpty);
-    state.toggleBookmark();
-    state.removeBookmark(state.bookmarks.single.id);
+    await state.toggleBookmark();
+    await state.removeBookmark(state.bookmarks.single.id);
     expect(state.bookmarks, isEmpty);
   });
 
@@ -361,6 +653,8 @@ class RecordingRepository implements BrowserRepository {
   final sessions = <List<BrowserTab>>[];
   final visits = <BrowserTab>[];
   final events = <String>[];
+  List<Bookmark> savedBookmarks = [];
+  final readingSaves = <BrowserTab>[];
   BrowserSettings? settings;
   bool historyCleared = false;
   bool failWrites = false;
@@ -390,7 +684,34 @@ class RecordingRepository implements BrowserRepository {
   }
 
   @override
-  Future<void> saveBookmarks(List<Bookmark> bookmarks) async {}
+  Future<void> saveBookmarks(List<Bookmark> bookmarks) async {
+    if (writeGate != null) await writeGate;
+    if (failWrites) throw Exception('INSERT https://secret.example.com');
+    savedBookmarks = List.of(bookmarks);
+  }
+
+  @override
+  Future<bool> addReadingListItem(
+    BrowserTab tab, {
+    required String id,
+    required DateTime createdAt,
+  }) async {
+    if (writeGate != null) await writeGate;
+    if (failWrites) throw Exception('INSERT https://secret.example.com');
+    readingSaves.add(tab);
+    return !tab.isPrivate && !tab.isHome;
+  }
+
+  @override
+  Future<void> setReadingListRead(String id, DateTime? readAt) async {
+    if (failWrites) throw Exception('UPDATE https://secret.example.com');
+  }
+
+  @override
+  Future<void> removeReadingListItem(String id) async {
+    if (failWrites) throw Exception('DELETE https://secret.example.com');
+  }
+
   @override
   Future<void> saveSettings(BrowserSettings settings) async {
     this.settings = settings;

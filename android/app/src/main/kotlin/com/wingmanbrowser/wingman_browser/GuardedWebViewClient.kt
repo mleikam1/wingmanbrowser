@@ -24,14 +24,14 @@ open class GuardedWebViewClient(
         // Keep provisional content hidden until the final committed URL passes.
         // This covers provider callback gaps such as POST-preserving redirects.
         view.visibility = View.INVISIBLE
-        guard.prepare(url)
-        if (!guard.deny(view, url)) original.onPageStarted(view, url, favicon)
+        if (guard.pageStarted(view, url) && !guard.deny(view, url)) original.onPageStarted(view, url, favicon)
     }
     override fun onPageFinished(view: WebView, url: String) {
         if (!guard.isBlocked()) original.onPageFinished(view, url)
     }
     override fun onLoadResource(view: WebView, url: String) = original.onLoadResource(view, url)
     override fun onPageCommitVisible(view: WebView, url: String) {
+        if (view.url != url) return
         if (!guard.deny(view, url) && !guard.isBlocked()) {
             view.visibility = View.VISIBLE
             original.onPageCommitVisible(view, url)

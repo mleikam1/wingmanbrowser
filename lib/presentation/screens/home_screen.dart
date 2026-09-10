@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../domain/search.dart';
 import '../../domain/local_suggestions.dart';
 import '../../monetization/home_ad_slot.dart';
+import '../../monetization/ad_policy_service.dart';
 import '../../state/browser_state.dart';
 import '../theme.dart';
 import '../widgets/brand.dart';
@@ -18,6 +19,11 @@ class HomeScreen extends StatelessWidget {
     required this.onBookmarks,
     required this.onPrivate,
     this.guardCard,
+    this.onReadingList,
+    this.adEligibility = const AdEligibilityContext(),
+    this.adEligibilityChanges,
+    this.readAdEligibility,
+    this.readAdIsPrivate,
   });
   final BrowserState state;
   final ValueChanged<String> onNavigate;
@@ -25,6 +31,11 @@ class HomeScreen extends StatelessWidget {
   final VoidCallback onBookmarks;
   final VoidCallback onPrivate;
   final Widget? guardCard;
+  final VoidCallback? onReadingList;
+  final AdEligibilityContext adEligibility;
+  final Listenable? adEligibilityChanges;
+  final AdEligibilityContext Function()? readAdEligibility;
+  final bool Function()? readAdIsPrivate;
   @override
   Widget build(BuildContext context) {
     final private = state.activeTab.isPrivate;
@@ -158,6 +169,13 @@ class HomeScreen extends StatelessWidget {
                     color: const Color(0xff977120),
                     onTap: onBookmarks,
                   ),
+                  if (onReadingList != null)
+                    _QuickLink(
+                      label: 'Reading list',
+                      icon: Icons.article_outlined,
+                      color: WingmanTheme.green,
+                      onTap: onReadingList!,
+                    ),
                 ],
               ),
               const SizedBox(height: 28),
@@ -205,7 +223,13 @@ class HomeScreen extends StatelessWidget {
               ),
               if (!private) ...[
                 const SizedBox(height: 12),
-                const HomeAdSlot(isPrivate: false),
+                HomeAdSlot(
+                  isPrivate: false,
+                  eligibility: adEligibility,
+                  eligibilityChanges: adEligibilityChanges,
+                  readEligibility: readAdEligibility,
+                  readIsPrivate: readAdIsPrivate,
+                ),
               ],
               const SizedBox(height: 26),
               Row(

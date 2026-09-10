@@ -17,11 +17,15 @@ class BrowserToolbar extends StatelessWidget {
     required this.onTabs,
     required this.onMenuSelected,
     this.guardAvailable = false,
+    this.readerAvailable = false,
+    this.readerSupported = true,
   });
 
   final bool isHome, isPrivate, isLoading, isBookmarked, desktopMode;
   final int tabCount;
   final bool guardAvailable;
+  final bool readerAvailable;
+  final bool readerSupported;
   final VoidCallback? onBack, onForward;
   final VoidCallback onPrimaryAction, onHome, onTabs;
   final ValueChanged<String> onMenuSelected;
@@ -113,6 +117,25 @@ class BrowserToolbar extends StatelessWidget {
                     child: Text('Bookmarks'),
                   ),
                   const PopupMenuItem(value: 'history', child: Text('History')),
+                  const PopupMenuItem(
+                    value: 'readingList',
+                    child: Text('Reading list'),
+                  ),
+                  if (!isHome && !isPrivate)
+                    const PopupMenuItem(
+                      value: 'saveReading',
+                      child: Text('Save to reading list'),
+                    ),
+                  if (!isHome)
+                    PopupMenuItem(
+                      value: 'reader',
+                      enabled: readerAvailable,
+                      child: Text(
+                        readerSupported
+                            ? 'Open reader'
+                            : 'Reader unavailable on this engine',
+                      ),
+                    ),
                   if (guardAvailable)
                     const PopupMenuItem(
                       value: 'guard',

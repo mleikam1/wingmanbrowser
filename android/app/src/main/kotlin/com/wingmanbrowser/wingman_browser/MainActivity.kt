@@ -8,8 +8,10 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.os.Bundle
 import android.os.Environment
 import android.view.ViewGroup
+import android.view.WindowManager
 import android.webkit.CookieManager
 import android.webkit.GeolocationPermissions
 import android.webkit.URLUtil
@@ -43,6 +45,14 @@ class MainActivity : FlutterActivity() {
     private var requestedPermissions: Array<String> = emptyArray()
     private var initialized = false
     private var safeBrowsingReady: Boolean? = null
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        // Protect every Wingman frame, including the first frame, tab previews,
+        // native dialogs and sensitive routes before Flutter can label them.
+        window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        if (Build.VERSION.SDK_INT >= 33) setRecentsScreenshotEnabled(false)
+        super.onCreate(savedInstanceState)
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -91,6 +101,18 @@ class MainActivity : FlutterActivity() {
             when (call.method) {
                 "initialize" -> { initialized = true; result.success(pendingLink); pendingLink = null }
                 "privateAvailable" -> result.success(privateAvailable())
+                "setSensitiveContent" -> result.success(null) // Global protection cannot be weakened by Dart.
+                "privacyStateForTesting" -> {
+                    check((applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0)
+                    val view = if (call.argument<Number>("id") != null) webView(call) else null
+                    result.success(mapOf("secureWindow" to ((window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE) != 0),
+                        "pageScale" to view?.settings?.textZoom,
+                        "webAuthenticationSupport" to if (view != null && WebViewFeature.isFeatureSupported(WebViewFeature.WEB_AUTHENTICATION)) WebSettingsCompat.getWebAuthenticationSupport(view.settings) else null))
+                }
+                "pageScale" -> {
+                    webView(call).settings.textZoom = (call.argument<Number>("percentage")?.toInt() ?: 100).coerceIn(75, 200)
+                    result.success(null)
+                }
                 "guardBenchmarkForTesting" -> {
                     check((applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0)
                     val samples = (0 until 1000).map { index ->
@@ -116,11 +138,12 @@ class MainActivity : FlutterActivity() {
                 "updateGuardPolicy" -> {
                     @Suppress("UNCHECKED_CAST")
                     guardPolicy.update(call.arguments as Map<String, Any?>)
+                    guardSessions.values.forEach { it.invalidatePendingReports() }
                     result.success(null)
                 }
                 "prepareGuardNavigation" -> {
                     val id = call.argument<Number>("id")!!.toLong()
-                    guardSessions[id]?.prepare(call.argument<String>("url") ?: "")
+                    guardSessions[id]?.prepare(call.argument<String>("url") ?: "", call.argument<Number>("request")?.toLong() ?: 0L)
                     result.success(null)
                 }
                 "disablePublisherFirstPartyId" -> {
@@ -132,7 +155,7 @@ class MainActivity : FlutterActivity() {
                     val id = call.argument<Number>("id")!!.toLong()
                     val privateMode = call.argument<Boolean>("private") == true
                     val guard = NativeGuardSession(guardPolicy, call.argument<String>("tabId") ?: id.toString(),
-                        blocked = { url, decision -> channel.invokeMethod("guardBlocked", mapOf("id" to id, "url" to url, "decision" to decision)) },
+                        blocked = { url, decision, request -> channel.invokeMethod("guardBlocked", mapOf("id" to id, "url" to url, "decision" to decision, "request" to request)) },
                         trackers = { count -> channel.invokeMethod("trackersBlocked", mapOf("id" to id, "count" to count)) })
                     guardSessions[id] = guard
                     if (privateMode) {
@@ -347,7 +370,10 @@ class MainActivity : FlutterActivity() {
                     (getSystemService(DOWNLOAD_SERVICE) as DownloadManager).enqueue(request)
                     channel.invokeMethod("message", "Download started. See your device Downloads.")
                 } catch (_: Exception) { channel.invokeMethod("message", "The download could not be started.") }
-            }.show()
+            }.create().also { dialog ->
+                dialog.window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                dialog.show()
+            }
     }
 
     @Deprecated("Activity result compatibility for FlutterActivity")

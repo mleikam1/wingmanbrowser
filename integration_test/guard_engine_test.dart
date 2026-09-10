@@ -92,10 +92,14 @@ ${request.uri.path == '/tracking' ? '<script src="$blockedBase/tracker.js"></scr
       await request.response.close();
     });
     late BrowserEnginePool engine;
+    Map<String, dynamic>? lastNativeBlock;
     final native = NativeBrowserService();
     await native.initialize(
       onIncomingUri: (_) {},
-      onGuardBlocked: (event) => engine.guardBlocked(event),
+      onGuardBlocked: (event) {
+        lastNativeBlock = Map<String, dynamic>.from(event);
+        engine.guardBlocked(event);
+      },
       onTrackersBlocked: (id, count) => engine.trackersBlocked(id, count),
       onRendererGone: (id) => engine.rendererGone(id),
       onNavigationSettled: (id, url) => engine.navigationSettled(id, url),
@@ -211,7 +215,14 @@ ${request.uri.path == '/tracking' ? '<script src="$blockedBase/tracker.js"></scr
         () => !engine.status(id).isLoading && engine.status(id).progress == 100,
         'render $path',
       );
-      expect(engine.status(id).guardDecision, isNull);
+      expect(
+        engine.status(id).guardDecision,
+        isNull,
+        reason:
+            'Allowed fixture $path; status=${engine.status(id).url}; '
+            'decision=${engine.status(id).guardDecision?.toJson()}; '
+            'document=${await engine.evaluateForTesting(id, "location.href")}',
+      );
       expect(engine.status(id).error, isNull);
     }
 
@@ -441,6 +452,7 @@ ${request.uri.path == '/tracking' ? '<script src="$blockedBase/tracker.js"></scr
     await engine.updateGuardPolicy(config);
     await engine.reload('normal');
     await blocked('expired grant');
+    final staleNormalBlock = Map<String, dynamic>.from(lastNativeBlock!);
     await openAllowed('private-before-block', id: 'private', private: true);
     await engine.open(
       tabId: 'private',
@@ -533,6 +545,11 @@ ${request.uri.path == '/tracking' ? '<script src="$blockedBase/tracker.js"></scr
 
     // Category rules apply to navigation; tracker list independently blocks only third-party resources.
     await openAllowed('tracking');
+    // Deliver an old native message after a newer request has committed. It
+    // must not relabel the current allowed page or stop its resource loading.
+    engine.guardBlocked(staleNormalBlock);
+    expect(engine.status('normal').guardDecision, isNull);
+    expect(engine.status('normal').url, '$base/tracking');
     await tester.pump(const Duration(milliseconds: 800));
     expect(
       trackerRequests,

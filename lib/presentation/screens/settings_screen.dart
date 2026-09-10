@@ -11,10 +11,12 @@ class SettingsScreen extends StatelessWidget {
     required this.onClear,
     required this.onDefaultBrowser,
     this.onGuard,
+    this.onPageScale,
   });
   final BrowserState state;
   final VoidCallback onClear, onDefaultBrowser;
   final VoidCallback? onGuard;
+  final ValueChanged<int>? onPageScale;
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: state,
@@ -69,6 +71,31 @@ class SettingsScreen extends StatelessWidget {
                 },
               ),
               const SizedBox(height: 16),
+              if (!kIsWeb && onPageScale != null) ...[
+                Text(
+                  'Website size · ${state.settings.pageScale}%',
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                Slider(
+                  value: state.settings.pageScale.toDouble(),
+                  min: 75,
+                  max: 200,
+                  divisions: 5,
+                  label: '${state.settings.pageScale}%',
+                  onChanged: (value) => onPageScale!(value.round()),
+                ),
+                const Text(
+                  'Adjusts website text on Android and page size on iOS. Reader has separate text controls.',
+                ),
+                if (defaultTargetPlatform == TargetPlatform.android)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 8),
+                    child: Text(
+                      'Local Reader is unavailable on this Android engine. You can still save pages to your reading list and adjust website text.',
+                    ),
+                  ),
+                const SizedBox(height: 20),
+              ],
               DropdownButtonFormField<String>(
                 isExpanded: true,
                 initialValue: state.settings.searchProviderId,
@@ -122,14 +149,14 @@ class SettingsScreen extends StatelessWidget {
                 icon: Icons.shield_outlined,
                 title: 'Your browsing history is yours.',
                 text:
-                    'Wingman doesn’t sell your browsing history, build an advertising profile from the sites you visit, or inject Wingman ads into the websites you browse.\n\nHistory, bookmarks, tab details, and preferences remain on this device by default. History is retained for up to 90 days, with a limit of 5,000 entries. No Wingman account or cloud backend is required.',
+                    'Wingman doesn’t sell your browsing history, build an advertising profile from the sites you visit, or inject Wingman ads into the websites you browse.\n\nHistory, bookmarks, reading-list titles and addresses, tab details, and preferences remain on this device by default. History is retained for up to 90 days, with a limit of 5,000 entries. No Wingman account or cloud backend is required. Bookmark files leave Wingman only when you choose to export them.',
               ),
               const SizedBox(height: 14),
               const _InfoCard(
                 icon: Icons.visibility_off_outlined,
                 title: 'What private browsing means',
                 text:
-                    'Private tabs aren’t saved in your history or restored after restart. Their site storage is isolated from normal tabs and cleared when the tab closes or is evicted from memory. On iOS, private site storage is nonpersistent. Android may temporarily write isolated site data to disk; cleanup runs when a tab closes and on the next launch.\n\nPrivate browsing does not make you anonymous to websites, search providers, your internet provider, or the network you use. Downloads you explicitly save are not private-session data.',
+                    'Private tabs aren’t saved in your history or restored after restart. Their site storage is isolated from normal tabs and cleared when the tab closes or is evicted from memory. On iOS, private site storage is nonpersistent. Android may temporarily write isolated site data to disk; cleanup runs when a tab closes and on the next launch.\n\nAndroid restricts screenshots and screen sharing throughout Wingman. iOS hides the app preview when Wingman becomes inactive; screenshots while you actively use the app are still possible.\n\nPrivate browsing does not make you anonymous to websites, search providers, your internet provider, or the network you use. Downloads you explicitly save are not private-session data.',
               ),
               const SizedBox(height: 12),
               ListTile(
@@ -161,7 +188,7 @@ class SettingsScreen extends StatelessWidget {
               ),
               const SizedBox(height: 26),
               Text(
-                'Wingman Browser · Foundation 0.1\nBuilt to browse without an account.',
+                'Wingman Browser · 0.3\nBuilt to browse without an account.',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
             ],

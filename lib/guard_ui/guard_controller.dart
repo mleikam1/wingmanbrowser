@@ -171,6 +171,8 @@ class GuardController extends ChangeNotifier {
     _configuration = next;
     _policyRevision++;
     _grants.clear();
+    // Invalidate owned content/ads before asynchronous native sync or storage.
+    _notify();
     await sync(recheck: true);
     await _persist();
     _notify();

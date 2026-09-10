@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import '../data/browser_repository.dart';
 import '../data/sqlite_browser_repository.dart';
 import '../domain/models.dart';
+import '../domain/bookmark_transfer.dart';
 import '../domain/search.dart';
 
 /// Predictable metadata state; web controllers and site storage never enter
@@ -26,6 +27,7 @@ class BrowserState extends ChangeNotifier {
   late String _activeId;
   List<HistoryEntry> _history = [];
   List<Bookmark> _bookmarks = [];
+  List<ReadingListItem> _readingList = [];
   BrowserSettings _settings = const BrowserSettings();
   Future<void> _writes = Future.value();
   Future<void>? _initialization;
@@ -43,6 +45,7 @@ class BrowserState extends ChangeNotifier {
   BrowserTab get activeTab => _tabs.firstWhere((tab) => tab.id == _activeId);
   List<HistoryEntry> get history => List.unmodifiable(_history);
   List<Bookmark> get bookmarks => List.unmodifiable(_bookmarks);
+  List<ReadingListItem> get readingList => List.unmodifiable(_readingList);
   BrowserSettings get settings => _settings;
   bool get isBookmarked =>
       !activeTab.isHome && _bookmarks.any((item) => item.url == activeTab.url);
@@ -64,6 +67,7 @@ class BrowserState extends ChangeNotifier {
       }
       _history = _retained(data.history);
       _bookmarks = List.of(data.bookmarks);
+      _readingList = List.of(data.readingList);
       _settings = data.settings.copyWith(
         searchProviderId: SearchProvider.byId(
           data.settings.searchProviderId,
@@ -198,33 +202,155 @@ class BrowserState extends ChangeNotifier {
     _changed();
   }
 
-  void toggleBookmark() {
+  Future<void> toggleBookmark() async {
     final tab = activeTab;
     if (tab.isHome || tab.isPrivate) return;
-    if (isBookmarked) {
-      _bookmarks = _bookmarks.where((item) => item.url != tab.url).toList();
-    } else {
-      _bookmarks = [
-        Bookmark(
-          id: _nextId(),
-          url: tab.url,
-          title: tab.title,
-          createdAt: _clock(),
-        ),
-        ..._bookmarks,
-      ];
-    }
-    final snapshot = List<Bookmark>.unmodifiable(_bookmarks);
-    _enqueue(() => _repository.saveBookmarks(snapshot));
-    notifyListeners();
+    final remove = _bookmarks.any((item) => item.url == tab.url);
+    await _durable(() async {
+      final uri = requireWebUri(tab.url);
+      final exists = _bookmarks.any((item) => item.url == uri.toString());
+      // Preserve the visible Add/Remove intent. An earlier queued import must
+      // not turn the user's Add action into deletion of the same address.
+      if (remove != exists) return;
+      if (!exists && _bookmarks.length >= BrowserRepository.maximumBookmarks) {
+        throw const LibraryOperationException(
+          'The bookmark limit is 5,000. Remove some before adding more.',
+        );
+      }
+      final next = remove
+          ? _bookmarks.where((item) => item.url != uri.toString()).toList()
+          : [
+              Bookmark(
+                id: _nextId(),
+                url: uri.toString(),
+                title: BookmarkTransferCodec.cleanTitle(
+                  tab.title,
+                  fallback: uri.host,
+                ),
+                createdAt: _clock(),
+              ),
+              ..._bookmarks,
+            ];
+      await _repository.saveBookmarks(next);
+      _bookmarks = next;
+      if (!_disposed) notifyListeners();
+    });
   }
 
-  void removeBookmark(String id) {
-    _bookmarks = _bookmarks.where((item) => item.id != id).toList();
-    final snapshot = List<Bookmark>.unmodifiable(_bookmarks);
-    _enqueue(() => _repository.saveBookmarks(snapshot));
-    notifyListeners();
+  Future<void> removeBookmark(String id) => _durable(() async {
+    final next = _bookmarks.where((item) => item.id != id).toList();
+    if (next.length == _bookmarks.length) return;
+    await _repository.saveBookmarks(next);
+    _bookmarks = next;
+    if (!_disposed) notifyListeners();
+  });
+
+  Future<int> importBookmarks(
+    BookmarkImportPreview preview,
+  ) => _durable(() async {
+    if (preview.entries.length > BookmarkTransferCodec.maximumEntries) {
+      throw const LibraryOperationException(
+        'Import up to 5,000 bookmarks at a time.',
+      );
+    }
+    final seen = _bookmarks
+        .map((item) => requireWebUri(item.url).toString())
+        .toSet();
+    final additions = <Bookmark>[];
+    for (final item in preview.entries) {
+      final uri = requireWebUri(item.url);
+      if (!seen.add(uri.toString())) continue;
+      additions.add(
+        Bookmark(
+          id: _nextId(),
+          url: uri.toString(),
+          title: BookmarkTransferCodec.cleanTitle(
+            item.title,
+            fallback: uri.host,
+          ),
+          createdAt: item.createdAt ?? _clock(),
+        ),
+      );
+    }
+    if (additions.isEmpty) return 0;
+    if (_bookmarks.length + additions.length >
+        BrowserRepository.maximumBookmarks) {
+      throw const LibraryOperationException(
+        'This import exceeds the 5,000 bookmark limit. Remove some bookmarks first.',
+      );
+    }
+    final next = [...additions, ..._bookmarks];
+    await _repository.saveBookmarks(next);
+    _bookmarks = next;
+    if (!_disposed) notifyListeners();
+    return additions.length;
+  });
+
+  Future<bool> addToReadingList() async {
+    // Capture the explicit source before queuing, not a later selected tab.
+    final tab = activeTab;
+    if (tab.isPrivate || tab.isHome) return false;
+    return _saveReadingListSource(tab);
   }
+
+  /// An explicit address is metadata only: no search, navigation or fetch.
+  Future<bool> addReadingListUrl(String url, {String? title}) async {
+    final source = activeTab;
+    if (source.isPrivate) return false;
+    return _saveReadingListSource(
+      BrowserTab(
+        id: source.id,
+        url: url.trim(),
+        title: title ?? '',
+        isPrivate: source.isPrivate,
+      ),
+    );
+  }
+
+  Future<bool> _saveReadingListSource(BrowserTab tab) => _durable(() async {
+    final uri = requireWebUri(tab.url);
+    if (_readingList.any((item) => item.url == uri.toString())) return false;
+    if (_readingList.length >= BrowserRepository.maximumReadingList) {
+      throw const LibraryOperationException(
+        'The reading list holds up to 500 pages. Remove one before saving more.',
+      );
+    }
+    final item = ReadingListItem(
+      id: _nextId(),
+      url: uri.toString(),
+      title: BookmarkTransferCodec.cleanTitle(tab.title, fallback: uri.host),
+      createdAt: _clock(),
+    );
+    final added = await _repository.addReadingListItem(
+      tab,
+      id: item.id,
+      createdAt: item.createdAt,
+    );
+    if (added) {
+      _readingList = [item, ..._readingList];
+      if (!_disposed) notifyListeners();
+    }
+    return added;
+  });
+
+  Future<void> setReadingListRead(String id, bool read) => _durable(() async {
+    final item = _readingList.where((item) => item.id == id).firstOrNull;
+    if (item == null || item.isRead == read) return;
+    final readAt = read ? _clock() : null;
+    await _repository.setReadingListRead(id, readAt);
+    _readingList = [
+      for (final item in _readingList)
+        if (item.id == id) item.withReadAt(readAt) else item,
+    ];
+    if (!_disposed) notifyListeners();
+  });
+
+  Future<void> removeReadingListItem(String id) => _durable(() async {
+    if (!_readingList.any((item) => item.id == id)) return;
+    await _repository.removeReadingListItem(id);
+    _readingList = _readingList.where((item) => item.id != id).toList();
+    if (!_disposed) notifyListeners();
+  });
 
   void saveSettings(BrowserSettings settings) {
     _settings = settings.copyWith(
@@ -325,6 +451,38 @@ class BrowserState extends ChangeNotifier {
     });
   }
 
+  /// Explicit library actions use the same queue as session/history writes,
+  /// but return their own result instead of swallowing persistence failures.
+  Future<T> _durable<T>(Future<T> Function() operation) {
+    if (_disposed || !_storageAvailable) {
+      return Future.error(
+        const LibraryOperationException(
+          'Local storage is unavailable. This change could not be saved.',
+        ),
+      );
+    }
+    final result = _writes.then((_) async {
+      try {
+        return await operation();
+      } on LibraryOperationException {
+        rethrow;
+      } on FormatException {
+        throw const LibraryOperationException(
+          'Enter a valid HTTP or HTTPS address without credentials.',
+        );
+      } catch (_) {
+        storageError =
+            'A local change could not be saved. Check available device storage.';
+        if (!_disposed) notifyListeners();
+        throw const LibraryOperationException(
+          'The library change could not be saved. Please try again.',
+        );
+      }
+    });
+    _writes = result.then<void>((_) {}, onError: (Object _, StackTrace _) {});
+    return result;
+  }
+
   List<HistoryEntry> _retained(Iterable<HistoryEntry> entries) {
     final cutoff = _clock().subtract(BrowserRepository.historyRetention);
     final retained =
@@ -344,4 +502,11 @@ class BrowserState extends ChangeNotifier {
     unawaited(_writes.then((_) => _repository.close()).catchError((_) {}));
     super.dispose();
   }
+}
+
+class LibraryOperationException implements Exception {
+  const LibraryOperationException(this.message);
+  final String message;
+  @override
+  String toString() => message;
 }

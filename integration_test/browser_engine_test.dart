@@ -179,7 +179,7 @@ ${request.uri.path == '/with-frame' ? '<iframe src="/failure" title="Failing emb
       normal,
       "localStorage.setItem('wingman_test','normal'); document.cookie='wingman_test=normal; path=/'; true",
     );
-    data.toggleBookmark();
+    await data.toggleBookmark();
     await data.flush();
     debugPrint('STAGE popup and bookmark ready');
     await tapPageElement(normal, 'spaOne');
@@ -283,6 +283,13 @@ ${request.uri.path == '/with-frame' ? '<iframe src="/failure" title="Failing emb
       final tab = data.newTab(url: '$base/cycle-$i');
       await open(tab.id, tab.url);
       expect(engine.liveEngineCount, lessThanOrEqualTo(3));
+      if (Platform.isIOS) {
+        expect(
+          (await engine.platformStateForTesting(tab.id))['retainedViews'],
+          lessThanOrEqualTo(3),
+          reason: 'Closed WK views must not wait for Dart garbage collection',
+        );
+      }
       if (i.isEven) {
         await engine.close(tab.id);
         data.closeTab(tab.id);
@@ -290,8 +297,34 @@ ${request.uri.path == '/with-frame' ? '<iframe src="/failure" title="Failing emb
       }
     }
     debugPrint('STAGE clear native data starting');
-    await engine.clearData();
+    // Native views must be unmounted by real frames while the asynchronous
+    // close/clear runs. IntegrationTest's default frame policy otherwise leaves
+    // widgets mounted throughout this await, unlike the running application.
+    Object? clearFailure;
+    var clearingFinished = false;
+    engine.clearData().then(
+      (_) {
+        clearingFinished = true;
+      },
+      onError: (Object error) {
+        clearFailure = error;
+        clearingFinished = true;
+      },
+    );
+    await waitFor(() => clearingFinished, 'site-data clear completion');
+    if (clearFailure != null && Platform.isIOS) {
+      debugPrint(
+        'STAGE clear failure native state ${await engine.platformStateForTesting(normal)}',
+      );
+    }
+    expect(clearFailure, isNull);
     debugPrint('STAGE clear native data returned');
+    if (Platform.isIOS) {
+      expect(
+        (await engine.platformStateForTesting(normal))['retainedViews'],
+        0,
+      );
+    }
     await data.clearHistory();
     expect(engine.liveEngineCount, 0);
     expect((await repository.load()).history, isEmpty);

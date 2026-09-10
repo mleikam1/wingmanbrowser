@@ -348,6 +348,20 @@ class WebKitWebViewController extends PlatformWebViewController {
   int get webViewIdentifier =>
       PigeonInstanceManager.instance.getIdentifier(_webView.nativeWebView)!;
 
+  bool _wingmanDisposed = false;
+
+  /// Releases an already stopped, detached Wingman view without waiting for GC.
+  /// The owner must not use this controller again, and must await native release
+  /// before deleting shared site data. No generated Pigeon behavior is changed.
+  Future<void> wingmanDispose() async {
+    if (_wingmanDisposed) return;
+    _wingmanDisposed = true;
+    for (final key in <String>['estimatedProgress', 'URL', 'canGoBack']) {
+      await _webView.removeObserver(_webView.nativeWebView, key);
+    }
+    PigeonInstanceManager.instance.removeWeakReference(_webView.nativeWebView);
+  }
+
   /// Whether horizontal swipe gestures trigger page navigation.
   Future<void> setAllowsBackForwardNavigationGestures(bool enabled) {
     return _webView.setAllowsBackForwardNavigationGestures(enabled);

@@ -38,6 +38,10 @@ final class BrowserNativeBridge {
   private var findQueries: [Int64: String] = [:]
   private let guardPolicy = NativeGuardPolicy()
   private let contentRules = GuardContentRules()
+  #if DEBUG
+  private var deletionStage = "idle"
+  private let observedViews = NSHashTable<WKWebView>.weakObjects()
+  #endif
 
   init(registrar: FlutterPluginRegistrar) {
     self.registrar = registrar
@@ -53,7 +57,31 @@ final class BrowserNativeBridge {
     case "initialize":
       initialized = true; result(AppDelegate.pendingURL); AppDelegate.pendingURL = nil
     case "privateAvailable": result(true)
+    case "setSensitiveContent": result(nil) // Every inactive scene is covered natively.
+    case "pageScale":
+      view?.pageZoom = CGFloat(min(200, max(75, (args["percentage"] as? NSNumber)?.doubleValue ?? 100))) / 100
+      result(nil)
+    case "readArticle":
+      guard let view = view, let script = args["script"] as? String,
+        script.count < 12000, !view.isHidden else { result(nil); return }
+      // A private content world avoids website JavaScript replacing extraction
+      // helpers; only the explicitly requested text crosses the app channel.
+      view.evaluateJavaScript(script, in: nil, in: .defaultClient) { response in
+        switch response {
+        case .success(let value): result(value as? String)
+        case .failure: result(nil)
+        }
+      }
     #if DEBUG
+    case "privacyStateForTesting":
+      let scene = UIApplication.shared.connectedScenes.first { $0 is UIWindowScene }
+      let delegate = scene?.delegate as? SceneDelegate
+      if let visible = args["visible"] as? Bool, let scene = scene {
+        delegate?.setPrivacyShieldForTesting(scene, visible: visible)
+      }
+      result(["shieldVisible": delegate?.privacyShieldVisible ?? false,
+        "pageScale": (view?.pageZoom ?? 1) * 100, "deletionStage": deletionStage,
+        "retainedViews": observedViews.allObjects.count])
     case "guardDecisionForTesting":
       if let url = URL(string: args["url"] as? String ?? "") {
         result(guardPolicy.evaluate(url, tabId: args["tabId"] as? String ?? "", filename: args["filename"] as? String, mimeType: args["mimeType"] as? String))
@@ -77,7 +105,7 @@ final class BrowserNativeBridge {
         result(FlutterError(code: "guard_storage_unavailable", message: "Local Guard rules could not be opened.", details: nil))
       }
     case "prepareGuardNavigation":
-      delegates[id]?.prepareNavigation(args["url"] as? String ?? "")
+      delegates[id]?.prepareNavigation(args["url"] as? String ?? "", request: (args["request"] as? NSNumber)?.int64Value)
       result(nil)
     case "localDataDirectory":
       do {
@@ -100,6 +128,9 @@ final class BrowserNativeBridge {
       result(!configuration.websiteDataStore.isPersistent)
     case "configure":
       guard let view = view else { result(false); return }
+      #if DEBUG
+      observedViews.add(view)
+      #endif
       let privateMode = args["private"] as? Bool == true
       guard !privateMode || !view.configuration.websiteDataStore.isPersistent else {
         result(FlutterError(code: "private_unavailable", message: "Private storage unavailable.", details: nil)); return
@@ -118,8 +149,8 @@ final class BrowserNativeBridge {
         navigationSettled: { [weak self] url in
           self?.channel.invokeMethod("navigationSettled", arguments: ["id": id, "attemptedUrl": url])
         }, guardPolicy: guardPolicy, contentRules: contentRules, tabId: args["tabId"] as? String ?? String(id),
-        guardBlocked: { [weak self] url, decision in
-          self?.channel.invokeMethod("guardBlocked", arguments: ["id": id, "url": url, "decision": decision])
+        guardBlocked: { [weak self] url, decision, request in
+          self?.channel.invokeMethod("guardBlocked", arguments: ["id": id, "url": url, "decision": decision, "request": request])
         })
       proxy.webView = view
       delegates[id] = proxy
@@ -147,6 +178,9 @@ final class BrowserNativeBridge {
         view.find(findQueries[id] ?? "", configuration: configuration) { found in result(found.matchFound) }
       } else { result(false) }
     case "close":
+      #if DEBUG
+      deletionStage = "closing-view"
+      #endif
       guard let view = view else { result(nil); return }
       view.stopLoading()
       view.navigationDelegate = nil
@@ -155,10 +189,27 @@ final class BrowserNativeBridge {
       delegates.removeValue(forKey: id)
       findQueries.removeValue(forKey: id)
       if !view.configuration.websiteDataStore.isPersistent {
+        #if DEBUG
+        deletionStage = "clearing-private-store"
+        #endif
         view.configuration.websiteDataStore.removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(),
-          modifiedSince: .distantPast) { result(nil) }
-      } else { result(nil) }
+          modifiedSince: .distantPast) {
+            #if DEBUG
+            self.deletionStage = "private-store-cleared"
+            #endif
+            result(nil)
+          }
+      } else {
+        #if DEBUG
+        deletionStage = "normal-view-closed"
+        #endif
+        result(nil)
+      }
+    case "closedViewReleased": result(view == nil)
     case "clearData":
+      #if DEBUG
+      deletionStage = "clearing-default-store"
+      #endif
       var types = Set<String>()
       if args["cookies"] as? Bool == true { types.insert(WKWebsiteDataTypeCookies) }
       if args["cache"] as? Bool == true {
@@ -169,7 +220,12 @@ final class BrowserNativeBridge {
           WKWebsiteDataTypeIndexedDBDatabases, WKWebsiteDataTypeWebSQLDatabases,
           WKWebsiteDataTypeServiceWorkerRegistrations, WKWebsiteDataTypeFetchCache])
       }
-      WKWebsiteDataStore.default().removeData(ofTypes: types, modifiedSince: .distantPast) { result(nil) }
+      WKWebsiteDataStore.default().removeData(ofTypes: types, modifiedSince: .distantPast) {
+        #if DEBUG
+        self.deletionStage = "default-store-cleared"
+        #endif
+        result(nil)
+      }
     case "requestPermissions": result(true) // WebKit presents OS permission prompts after explicit app approval.
     case "defaultBrowser":
       guard let url = URL(string: UIApplication.openSettingsURLString) else { result(false); return }
@@ -193,17 +249,19 @@ final class BrowserNavigationProxy: NSObject, WKNavigationDelegate, WKDownloadDe
   private let guardPolicy: NativeGuardPolicy
   private let contentRules: GuardContentRules
   private let tabId: String
-  private let guardBlocked: (String, [String: Any]) -> Void
+  private let guardBlocked: (String, [String: Any], Int64) -> Void
+  private var requestIdentity: Int64 = 0
   private var blockedURL: String?
   init(original: WKNavigationDelegate?, privateMode: Bool, message: @escaping (String) -> Void,
     navigationSettled: @escaping (String) -> Void, guardPolicy: NativeGuardPolicy,
-    contentRules: GuardContentRules, tabId: String, guardBlocked: @escaping (String, [String: Any]) -> Void) {
+    contentRules: GuardContentRules, tabId: String, guardBlocked: @escaping (String, [String: Any], Int64) -> Void) {
     self.original = original; self.privateMode = privateMode; self.message = message
     self.navigationSettled = navigationSettled
     self.guardPolicy = guardPolicy; self.contentRules = contentRules
     self.tabId = tabId; self.guardBlocked = guardBlocked
   }
-  func prepareNavigation(_ address: String) {
+  func prepareNavigation(_ address: String, request: Int64? = nil) {
+    if let request = request { requestIdentity = request }
     blockedURL = nil
     guard let view = webView, let url = URL(string: address) else { return }
     contentRules.apply(to: view, enabled: guardPolicy.trackingEnabled(for: url.host ?? ""))
@@ -217,7 +275,7 @@ final class BrowserNavigationProxy: NSObject, WKNavigationDelegate, WKDownloadDe
     if blockedURL != url.absoluteString {
       blockedURL = url.absoluteString
       webView?.isHidden = true
-      guardBlocked(url.absoluteString, decision)
+      guardBlocked(url.absoluteString, decision, requestIdentity)
     }
     return true
   }
@@ -227,6 +285,21 @@ final class BrowserNavigationProxy: NSObject, WKNavigationDelegate, WKDownloadDe
   override func forwardingTarget(for selector: Selector!) -> Any? {
     if original?.responds(to: selector) == true { return original }
     return super.forwardingTarget(for: selector)
+  }
+  func webView(_ webView: WKWebView, didReceive challenge: URLAuthenticationChallenge,
+    completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
+    guard let original = original,
+      original.responds(to: NSSelectorFromString("webView:didReceiveAuthenticationChallenge:completionHandler:")) else {
+      completionHandler(.performDefaultHandling, nil); return
+    }
+    original.webView?(webView, didReceive: challenge) { [privateMode] disposition, credential in
+      // The plugin normally requests session persistence for HTTP credentials.
+      // Private views never request even session-level credential storage.
+      if privateMode, disposition == .useCredential, let user = credential?.user,
+        let password = credential?.password {
+        completionHandler(disposition, URLCredential(user: user, password: password, persistence: .none))
+      } else { completionHandler(disposition, credential) }
+    }
   }
   func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
     currentNavigation = navigation

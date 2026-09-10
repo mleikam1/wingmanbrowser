@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'guard/guard_runtime.dart';
 import 'guard_pin/guard_pin_service.dart';
 import 'guard_ui/guard_controller.dart';
+import 'monetization/ad_route_observer.dart';
 import 'state/browser_state.dart';
 import 'presentation/browser_shell.dart';
 import 'presentation/screens/onboarding_screen.dart';
@@ -38,6 +39,7 @@ class WingmanApp extends StatelessWidget {
     builder: (context, _) => MaterialApp(
       title: 'Wingman Browser',
       debugShowCheckedModeBanner: false,
+      navigatorObservers: [adRouteObserver],
       theme: WingmanTheme.make(Brightness.light),
       darkTheme: WingmanTheme.make(Brightness.dark),
       themeMode: state.settings.themeMode,
