@@ -15,12 +15,26 @@ void main() {
     AdPlacement placement = AdPlacement.homeBanner,
     AdHostSurface surface = AdHostSurface.home,
     bool isPrivate = false,
+    bool isCurrentRoute = true,
+    bool isForeground = true,
+    AdProtectionRequirements requirements = AdProtectionRequirements.standard,
+    AdProviderCapability provider =
+        AdProviderCapability.standardTestInventoryOnly,
+    AdContentSuitability suitability =
+        AdContentSuitability.reviewedTestInventory,
     bool consent = true,
     bool optedIn = true,
     AdConfiguration configuration = testConfiguration,
   }) => policy.evaluate(
     placement: placement,
-    currentSurface: surface,
+    context: AdEligibilityContext(
+      currentSurface: surface,
+      isCurrentRoute: isCurrentRoute,
+      isForeground: isForeground,
+      protectionRequirements: requirements,
+    ),
+    providerCapability: provider,
+    contentSuitability: suitability,
     isPrivate: isPrivate,
     configuration: configuration,
     consentReady: consent,
@@ -53,6 +67,62 @@ void main() {
       AdDecision.surfaceMismatch,
     );
     expect(decide(), AdDecision.allowed);
+  });
+
+  test('sensitive and unknown routes cannot become inventory', () {
+    for (final surface in [
+      AdHostSurface.guardBlock,
+      AdHostSurface.securityWarning,
+      AdHostSurface.helpNow,
+      AdHostSurface.support,
+      AdHostSurface.settings,
+    ]) {
+      for (final placement in AdPlacement.values) {
+        expect(
+          decide(placement: placement, surface: surface),
+          AdDecision.sensitiveSurface,
+        );
+      }
+    }
+    expect(decide(surface: AdHostSurface.unknown), AdDecision.surfaceMismatch);
+  });
+
+  test(
+    'foreground top route and verified protection are independent gates',
+    () {
+      expect(decide(isCurrentRoute: false), AdDecision.inactiveSurface);
+      expect(decide(isForeground: false), AdDecision.inactiveSurface);
+      expect(
+        decide(requirements: AdProtectionRequirements.unknown),
+        AdDecision.protectionUnknown,
+      );
+      expect(
+        decide(requirements: AdProtectionRequirements.strict),
+        AdDecision.protectionIncompatible,
+      );
+      expect(
+        decide(provider: AdProviderCapability.unknown),
+        AdDecision.providerUnverified,
+      );
+      expect(
+        decide(suitability: AdContentSuitability.unknown),
+        AdDecision.contentUnverified,
+      );
+    },
+  );
+
+  test('the default context denies even a fully configured debug demo', () {
+    expect(
+      policy.preflight(
+        placement: AdPlacement.homeBanner,
+        context: const AdEligibilityContext(),
+        isPrivate: false,
+        configuration: testConfiguration,
+        providerCapability: AdProviderCapability.standardTestInventoryOnly,
+        contentSuitability: AdContentSuitability.reviewedTestInventory,
+      ),
+      isNot(AdDecision.allowed),
+    );
   });
 
   test('consent and explicit demo opt-in are independently required', () {

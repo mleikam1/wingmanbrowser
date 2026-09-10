@@ -301,7 +301,7 @@ class _GuardSettingsScreenState extends State<GuardSettingsScreen> {
                               : null,
                         ),
                       const Text(
-                        'Coverage is a small, curated starter set—not every website. Support, recovery and education sites are distinguished from commercial or recreational content. No URL keyword scanning.',
+                        'Category filtering is experimental. Coverage is a small, curated starter set and many websites are not classified. Support, recovery and education sites are distinguished from commercial or recreational content. No URL keyword scanning.',
                       ),
                       if (config.adultFilteringEnabled)
                         const Padding(
@@ -610,8 +610,8 @@ class _GuardSettingsScreenState extends State<GuardSettingsScreen> {
                       if (kIsWeb || defaultTargetPlatform == TargetPlatform.iOS)
                         const Text(
                           kIsWeb
-                            ? 'The Web companion cannot block or count trackers in websites opened in your host browser.'
-                            : 'iOS does not expose a reliable per-request tracker count. An unavailable count does not mean zero blocking.',
+                              ? 'The Web companion cannot block or count trackers in websites opened in your host browser.'
+                              : 'iOS does not expose a reliable per-request tracker count. An unavailable count does not mean zero blocking.',
                         ),
                       TextButton(
                         onPressed: busy

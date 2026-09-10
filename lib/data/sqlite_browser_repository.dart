@@ -2,6 +2,7 @@ import 'package:flutter/material.dart' show ThemeMode;
 import 'package:sqflite/sqflite.dart';
 
 import '../domain/models.dart';
+import '../domain/bookmark_transfer.dart';
 import '../domain/search.dart';
 import 'browser_repository.dart';
 import 'database_native.dart' if (dart.library.js_interop) 'database_web.dart';
@@ -22,7 +23,7 @@ class SqliteBrowserRepository implements BrowserRepository {
 
   Future<Database> _open() async {
     final options = OpenDatabaseOptions(
-      version: 1,
+      version: 2,
       onConfigure: (db) async {
         // Reclaimed records are overwritten within SQLite. Platform backups,
         // browser eviction and filesystem snapshots remain OS/browser concerns.
@@ -49,6 +50,10 @@ class SqliteBrowserRepository implements BrowserRepository {
         await db.execute('''CREATE TABLE settings (
           key TEXT PRIMARY KEY, value TEXT NOT NULL
         )''');
+        await _createReadingList(db);
+      },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) await _createReadingList(db);
       },
     );
     return factory?.openDatabase(databasePath, options: options) ??
@@ -68,6 +73,7 @@ class SqliteBrowserRepository implements BrowserRepository {
       db.query('history', orderBy: 'visited_at DESC'),
       db.query('bookmarks', orderBy: 'created_at DESC'),
       db.query('settings'),
+      db.query('reading_list', orderBy: 'created_at DESC, id'),
     ]);
     final prefs = {
       for (final row in results[3])
@@ -113,6 +119,21 @@ class SqliteBrowserRepository implements BrowserRepository {
               ),
             ),
       ],
+      readingList: [
+        for (final row in results[4])
+          if (_safeUrl(row['url'] as String))
+            ReadingListItem(
+              id: row['id'] as String,
+              url: row['url'] as String,
+              title: row['title'] as String,
+              createdAt: DateTime.fromMillisecondsSinceEpoch(
+                row['created_at'] as int,
+              ),
+              readAt: row['read_at'] == null
+                  ? null
+                  : DateTime.fromMillisecondsSinceEpoch(row['read_at'] as int),
+            ),
+      ],
       settings: BrowserSettings(
         searchProviderId: SearchProvider.byId(
           prefs['search_provider'] ?? '',
@@ -125,6 +146,10 @@ class SqliteBrowserRepository implements BrowserRepository {
         guardJson: prefs['guard_configuration'] ?? '{}',
         guardStatsJson: prefs['guard_statistics'] ?? '{}',
         localSuggestions: prefs['local_suggestions'] != 'false',
+        pageScale: (int.tryParse(prefs['page_scale'] ?? '') ?? 100).clamp(
+          75,
+          200,
+        ),
       ),
     );
   }
@@ -197,11 +222,31 @@ class SqliteBrowserRepository implements BrowserRepository {
 
   @override
   Future<void> saveBookmarks(List<Bookmark> bookmarks) async {
+    final ids = <String>{};
+    final urls = <String>{};
     for (final bookmark in bookmarks) {
       requireWebUri(bookmark.url);
+      if (!ids.add(bookmark.id) || !urls.add(bookmark.url)) {
+        throw const FormatException(
+          'Bookmarks must have unique addresses and identifiers.',
+        );
+      }
     }
     final db = await _db;
     await db.transaction((txn) async {
+      if (bookmarks.length > BrowserRepository.maximumBookmarks) {
+        // Preserve oversized pre-upgrade libraries and permit deletion, but
+        // never silently drop records or let a new import increase them.
+        final existing = (await txn.query(
+          'bookmarks',
+          columns: ['url'],
+        )).map((row) => row['url'] as String).toSet();
+        if (!existing.containsAll(urls)) {
+          throw StateError(
+            'The bookmark limit is 5,000. Remove some before adding more.',
+          );
+        }
+      }
       final batch = txn.batch()..delete('bookmarks');
       for (final bookmark in bookmarks) {
         batch.insert('bookmarks', {
@@ -215,6 +260,75 @@ class SqliteBrowserRepository implements BrowserRepository {
     });
   }
 
+  Future<void> _createReadingList(DatabaseExecutor db) async {
+    await db.execute('''CREATE TABLE reading_list (
+      id TEXT PRIMARY KEY, url TEXT NOT NULL UNIQUE, title TEXT NOT NULL,
+      created_at INTEGER NOT NULL, read_at INTEGER
+    )''');
+    await db.execute(
+      'CREATE INDEX reading_list_created_at ON reading_list(created_at DESC)',
+    );
+  }
+
+  @override
+  Future<bool> addReadingListItem(
+    BrowserTab tab, {
+    required String id,
+    required DateTime createdAt,
+  }) async {
+    if (tab.isPrivate || tab.isHome) return false;
+    final uri = requireWebUri(tab.url);
+    final db = await _db;
+    return db.transaction((txn) async {
+      if ((await txn.query(
+        'reading_list',
+        columns: ['id'],
+        where: 'url = ?',
+        whereArgs: [uri.toString()],
+        limit: 1,
+      )).isNotEmpty) {
+        return false;
+      }
+      final count =
+          Sqflite.firstIntValue(
+            await txn.rawQuery('SELECT COUNT(*) FROM reading_list'),
+          ) ??
+          0;
+      if (count >= BrowserRepository.maximumReadingList) {
+        throw StateError(
+          'The reading list holds up to 500 pages. Remove one before saving more.',
+        );
+      }
+      await txn.insert('reading_list', {
+        'id': id,
+        'url': uri.toString(),
+        'title': BookmarkTransferCodec.cleanTitle(
+          tab.title,
+          fallback: uri.host,
+        ),
+        'created_at': createdAt.millisecondsSinceEpoch,
+      });
+      return true;
+    });
+  }
+
+  @override
+  Future<void> setReadingListRead(String id, DateTime? readAt) async {
+    final db = await _db;
+    await db.update(
+      'reading_list',
+      {'read_at': readAt?.millisecondsSinceEpoch},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  @override
+  Future<void> removeReadingListItem(String id) async {
+    final db = await _db;
+    await db.delete('reading_list', where: 'id = ?', whereArgs: [id]);
+  }
+
   @override
   Future<void> saveSettings(BrowserSettings settings) async {
     final db = await _db;
@@ -226,6 +340,7 @@ class SqliteBrowserRepository implements BrowserRepository {
       'guard_configuration': settings.guardJson,
       'guard_statistics': settings.guardStatsJson,
       'local_suggestions': settings.localSuggestions.toString(),
+      'page_scale': settings.pageScale.clamp(75, 200).toString(),
     };
     for (final entry in prefs.entries) {
       batch.insert('settings', {

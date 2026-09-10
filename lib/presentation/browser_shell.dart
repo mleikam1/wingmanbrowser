@@ -10,9 +10,12 @@ import '../domain/local_suggestions.dart';
 import '../guard_ui/guard_controller.dart';
 import '../guard_ui/guard_settings_screen.dart';
 import '../guard_ui/guard_surfaces.dart';
+import '../monetization/ad_policy_service.dart';
+import '../monetization/ad_route_observer.dart';
 import '../state/browser_state.dart';
 import 'screens/home_screen.dart';
 import 'screens/library_screen.dart';
+import 'screens/reader_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/tab_switcher.dart';
 import 'widgets/omnibox.dart';
@@ -21,23 +24,62 @@ import 'widgets/browser_page_error.dart';
 import 'widgets/clear_browsing_data_dialog.dart';
 
 class BrowserShell extends StatefulWidget {
-  const BrowserShell({super.key, required this.state, this.guard});
+  const BrowserShell({
+    super.key,
+    required this.state,
+    this.guard,
+    this.readerForTesting,
+  });
   final BrowserState state;
   final GuardController? guard;
+  @visibleForTesting
+  final Future<ReaderArticle?> Function(String)? readerForTesting;
   @override
   State<BrowserShell> createState() => _BrowserShellState();
 }
 
 class _BrowserShellState extends State<BrowserShell>
-    with WidgetsBindingObserver {
+    with WidgetsBindingObserver, RouteAware {
   BrowserState get data => widget.state;
   GuardController? get guard => widget.guard;
   late final BrowserEnginePool engine;
+  late Listenable _adEligibilityChanges;
+  late Listenable _shellChanges;
   final native = NativeBrowserService();
+  bool _isForeground = true;
+  bool _reading = false;
+  int _readerGeneration = 0;
+  ModalRoute<dynamic>? _route;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final next = ModalRoute.of(context);
+    if (_route != next) {
+      adRouteObserver.unsubscribe(this);
+      _route = next;
+      if (next != null) adRouteObserver.subscribe(this, next);
+      _readerGeneration++;
+    }
+  }
+
+  @override
+  void didPushNext() {
+    _readerGeneration++;
+  }
+
+  @override
+  void didPop() {
+    _readerGeneration++;
+  }
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _isForeground =
+        WidgetsBinding.instance.lifecycleState == null ||
+        WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
     engine = BrowserEnginePool(
       confirm: confirm,
       prompt: prompt,
@@ -55,6 +97,8 @@ class _BrowserShellState extends State<BrowserShell>
       },
       onMessage: message,
     );
+    _adEligibilityChanges = Listenable.merge([data, guard]);
+    _shellChanges = Listenable.merge([data, engine, guard]);
     guard?.applyNative = (policy, recheck) async {
       if (kIsWeb) return;
       await engine.updateGuardPolicy(policy);
@@ -73,6 +117,7 @@ class _BrowserShellState extends State<BrowserShell>
     try {
       // Install policy before initialize can deliver a cold-start external URL.
       await guard?.sync();
+      await engine.setPageScale(data.settings.pageScale);
       await native.initialize(
         onMessage: message,
         onRendererGone: engine.rendererGone,
@@ -100,7 +145,20 @@ class _BrowserShellState extends State<BrowserShell>
   }
 
   @override
+  void didUpdateWidget(covariant BrowserShell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.state != widget.state || oldWidget.guard != widget.guard) {
+      _adEligibilityChanges = Listenable.merge([data, guard]);
+      _shellChanges = Listenable.merge([data, engine, guard]);
+    }
+  }
+
+  @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) _readerGeneration++;
+    if (mounted) {
+      setState(() => _isForeground = state == AppLifecycleState.resumed);
+    }
     if (state == AppLifecycleState.inactive ||
         state == AppLifecycleState.paused) {
       unawaited(data.flush());
@@ -110,6 +168,8 @@ class _BrowserShellState extends State<BrowserShell>
 
   @override
   void dispose() {
+    _readerGeneration++;
+    adRouteObserver.unsubscribe(this);
     WidgetsBinding.instance.removeObserver(this);
     native.dispose();
     guard?.applyNative = null;
@@ -287,14 +347,11 @@ class _BrowserShellState extends State<BrowserShell>
     await engine.close(id);
   }
 
-  void library(bool bookmarks) => Navigator.push(
+  void library(LibraryKind kind) => Navigator.push(
     context,
     MaterialPageRoute<void>(
-      builder: (_) => LibraryScreen(
-        state: data,
-        bookmarks: bookmarks,
-        onNavigate: navigate,
-      ),
+      builder: (_) =>
+          LibraryScreen(state: data, kind: kind, onNavigate: navigate),
     ),
   );
   void settings() => Navigator.push(
@@ -303,6 +360,16 @@ class _BrowserShellState extends State<BrowserShell>
       builder: (_) => SettingsScreen(
         state: data,
         onClear: clearData,
+        onPageScale: (value) async {
+          data.saveSettings(data.settings.copyWith(pageScale: value));
+          try {
+            await engine.setPageScale(value);
+          } catch (_) {
+            message(
+              'This website could not apply the new size. Try reloading it.',
+            );
+          }
+        },
         onGuard: guard == null ? null : guardSettings,
         onDefaultBrowser: () async {
           try {
@@ -359,7 +426,9 @@ class _BrowserShellState extends State<BrowserShell>
       await openActive();
     } catch (_) {
       message(
-        'Some data could not be cleared. Please close your tabs and try again.',
+        engine.isClearingSiteData
+            ? 'Website data is still clearing. New pages are paused until it finishes. Please wait before trying again.'
+            : 'Some data could not be cleared. Please close your tabs and try again.',
       );
     }
   }
@@ -368,11 +437,22 @@ class _BrowserShellState extends State<BrowserShell>
     final tab = data.activeTab;
     switch (value) {
       case 'bookmark':
-        data.toggleBookmark();
+        await data.toggleBookmark();
       case 'bookmarks':
-        library(true);
+        library(LibraryKind.bookmarks);
       case 'history':
-        library(false);
+        library(LibraryKind.history);
+      case 'readingList':
+        library(LibraryKind.readingList);
+      case 'saveReading':
+        final saved = await data.addToReadingList();
+        message(
+          saved
+              ? 'Saved to your reading list.'
+              : 'Already saved, or this page cannot be added to the reading list.',
+        );
+      case 'reader':
+        await openReader();
       case 'settings':
         settings();
       case 'guard':
@@ -422,10 +502,73 @@ class _BrowserShellState extends State<BrowserShell>
     }
   }
 
+  Future<void> openReader() async {
+    if (kIsWeb || _reading || !_isForeground || _route?.isCurrent != true) {
+      return;
+    }
+    final tab = data.activeTab;
+    if (tab.isHome) return;
+    _reading = true;
+    final generation = _readerGeneration;
+    try {
+      final article = await (widget.readerForTesting ?? engine.readArticle)(
+        tab.id,
+      );
+      if (!mounted ||
+          generation != _readerGeneration ||
+          !_isForeground ||
+          _route?.isCurrent != true ||
+          data.activeId != tab.id ||
+          data.activeTab.url != tab.url) {
+        return;
+      }
+      if (article == null) {
+        message(
+          'This page does not have readable article text. Finish loading it or try another page.',
+        );
+        return;
+      }
+      await Navigator.push<void>(
+        context,
+        MaterialPageRoute(builder: (_) => ReaderScreen(article: article)),
+      );
+    } finally {
+      _reading = false;
+    }
+  }
+
+  AdProtectionRequirements get adProtectionRequirements {
+    final controller = guard;
+    if (controller == null ||
+        controller.problem != null ||
+        !controller.pack.integrityVerified) {
+      return AdProtectionRequirements.unknown;
+    }
+    final policy = controller.configuration;
+    if (controller.pin.hasPin ||
+        controller.locked ||
+        controller.focusActive ||
+        policy.customBlock.isNotEmpty ||
+        (policy.guardEnabled && policy.enabledCategories.isNotEmpty)) {
+      return AdProtectionRequirements.strict;
+    }
+    return AdProtectionRequirements.standard;
+  }
+
+  AdEligibilityContext readAdEligibility() => AdEligibilityContext(
+    currentSurface: data.activeTab.isHome || kIsWeb
+        ? AdHostSurface.home
+        : AdHostSurface.browserPage,
+    isCurrentRoute: mounted && _route?.isCurrent == true,
+    isForeground: _isForeground,
+    protectionRequirements: adProtectionRequirements,
+  );
+
   @override
   Widget build(BuildContext context) => ListenableBuilder(
-    listenable: Listenable.merge([data, engine, guard]),
+    listenable: _shellChanges,
     builder: (context, _) {
+      final isCurrentRoute = ModalRoute.isCurrentOf(context) ?? false;
       final tab = data.activeTab;
       final page = engine.status(tab.id);
       final scheme = Theme.of(context).colorScheme;
@@ -546,7 +689,20 @@ class _BrowserShellState extends State<BrowserShell>
                                 state: data,
                                 onNavigate: navigate,
                                 onSettings: settings,
-                                onBookmarks: () => library(true),
+                                onBookmarks: () =>
+                                    library(LibraryKind.bookmarks),
+                                onReadingList: () =>
+                                    library(LibraryKind.readingList),
+                                adEligibility: AdEligibilityContext(
+                                  currentSurface: AdHostSurface.home,
+                                  isCurrentRoute: isCurrentRoute,
+                                  isForeground: _isForeground,
+                                  protectionRequirements:
+                                      adProtectionRequirements,
+                                ),
+                                adEligibilityChanges: _adEligibilityChanges,
+                                readAdEligibility: readAdEligibility,
+                                readAdIsPrivate: () => data.activeTab.isPrivate,
                                 onPrivate: () => newTab(true),
                                 guardCard: guard == null
                                     ? null
@@ -666,6 +822,14 @@ class _BrowserShellState extends State<BrowserShell>
                   desktopMode: tab.desktopMode,
                   tabCount: data.tabs.length,
                   guardAvailable: guard != null,
+                  readerAvailable:
+                      engine.supportsReader &&
+                      !tab.isHome &&
+                      !page.isLoading &&
+                      page.error == null &&
+                      page.guardDecision == null &&
+                      engine.view(tab.id) != null,
+                  readerSupported: engine.supportsReader,
                   onBack: !tab.isHome && page.canGoBack
                       ? () => engine.back(tab.id)
                       : null,
@@ -682,6 +846,8 @@ class _BrowserShellState extends State<BrowserShell>
                   onMenuSelected: (value) async {
                     try {
                       await menu(value);
+                    } on LibraryOperationException catch (error) {
+                      message(error.message);
                     } catch (_) {
                       message('This action could not be completed.');
                     }

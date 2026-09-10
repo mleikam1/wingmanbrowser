@@ -109,13 +109,17 @@ class ConsentUnavailableException implements Exception {
 /// boolean. Concurrent callers share one refresh. Errors deliberately deny ads,
 /// even where UMP could permit using a previously cached consent decision.
 class AdConsentManager {
-  AdConsentManager(this._gateway, {bool Function()? canContinue})
-    : _canContinue = canContinue ?? (() => true);
+  AdConsentManager(
+    this._gateway, {
+    bool Function()? canContinue,
+    bool privacyOptionsPreviouslyRequired = false,
+  }) : _canContinue = canContinue ?? (() => true),
+       _privacyOptionsRequired = privacyOptionsPreviouslyRequired;
 
   final ConsentGateway _gateway;
   final bool Function() _canContinue;
   Future<AdConsentSnapshot>? _refresh;
-  bool _privacyOptionsRequired = false;
+  bool _privacyOptionsRequired;
 
   Future<AdConsentSnapshot> refresh() => _refresh ??= _update();
 

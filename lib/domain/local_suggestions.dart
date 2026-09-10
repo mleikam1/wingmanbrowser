@@ -1,4 +1,5 @@
 import 'models.dart';
+import 'search.dart';
 
 /// Only local bookmarks/history; no provider or network client can be supplied.
 /// Private tabs never consult this data for suggestions.
@@ -18,19 +19,26 @@ class LocalSuggestionService {
     final result = <String>[];
     void add(String url, String title) {
       if (result.length >= 5 || seen.contains(url)) return;
-      final uri = Uri.tryParse(url);
-      if (uri == null || !{'https', 'http'}.contains(uri.scheme)) return;
-      if (url.toLowerCase().contains(query) ||
-          title.toLowerCase().contains(query)) {
-        seen.add(url);
-        result.add(url);
+      // Most entries do not match. Parse only potential results so typing does
+      // not construct thousands of Uri objects at the supported library cap.
+      if (!url.toLowerCase().contains(query) &&
+          !title.toLowerCase().contains(query)) {
+        return;
       }
+      try {
+        requireWebUri(url);
+      } on FormatException {
+        return;
+      }
+      seen.add(url);
+      result.add(url);
     }
 
     for (final entry in bookmarks) {
       add(entry.url, entry.title);
       if (result.length == 5) break;
     }
+    if (result.length == 5) return result;
     for (final entry in history) {
       add(entry.url, entry.title);
       if (result.length == 5) break;

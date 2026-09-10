@@ -7,6 +7,8 @@ import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:wingman_browser/config/ad_configuration.dart';
 import 'package:wingman_browser/monetization/home_ad_slot.dart';
+import 'package:wingman_browser/monetization/ad_policy_service.dart';
+import 'package:wingman_browser/monetization/ad_route_observer.dart';
 
 /// Runs against actual native Google services. No mocked grant, consent reset,
 /// forced geography, production unit or ad-creative tap is used here.
@@ -28,9 +30,21 @@ void main() {
         configuration.bannerUnitId,
         startsWith('ca-app-pub-3940256099942544/'),
       );
+      final eligibilityChanges = ChangeNotifier();
+      const eligibility = AdEligibilityContext(
+        currentSurface: AdHostSurface.home,
+        isCurrentRoute: true,
+        isForeground: true,
+        protectionRequirements: AdProtectionRequirements.standard,
+      );
+      addTearDown(() async {
+        await tester.pumpWidget(const SizedBox());
+        eligibilityChanges.dispose();
+      });
 
       Widget harness(List<AdDemoStatus> events, {required String id}) =>
           MaterialApp(
+            navigatorObservers: [adRouteObserver],
             home: Scaffold(
               body: SafeArea(
                 child: SingleChildScrollView(
@@ -38,6 +52,10 @@ void main() {
                   child: HomeAdSlot(
                     key: ValueKey(id),
                     isPrivate: false,
+                    eligibility: eligibility,
+                    eligibilityChanges: eligibilityChanges,
+                    readEligibility: () => eligibility,
+                    readIsPrivate: () => false,
                     onStatusChanged: events.add,
                   ),
                 ),

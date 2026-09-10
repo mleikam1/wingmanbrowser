@@ -20,6 +20,16 @@ class MemoryRepository implements BrowserRepository {
   @override
   Future<void> saveBookmarks(List<Bookmark> bookmarks) async {}
   @override
+  Future<bool> addReadingListItem(
+    BrowserTab tab, {
+    required String id,
+    required DateTime createdAt,
+  }) async => !tab.isPrivate && !tab.isHome;
+  @override
+  Future<void> setReadingListRead(String id, DateTime? readAt) async {}
+  @override
+  Future<void> removeReadingListItem(String id) async {}
+  @override
   Future<void> saveSettings(BrowserSettings settings) async {}
   @override
   Future<void> clearHistory() async {}

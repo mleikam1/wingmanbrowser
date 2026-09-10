@@ -56,6 +56,29 @@ class FakeConsentGateway implements ConsentGateway {
 }
 
 void main() {
+  test('ineligible consent manager performs no provider calls', () async {
+    final gateway = FakeConsentGateway();
+    final manager = AdConsentManager(gateway, canContinue: () => false);
+    expect((await manager.refresh()).canRequestAds, isFalse);
+    expect((await manager.showPrivacyOptions()).canRequestAds, isFalse);
+    expect(gateway.calls, isEmpty);
+  });
+
+  test(
+    'a fresh options attempt preserves previously required access on error',
+    () async {
+      final gateway = FakeConsentGateway()..failOptions = true;
+      final manager = AdConsentManager(
+        gateway,
+        privacyOptionsPreviouslyRequired: true,
+      );
+      final result = await manager.showPrivacyOptions();
+      expect(result.canRequestAds, isFalse);
+      expect(result.privacyOptionsRequired, isTrue);
+      expect(result.hasError, isTrue);
+    },
+  );
+
   test(
     'leaving Home during UMP update prevents delayed consent form',
     () async {
