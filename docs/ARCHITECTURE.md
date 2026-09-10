@@ -14,6 +14,20 @@ Wingman shares Flutter product UI and browser metadata across targets. Mobile pa
 | `ios/Runner/` | WK data-store configuration, download/navigation proxy and incoming URLs |
 | `lib/config/`, `lib/monetization/` | Central configuration, placement policy, consent and owned Home ad slot |
 | `lib/privacy/` | Enum-only analytics boundary and diagnostic categorization |
+| `lib/guard/` | Domain normalization, local policy, signed manifests, indexed filter repository, SafeSearch |
+| `lib/guard_ui/` | Local Guard controller, daily counts, time-limited grants, settings and owned blocked pages |
+| `lib/guard_pin/` | Salted PIN derivation, native secure storage, persistent retry limits and session lock |
+| `assets/guard/`, `assets/guard_tracking/` | Signed authored category starter pack and separately licensed tracker subset |
+
+## Guard decisions and updates
+
+`GuardRuntime` opens a local indexed SQLite filter database and verifies the active release. `NavigationPolicyService` separates known threat rules, user rules, temporary Focus and content categories. Explicit support/education classifications exempt category rules; they cannot bypass known threats or user blocks. Unknown domains remain usable and are not classified by words in their URLs. An unavailable pack has an explicit degraded status; normal browsing and native security can continue.
+
+`GuardController` stores configuration separately from numeric daily statistics. Private decisions bypass the bounded host cache and saved counters. Allow Once is memory-only, bound to an exact host and tab, expires after five minutes, and is cleared when that navigation completes. Family lock removes those grants and propagates policy to live engines. Local suggestions consult only bookmarks/history and return before accessing either source in private mode.
+
+Android and iOS read the same indexed active generation natively for callback paths, including redirects and response decisions. Normal subresources never invoke Dart classification; tracker blocking stays native. Android uses a synchronous third-party hostname check; iOS compiles a small WKContentRuleList. Updating policy rechecks cached tabs. The engine retains a blocked-navigation status even when no WebView was created, so a typed blocked address renders a Wingman-owned explanation rather than a spinner or website.
+
+Signed manifests bind release metadata, pack bytes and the derived rule index. Activation and previous-generation state change transactionally. Verification failures retain the last valid version; downloads cannot import an unsigned arbitrary list. The default update source is absent. A future global, cacheable artifact transport can implement `FilterPackUpdateSource`, which accepts no browsing URL. No Google Cloud or Firebase resource is needed for local browsing. [Full privacy data flow](PRIVACY_ARCHITECTURE.md).
 
 ## State and memory
 

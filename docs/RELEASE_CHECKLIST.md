@@ -2,6 +2,16 @@
 
 This is an engineering handoff, not evidence of store approval. Local builds cannot enroll the operator, approve entitlements, configure real advertising or secure distribution signing. The validation report records completed checks.
 
+## Guard release gates
+
+Phase 2 supplies a limited local starter pack and browser-level controls. Before production distribution:
+
+- Replace development signing trust with a managed production key and reviewed key-rotation procedure.
+- License, validate and maintain broader category/tracker coverage; retain clear support/education exceptions and false-positive procedures.
+- Configure a reviewed global update endpoint with budgets and operational ownership. No Google Web Risk feed, production update service or report inbox is active now.
+- Complete release-mode startup, memory and navigation acceptance on older supported physical phones. Debug simulator/emulator timings are not production smoothness evidence.
+- Preserve the browser-only scope disclosures for Web and Family controls; review Family PIN recovery expectations, SafeSearch gaps and native-provider disclosures.
+
 ## Identity and ownership
 
 - Clear the Wingman brand for intended markets; replace the temporary icon/wordmark as needed. Local implementation establishes no trademark or domain ownership.

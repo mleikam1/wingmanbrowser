@@ -11,6 +11,8 @@ Use `pubspec.lock` and native resolution files for the exact resolved versions. 
 | `sqflite` 2.4.4 | Structured, transactional native local persistence | No server or account; not an encryption layer |
 | `sqflite_common_ffi_web` 1.1.3 | Shared SQL repository for web through local WASM/IndexedDB | Upstream marks web support experimental; storage may be evicted and is origin-specific |
 | `path` 1.9.1 | Safe database-path composition | Local pure Dart utility |
+| `cryptography` 2.9.0 | SHA-256 and Ed25519 filter verification; salted PBKDF2 PIN derivation | On-device primitives; no hosted cryptography or credentials in the client |
+| `flutter_secure_storage` 11.1.0 | Platform protected storage for PIN verifier and retry state | Android protected storage / iOS device-bound non-synchronizing Keychain; no PIN feature on Web |
 | `url_launcher` 6.3.2 | Explicit external links and the web search companion | Opening a link hands it to the destination app/browser |
 | `share_plus` 13.3.0 | User-requested platform share sheet | User chooses the receiving service; never invoked automatically |
 | `google_mobile_ads` 9.1.0 | User-requested Android/iOS Google test-ad foundation and UMP | Optional demo, default off, no production request path; SDK may process technical/ad data |
