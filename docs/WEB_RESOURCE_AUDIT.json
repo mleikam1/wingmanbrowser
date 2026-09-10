@@ -1,0 +1,79 @@
+{
+  "validation_date": "2026-09-10",
+  "browser": "Google Chrome 152, native CUA + DevTools Network, cache disabled",
+  "scenario": "Wingman production Home, Dark theme, Brave Search preference, no ad opt-in",
+  "completed_requests": 15,
+  "off_origin_completed_requests": 0,
+  "http_errors": 0,
+  "requests": [
+    {
+      "path": "/",
+      "status": 200
+    },
+    {
+      "path": "/flutter_bootstrap.js",
+      "status": 200
+    },
+    {
+      "path": "/canvaskit/chromium/canvaskit.wasm",
+      "status": 200
+    },
+    {
+      "path": "/canvaskit/chromium/canvaskit.js",
+      "status": 200
+    },
+    {
+      "path": "/main.dart.js",
+      "status": 200
+    },
+    {
+      "path": "/manifest.json",
+      "status": 200
+    },
+    {
+      "path": "/assets/FontManifest.json",
+      "status": 200
+    },
+    {
+      "path": "/assets/fonts/MaterialIcons-Regular.otf",
+      "status": 200
+    },
+    {
+      "path": "/assets/assets/fonts/Roboto-Regular.ttf",
+      "status": 200
+    },
+    {
+      "path": "/assets/assets/fonts/Roboto-Medium.ttf",
+      "status": 200
+    },
+    {
+      "path": "/assets/assets/fonts/Roboto-Bold.ttf",
+      "status": 200
+    },
+    {
+      "path": "/assets/assets/fonts/NotoSansSymbols.ttf",
+      "status": 200
+    },
+    {
+      "path": "/assets/packages/cupertino_icons/assets/CupertinoIcons.ttf",
+      "status": 200
+    },
+    {
+      "path": "/favicon.png",
+      "status": 200
+    },
+    {
+      "path": "/icons/Icon-192.png",
+      "status": 200
+    }
+  ],
+  "notes": [
+    "DevTools showed 16 total requests including a same-origin shared-worker connection marked pending; the HAR exports 15 completed requests.",
+    "No page errors were present after the final reload or settings/search smoke. An upstream Flutter Intl.v8BreakIterator deprecation remains. Enabling semantics and using the UI produced generated form-field id/name advisories and verbose timing diagnostics; console error/warning categories were empty.",
+    "This covers the observed Home load and Wingman tab interactions only. Additional Unicode scripts/emoji may use documented conditional Google-hosted font fallback. The explicitly opened Brave results tab and host-browser background requests are outside this page capture.",
+    "The source capture is ignored work/web-home-handoff.har; Home, retained Dark/Brave settings and a Go-button search for wingman were observed in actual Chrome."
+  ],
+  "capture_started_utc": "2026-09-10T20:15:14.717Z",
+  "application_version": "0.1.0+1",
+  "final_web_build_seconds": 75.7
+}
