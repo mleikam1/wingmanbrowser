@@ -97,6 +97,9 @@ class GuardBlockedPage extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     final color = security ? colors.error : colors.primary;
     final category = decision.category?.label ?? 'this site';
+    final contentLabel = decision.category == GuardCategory.adult
+        ? category
+        : '$category content';
     return ColoredBox(
       color: colors.surface,
       child: Center(
@@ -138,7 +141,7 @@ class GuardBlockedPage extends StatelessWidget {
                       ? 'This address needs another look before it can be opened. Check the address or review Guard settings.'
                       : decision.action == GuardAction.blockCustomRule
                       ? 'You asked Wingman to block this site.'
-                      : 'You asked Wingman Guard to block $category content.',
+                      : 'You asked Wingman Guard to block $contentLabel.',
                   style: Theme.of(context).textTheme.bodyLarge,
                 ),
                 const SizedBox(height: 14),

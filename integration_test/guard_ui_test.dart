@@ -80,10 +80,21 @@ void main() {
       await tester.pump(const Duration(milliseconds: 250));
     }
 
-    Future<void> idleSettings() => waitFor(
-      () => find.byType(LinearProgressIndicator).evaluate().isEmpty,
-      'Settings mutation completes',
-    );
+    Future<void> idleSettings() => waitFor(() {
+      // The progress bar can be outside the lazy list's built viewport. Wait
+      // for the actual visible settings controls, which stay disabled while
+      // native policy synchronization and persistence are still in progress.
+      final scope = find.byType(GuardSettingsScreen);
+      Iterable<T> visible<T extends Widget>() => tester.widgetList<T>(
+        find.descendant(of: scope, matching: find.byType(T)),
+      );
+      return find.byType(LinearProgressIndicator).evaluate().isEmpty &&
+          visible<CheckboxListTile>().every((tile) => tile.onChanged != null) &&
+          visible<SwitchListTile>().every((tile) => tile.onChanged != null) &&
+          visible<FilterChip>().every((chip) => chip.onSelected != null) &&
+          visible<FilledButton>().every((button) => button.onPressed != null) &&
+          visible<IconButton>().every((button) => button.onPressed != null);
+    }, 'Visible settings controls are enabled after the mutation');
     Future<void> menu(String label) async {
       await tap(find.byTooltip('Browser menu'));
       await tap(find.text(label).last);
@@ -199,9 +210,18 @@ void main() {
       }
       await tap(find.text('Guard mode'));
       await idleSettings();
-      for (final label in ['Adult content', 'Alcohol', 'Recreational drugs']) {
-        await scrollTo(find.text(label));
-        await tap(find.text(label));
+      for (final category in [
+        GuardCategory.adult,
+        GuardCategory.alcohol,
+        GuardCategory.recreationalDrugs,
+      ]) {
+        await scrollTo(find.text(category.label));
+        await idleSettings();
+        await tap(find.text(category.label));
+        await waitFor(
+          () => guard.configuration.enabledCategories.contains(category),
+          'The tapped category is selected before the next action',
+        );
         await idleSettings();
       }
       expect(guard.configuration.enabledCategories, {
