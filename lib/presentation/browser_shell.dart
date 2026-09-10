@@ -6,6 +6,10 @@ import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../browser/browser_engine.dart';
 import '../domain/search.dart';
+import '../domain/local_suggestions.dart';
+import '../guard_ui/guard_controller.dart';
+import '../guard_ui/guard_settings_screen.dart';
+import '../guard_ui/guard_surfaces.dart';
 import '../state/browser_state.dart';
 import 'screens/home_screen.dart';
 import 'screens/library_screen.dart';
@@ -17,8 +21,9 @@ import 'widgets/browser_page_error.dart';
 import 'widgets/clear_browsing_data_dialog.dart';
 
 class BrowserShell extends StatefulWidget {
-  const BrowserShell({super.key, required this.state});
+  const BrowserShell({super.key, required this.state, this.guard});
   final BrowserState state;
+  final GuardController? guard;
   @override
   State<BrowserShell> createState() => _BrowserShellState();
 }
@@ -26,6 +31,7 @@ class BrowserShell extends StatefulWidget {
 class _BrowserShellState extends State<BrowserShell>
     with WidgetsBindingObserver {
   BrowserState get data => widget.state;
+  GuardController? get guard => widget.guard;
   late final BrowserEnginePool engine;
   final native = NativeBrowserService();
   @override
@@ -35,23 +41,44 @@ class _BrowserShellState extends State<BrowserShell>
     engine = BrowserEnginePool(
       confirm: confirm,
       prompt: prompt,
-      onPageChanged: (id, url, title, completed) => data.pageChanged(
-        tabId: id,
-        url: url,
-        title: title,
-        completed: completed,
-      ),
+      navigationPolicy: guard?.evaluate,
+      onGuardBlock: guard?.recordBlock,
+      onTrackersBlocked: guard?.recordTrackers,
+      onPageChanged: (id, url, title, completed) {
+        if (completed) guard?.navigationCompleted(id);
+        return data.pageChanged(
+          tabId: id,
+          url: url,
+          title: title,
+          completed: completed,
+        );
+      },
       onMessage: message,
     );
+    guard?.applyNative = (policy, recheck) async {
+      if (kIsWeb) return;
+      await engine.updateGuardPolicy(policy);
+      if (recheck) await engine.recheckGuard();
+    };
     if (!kIsWeb) unawaited(initializeNative());
+    if (guard?.requestSetup ?? false) {
+      guard!.requestSetup = false;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) guardSettings();
+      });
+    }
   }
 
   Future<void> initializeNative() async {
     try {
+      // Install policy before initialize can deliver a cold-start external URL.
+      await guard?.sync();
       await native.initialize(
         onMessage: message,
         onRendererGone: engine.rendererGone,
         onNavigationSettled: engine.navigationSettled,
+        onGuardBlocked: engine.guardBlocked,
+        onTrackersBlocked: engine.trackersBlocked,
         onIncomingUri: (uri) {
           if (!mounted) return;
           try {
@@ -77,6 +104,7 @@ class _BrowserShellState extends State<BrowserShell>
     if (state == AppLifecycleState.inactive ||
         state == AppLifecycleState.paused) {
       unawaited(data.flush());
+      guard?.pin.lock();
     }
   }
 
@@ -84,6 +112,7 @@ class _BrowserShellState extends State<BrowserShell>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     native.dispose();
+    guard?.applyNative = null;
     engine.dispose();
     super.dispose();
   }
@@ -159,12 +188,12 @@ class _BrowserShellState extends State<BrowserShell>
 
   Future<void> navigate(String input) async {
     try {
-      final target = kIsWeb
-          ? const OmniboxParser().parse(
-              input,
-              provider: SearchProvider.byId(data.settings.searchProviderId),
-            )
-          : data.navigate(input);
+      final parsed = const OmniboxParser().parse(
+        input,
+        provider: SearchProvider.byId(data.settings.searchProviderId),
+      );
+      final normalized = guard?.safeSearch(parsed.uri) ?? parsed.uri;
+      final target = kIsWeb ? parsed : data.navigate(normalized.toString());
       if (kIsWeb || target.isExternal) {
         if (target.isExternal &&
             !await confirm(
@@ -174,7 +203,7 @@ class _BrowserShellState extends State<BrowserShell>
           return;
         }
         final opened = await launchUrl(
-          target.uri,
+          normalized,
           mode: LaunchMode.externalApplication,
           webOnlyWindowName: '_blank',
         );
@@ -202,7 +231,9 @@ class _BrowserShellState extends State<BrowserShell>
       );
       if (!mounted) return;
       engine.activate(data.activeId);
-      if (data.activeId == tab.id && engine.view(tab.id) == null) {
+      if (data.activeId == tab.id &&
+          engine.view(tab.id) == null &&
+          engine.status(tab.id).guardDecision == null) {
         message('The browser could not start this tab. Please try again.');
         data.goHome();
       }
@@ -238,6 +269,7 @@ class _BrowserShellState extends State<BrowserShell>
   }
 
   Future<void> closeTab(String id) async {
+    guard?.forgetTab(id);
     await engine.close(id);
     data.closeTab(id);
     await openActive();
@@ -250,6 +282,7 @@ class _BrowserShellState extends State<BrowserShell>
 
   Future<void> home() async {
     final id = data.activeId;
+    guard?.forgetTab(id);
     data.goHome();
     await engine.close(id);
   }
@@ -270,6 +303,7 @@ class _BrowserShellState extends State<BrowserShell>
       builder: (_) => SettingsScreen(
         state: data,
         onClear: clearData,
+        onGuard: guard == null ? null : guardSettings,
         onDefaultBrowser: () async {
           try {
             if (!await native.requestDefaultBrowser()) {
@@ -284,6 +318,16 @@ class _BrowserShellState extends State<BrowserShell>
       ),
     ),
   );
+  void guardSettings() {
+    if (guard == null) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) => GuardSettingsScreen(guard: guard!),
+      ),
+    );
+  }
+
   void tabs() => Navigator.push(
     context,
     MaterialPageRoute<void>(
@@ -302,6 +346,7 @@ class _BrowserShellState extends State<BrowserShell>
     );
     if (choice == null || choice.isEmpty) return;
     try {
+      guard?.runtime.repository.clearCache();
       if (!kIsWeb && choice.any((e) => e != 'history')) {
         await engine.clearData(
           cookies: choice.contains('cookies'),
@@ -330,6 +375,15 @@ class _BrowserShellState extends State<BrowserShell>
         library(false);
       case 'settings':
         settings();
+      case 'guard':
+        guardSettings();
+      case 'reportGuard':
+        await showGuardReport(context, url: tab.url, missed: true);
+      case 'tracking':
+        await guard?.pauseTracking(tab.url);
+        message(
+          'Temporary tracking exception updated. Reload the page to apply it to existing resources.',
+        );
       case 'private':
         await newTab(true);
       case 'new':
@@ -370,7 +424,7 @@ class _BrowserShellState extends State<BrowserShell>
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
-    listenable: Listenable.merge([data, engine]),
+    listenable: Listenable.merge([data, engine, guard]),
     builder: (context, _) {
       final tab = data.activeTab;
       final page = engine.status(tab.id);
@@ -451,6 +505,14 @@ class _BrowserShellState extends State<BrowserShell>
                           url: tab.url,
                           isPrivate: tab.isPrivate,
                           onSubmit: navigate,
+                          localSuggestions: (input) =>
+                              const LocalSuggestionService().suggest(
+                                input,
+                                bookmarks: data.bookmarks,
+                                history: data.history,
+                                isPrivate: tab.isPrivate,
+                                enabled: data.settings.localSuggestions,
+                              ),
                         ),
                         Padding(
                           padding: const EdgeInsets.only(top: 5),
@@ -486,6 +548,21 @@ class _BrowserShellState extends State<BrowserShell>
                                 onSettings: settings,
                                 onBookmarks: () => library(true),
                                 onPrivate: () => newTab(true),
+                                guardCard: guard == null
+                                    ? null
+                                    : GuardHomeCard(
+                                        enabled:
+                                            guard!.configuration.guardEnabled,
+                                        focusActive: guard!.focusActive,
+                                        ready:
+                                            guard!.pack.integrityVerified &&
+                                            guard!.problem == null,
+                                        locked: guard!.locked,
+                                        blocks:
+                                            guard!.guardToday +
+                                            guard!.riskyToday,
+                                        onOpen: guardSettings,
+                                      ),
                               )
                             else
                               const SizedBox.shrink(),
@@ -512,11 +589,65 @@ class _BrowserShellState extends State<BrowserShell>
                         Positioned.fill(
                           child: BrowserPageError(
                             message: page.error.toString(),
+                            securityWarning: page.error.toString().contains(
+                              'secure connection could not be verified',
+                            ),
                             onRetry: () => engine.reload(tab.id),
                             onHome: home,
                             onBack: page.canGoBack
                                 ? () => engine.back(tab.id)
                                 : null,
+                          ),
+                        ),
+                      if (!tab.isHome &&
+                          page.guardDecision != null &&
+                          guard != null)
+                        Positioned.fill(
+                          child: GuardBlockedPage(
+                            decision: page.guardDecision!,
+                            isPrivate: tab.isPrivate,
+                            onBack: () {
+                              if (page.canGoBack) {
+                                engine.back(tab.id);
+                              } else {
+                                home();
+                              }
+                            },
+                            onSettings: guardSettings,
+                            onReport: () => showGuardReport(
+                              context,
+                              url: page.url.isEmpty ? tab.url : page.url,
+                              decision: page.guardDecision,
+                            ),
+                            onAllowOnce: guard!.locked
+                                ? null
+                                : () async {
+                                    try {
+                                      await guard!.allowOnce(
+                                        tab.id,
+                                        page.guardDecision!,
+                                      );
+                                      await engine.retryGuard(tab.id);
+                                    } catch (_) {
+                                      message(
+                                        'This exception could not be applied.',
+                                      );
+                                    }
+                                  },
+                            onAlwaysAllow: guard!.locked
+                                ? null
+                                : () async {
+                                    try {
+                                      await guard!.alwaysAllow(
+                                        page.guardDecision!,
+                                      );
+                                      await engine.retryGuard(tab.id);
+                                    } catch (_) {
+                                      message(
+                                        'This exception could not be applied.',
+                                      );
+                                    }
+                                  },
                           ),
                         ),
                     ],
@@ -534,6 +665,7 @@ class _BrowserShellState extends State<BrowserShell>
                   isBookmarked: data.isBookmarked,
                   desktopMode: tab.desktopMode,
                   tabCount: data.tabs.length,
+                  guardAvailable: guard != null,
                   onBack: !tab.isHome && page.canGoBack
                       ? () => engine.back(tab.id)
                       : null,

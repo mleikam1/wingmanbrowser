@@ -2,7 +2,7 @@
 
 **We've got your back, not your data.**
 
-A Flutter browser foundation using Android System WebView and iOS WKWebView, with a web Home/search companion. Normal history, bookmarks, preferences and tab metadata use local SQLite. Wingman has no browsing backend, account requirement, analytics upload or cloud sync.
+A Flutter browser using Android System WebView and iOS WKWebView, with a web Home/search companion. Wingman Guard adds optional local content boundaries, timed Focus, balanced tracker blocking and local Family settings. Normal history, bookmarks, preferences and tab metadata use local SQLite. Wingman has no browsing backend, account requirement, analytics upload or cloud sync.
 
 Your browsing history is yours. Wingman doesn't sell your browsing history, build an advertising profile from the sites you visit, or inject Wingman ads into the websites you browse.
 
@@ -59,6 +59,24 @@ For native debugging, run `open ios/Runner.xcworkspace`, choose Runner and a sim
 For a physical iPhone, enable Developer Mode, trust this Mac, and select an authorized signing team, unique bundle identifier and device in Xcode. Run `flutter run -d <device-id>` after signing is configured. Local development-team settings do not prove that the final product has approved provisioning or the browser entitlement.
 
 ## Implemented foundation
+
+### Wingman Guard (Phase 2)
+
+Open **Wingman Guard** from Home or Settings. Turn on Guard and choose categories; none are preselected. Standard browsing keeps native security enabled. Focus adds temporary category/site boundaries. Private tabs follow the same Guard policy, while their activity stays out of saved history and statistics.
+
+- Local indexed classification and a signed, versioned starter pack; SHA-256 and Ed25519 verification precede activation. Previous verified data supports rollback. There is no per-navigation cloud lookup.
+- Native main-frame navigation defenses, separate security warnings, safe-search policy for DuckDuckGo, Google, Bing and Brave, custom block/allow rules, and limited tab-scoped Allow Once grants.
+- Balanced tracking protection uses seven selected third-party EasyPrivacy domain rules under CC BY-SA 3.0. Android reports local blocked-resource counts; iOS does not expose a reliable count.
+- Optional 6–12 digit Family PIN uses a salted PBKDF2 verifier in native secure storage with persistent retry limits. It protects Wingman settings, not other apps or devices.
+- False-positive/missed-block reports let the user choose no address, a domain, or a full URL before copying/sharing. No report inbox or automatic upload is configured.
+
+The **49-rule category pack is a limited starter dataset**. Threat entries in that pack are synthetic test fixtures; real general threat protection comes from the native engine. Google Web Risk and production filter hosting are **not active**. No category classifier is foolproof. See [provider coverage and licensing](docs/PHASE2_PROVIDERS.md), [Guard privacy architecture](docs/PRIVACY_ARCHITECTURE.md), and [Family PIN details](docs/GUARD_PIN.md).
+
+Use `https://adult.guard.test`, `https://alcohol.guard.test` and `https://recreational-drugs.guard.test` to inspect the bundled category-block UI after enabling their matching categories. These reserved test domains do not host websites. Native integration tests also use a real loopback server to prove that blocked content never reaches the render step and that permitted content loads.
+
+The Web companion saves configuration concepts and requests SafeSearch when launching supported searches. It cannot filter another browser's pages. The production update transport is deliberately unconfigured; verified bundled rules work offline. See [control-plane deployment prerequisites](docs/CLOUD_CONTROL_PLANE.md).
+
+### Browser foundation
 
 - Polished Home/New Tab, replaceable wordmark, light/dark/system themes, quick links, bookmarks and modular owned monetization space.
 - Shared URL/search parsing and direct DuckDuckGo, Google, Bing and Brave Search providers.
@@ -122,6 +140,9 @@ iOS renders with WKWebView and handles delivered app links, but cannot claim def
 Created locally on branch `main`; initial baseline: `8c748adf1ecb271132bdba4ad25263e1a9e172d9`. No existing repository changes were overwritten. Run `git log -1 --oneline` for the current final revision; consult the validation report for the recorded handoff state.
 
 - [Architecture](docs/ARCHITECTURE.md)
+- [Phase 2 privacy data flow and request inventory](docs/PRIVACY_ARCHITECTURE.md)
+- [Protection providers and data licenses](docs/PHASE2_PROVIDERS.md)
+- [Future device-wide protection and desktop extensions](docs/FUTURE_PROTECTION.md)
 - [Privacy and SDK disclosures](docs/PRIVACY.md)
 - [Privacy/security source review](docs/PRIVACY_AUDIT.md)
 - [Monetization configuration](docs/MONETIZATION.md)

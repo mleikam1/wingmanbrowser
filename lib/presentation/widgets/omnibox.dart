@@ -8,6 +8,7 @@ class Omnibox extends StatefulWidget {
     this.isPrivate = false,
     this.compact = false,
     this.hasPageError = false,
+    this.localSuggestions,
     this.searchProvider = 'DuckDuckGo',
   });
   final ValueChanged<String> onSubmit;
@@ -15,6 +16,7 @@ class Omnibox extends StatefulWidget {
   final bool isPrivate;
   final bool compact;
   final bool hasPageError;
+  final Iterable<String> Function(String input)? localSuggestions;
   final String searchProvider;
   @override
   State<Omnibox> createState() => _OmniboxState();
@@ -26,6 +28,7 @@ class _OmniboxState extends State<Omnibox> {
   );
   final focus = FocusNode();
   final scroll = ScrollController();
+  bool _selectionSubmitted = false;
   @override
   void initState() {
     super.initState();
@@ -71,7 +74,52 @@ class _OmniboxState extends State<Omnibox> {
   }
 
   @override
-  Widget build(BuildContext context) => TextField(
+  Widget build(BuildContext context) => RawAutocomplete<String>(
+    textEditingController: controller,
+    focusNode: focus,
+    optionsBuilder: (value) => widget.isPrivate
+        ? const <String>[]
+        : widget.localSuggestions?.call(value.text) ?? const <String>[],
+    onSelected: (value) {
+      _selectionSubmitted = true;
+      submit(value);
+    },
+    fieldViewBuilder: (_, _, _, onFieldSubmitted) => _field((text) {
+      _selectionSubmitted = false;
+      onFieldSubmitted();
+      if (!_selectionSubmitted) submit(text);
+    }),
+    optionsViewBuilder: (context, onSelected, options) => Align(
+      alignment: Alignment.topLeft,
+      child: Material(
+        elevation: 8,
+        borderRadius: BorderRadius.circular(16),
+        clipBehavior: Clip.antiAlias,
+        child: SizedBox(
+          width: MediaQuery.sizeOf(context).width.clamp(240, 600) - 48,
+          child: ListView(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            shrinkWrap: true,
+            children: [
+              for (final option in options)
+                ListTile(
+                  leading: const Icon(Icons.history_rounded),
+                  title: Text(
+                    option,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  subtitle: const Text('On this device'),
+                  onTap: () => onSelected(option),
+                ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+
+  Widget _field(ValueChanged<String> onSubmitted) => TextField(
     key: ValueKey(widget.compact ? 'browser-omnibox' : 'home-omnibox'),
     controller: controller,
     scrollController: scroll,
@@ -83,13 +131,16 @@ class _OmniboxState extends State<Omnibox> {
     enableIMEPersonalizedLearning: !widget.isPrivate,
     smartDashesType: SmartDashesType.disabled,
     smartQuotesType: SmartQuotesType.disabled,
+    // Keep the edited value until onSubmitted captures it. The default IME
+    // completion unfocuses first, which would restore the previous page URL.
+    onEditingComplete: () {},
     onTap: () {
       controller.selection = TextSelection(
         baseOffset: 0,
         extentOffset: controller.text.length,
       );
     },
-    onSubmitted: submit,
+    onSubmitted: onSubmitted,
     decoration: InputDecoration(
       hintText: widget.compact
           ? 'Search or enter address'

@@ -7,8 +7,10 @@ class BrowserPageError extends StatelessWidget {
     required this.onRetry,
     required this.onHome,
     this.onBack,
+    this.securityWarning = false,
   });
   final String message;
+  final bool securityWarning;
   final VoidCallback onRetry, onHome;
   final VoidCallback? onBack;
   @override
@@ -23,13 +25,19 @@ class BrowserPageError extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(
-                Icons.cloud_off_outlined,
+                securityWarning
+                    ? Icons.gpp_bad_outlined
+                    : Icons.cloud_off_outlined,
                 size: 60,
-                color: Theme.of(context).colorScheme.primary,
+                color: securityWarning
+                    ? Theme.of(context).colorScheme.error
+                    : Theme.of(context).colorScheme.primary,
               ),
               const SizedBox(height: 24),
               Text(
-                'A bump in the connection.',
+                securityWarning
+                    ? 'This connection is not safe.'
+                    : 'A bump in the connection.',
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.headlineSmall,
               ),

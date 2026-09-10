@@ -61,19 +61,31 @@ class BrowserSettings {
     this.themeMode = ThemeMode.system,
     this.searchProviderId = 'duckduckgo',
     this.onboardingComplete = false,
+    this.guardJson = '{}',
+    this.guardStatsJson = '{}',
+    this.localSuggestions = true,
   });
 
   final ThemeMode themeMode;
   final String searchProviderId;
   final bool onboardingComplete;
+  final String guardJson;
+  final String guardStatsJson;
+  final bool localSuggestions;
 
   BrowserSettings copyWith({
     ThemeMode? themeMode,
     String? searchProviderId,
     bool? onboardingComplete,
+    String? guardJson,
+    String? guardStatsJson,
+    bool? localSuggestions,
   }) => BrowserSettings(
     themeMode: themeMode ?? this.themeMode,
     searchProviderId: searchProviderId ?? this.searchProviderId,
     onboardingComplete: onboardingComplete ?? this.onboardingComplete,
+    guardJson: guardJson ?? this.guardJson,
+    guardStatsJson: guardStatsJson ?? this.guardStatsJson,
+    localSuggestions: localSuggestions ?? this.localSuggestions,
   );
 }

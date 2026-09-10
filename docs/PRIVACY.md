@@ -15,9 +15,9 @@ Wingman has no application backend, account system, synchronization service, bro
 | Normal history | Local SQLite; most recent visit for each URL; retained up to 90 days and 5,000 URLs, pruned at startup and on writes |
 | Bookmarks | Separate local SQLite table; only explicit user actions add bookmarks |
 | Normal tab metadata | Local SQLite; separate from live browser controllers |
-| Preferences | Local SQLite; includes theme and chosen search provider |
+| Preferences | Local SQLite; includes theme, chosen search provider, Guard categories, custom site rules and Focus settings |
 | Private history and tab metadata | Memory only; filtered before state persistence and again at the repository boundary |
-| Private bookmarks | Disabled in Phase 1 to avoid accidental persistent records |
+| Private bookmarks | Disabled to avoid accidental persistent records |
 | Page contents and forms | Handled by the platform browser engine and the website; not forwarded to Wingman servers |
 | Product telemetry | No analytics upload; default analytics implementation is a no-op |
 
@@ -34,6 +34,20 @@ Android requires WebView support for both multiple profiles and profile browsing
 At most three browser engines stay live. Evicting an inactive private engine ends its private site session; returning to it reloads the URL into fresh private storage. Private tabs do not share session cookies with one another in this foundation. Normal and private metadata remain separate from expensive controllers. See the README for device verification and platform limitations.
 
 Private browsing is not a VPN or an anonymity network. Websites, searches, network providers, employers and schools can still observe traffic they handle. Downloads, explicit sharing, external apps and files saved by the user may remain outside Wingman's private session. Wingman's web companion cannot control or erase a separate browser's private mode, cookies or history.
+
+## Wingman Guard
+
+Routine Guard classification uses local normalized domains and a signature-verified indexed filter pack. It sends no navigation URL, page content, custom rule, PIN, or chosen sensitive category to Wingman infrastructure. The bundled starter has limited coverage; an unmatched site is not a finding that it is safe. No Web Risk API client, remote filter endpoint, cloud account sync, device-wide VPN, parental-management service or browser extension is active.
+
+Private requests skip the shared domain-result cache and saved Guard statistics. The daily summary stores only a local date and three totals, with no per-site event log. Users can reset it. Local omnibox suggestions consult normal bookmarks/history only; private tabs do not consult them and no keystrokes are sent for suggestions. Temporary exceptions remain in memory. Explicitly creating an always-allow/custom site rule saves that preference locally, including when initiated from a private tab; automatic private browsing history and counters remain excluded.
+
+The optional mobile Family PIN stores a random salt, derived verifier and retry state in platform secure storage. It does not store plaintext in SQLite, provide account recovery, or control other apps. Secure-store errors leave settings locked. See [PIN design and actual native checks](GUARD_PIN.md).
+
+Native Android Safe Browsing and WebKit fraudulent-site warnings remain enabled where supported and can use platform-managed network services. Wingman returns Android threat hits to safety with optional reporting disabled, and opts out of Android WebView usage metrics. The usage setting does not disable all engine crash reports. These platform behaviors are distinct from Wingman's local classifier and no-op application telemetry. [Safe Browsing response reporting](https://developer.android.com/reference/android/webkit/SafeBrowsingResponse#backToSafety(boolean)), [WebView privacy](https://developer.android.com/develop/ui/views/layout/webapps/webview-privacy)
+
+A small licensed third-party tracker list applies only to browsing views. It does not process Wingman's owned ad view, replace publisher ads, or upload resource URLs. Android exposes batched local blocked-resource counts; iOS reports counts as unavailable because its compiled content rules do not provide a reliable equivalent.
+
+The report composer defaults to no address, shows the proposed text, and copies or opens a selected share target only after an explicit action. Choosing a full address can disclose search terms or tokens, so it requires a separate selection and visible preview. No Wingman reporting inbox or automatic submission exists. [Complete data-flow and network inventory](PRIVACY_ARCHITECTURE.md), [providers and licensing](PHASE2_PROVIDERS.md)
 
 ## Monetization boundary
 

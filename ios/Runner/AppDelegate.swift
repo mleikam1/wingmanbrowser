@@ -36,6 +36,8 @@ final class BrowserNativeBridge {
   var initialized = false
   private var delegates: [Int64: BrowserNavigationProxy] = [:]
   private var findQueries: [Int64: String] = [:]
+  private let guardPolicy = NativeGuardPolicy()
+  private let contentRules = GuardContentRules()
 
   init(registrar: FlutterPluginRegistrar) {
     self.registrar = registrar
@@ -51,6 +53,32 @@ final class BrowserNativeBridge {
     case "initialize":
       initialized = true; result(AppDelegate.pendingURL); AppDelegate.pendingURL = nil
     case "privateAvailable": result(true)
+    #if DEBUG
+    case "guardDecisionForTesting":
+      if let url = URL(string: args["url"] as? String ?? "") {
+        result(guardPolicy.evaluate(url, tabId: args["tabId"] as? String ?? "", filename: args["filename"] as? String, mimeType: args["mimeType"] as? String))
+      } else { result(nil) }
+    case "safeSearchForTesting":
+      result(URL(string: args["url"] as? String ?? "").map { guardPolicy.safeSearch($0).absoluteString })
+    #endif
+    case "normalizeHost": result(NativeGuardPolicy.normalizeHost(args["host"] as? String ?? ""))
+    case "updateGuardPolicy":
+      do {
+        try guardPolicy.update(args)
+        contentRules.prepare(configuration: args) { [weak self] error in
+          guard let self = self else { result(nil); return }
+          if error != nil {
+            result(FlutterError(code: "tracking_rules_unavailable", message: "Tracking protection rules could not be prepared.", details: nil)); return
+          }
+          for proxy in self.delegates.values { proxy.updateTrackingRules() }
+          result(nil)
+        }
+      } catch {
+        result(FlutterError(code: "guard_storage_unavailable", message: "Local Guard rules could not be opened.", details: nil))
+      }
+    case "prepareGuardNavigation":
+      delegates[id]?.prepareNavigation(args["url"] as? String ?? "")
+      result(nil)
     case "localDataDirectory":
       do {
         var directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -89,10 +117,15 @@ final class BrowserNativeBridge {
         message: { [weak self] text in self?.channel.invokeMethod("message", arguments: text) },
         navigationSettled: { [weak self] url in
           self?.channel.invokeMethod("navigationSettled", arguments: ["id": id, "attemptedUrl": url])
+        }, guardPolicy: guardPolicy, contentRules: contentRules, tabId: args["tabId"] as? String ?? String(id),
+        guardBlocked: { [weak self] url, decision in
+          self?.channel.invokeMethod("guardBlocked", arguments: ["id": id, "url": url, "decision": decision])
         })
+      proxy.webView = view
       delegates[id] = proxy
       view.navigationDelegate = proxy
       result(true)
+    case "hideForGuard": view?.stopLoading(); view?.isHidden = true; result(nil)
     case "stop": view?.stopLoading(); result(nil)
     case "pause":
       view?.setAllMediaPlaybackSuspended(true) { result(nil) }
@@ -156,10 +189,37 @@ final class BrowserNavigationProxy: NSObject, WKNavigationDelegate, WKDownloadDe
   private var downloadNavigation: WKNavigation?
   private var downloadURL: String?
   private var activeDownloads: [ObjectIdentifier: WKDownload] = [:]
+  weak var webView: WKWebView?
+  private let guardPolicy: NativeGuardPolicy
+  private let contentRules: GuardContentRules
+  private let tabId: String
+  private let guardBlocked: (String, [String: Any]) -> Void
+  private var blockedURL: String?
   init(original: WKNavigationDelegate?, privateMode: Bool, message: @escaping (String) -> Void,
-    navigationSettled: @escaping (String) -> Void) {
+    navigationSettled: @escaping (String) -> Void, guardPolicy: NativeGuardPolicy,
+    contentRules: GuardContentRules, tabId: String, guardBlocked: @escaping (String, [String: Any]) -> Void) {
     self.original = original; self.privateMode = privateMode; self.message = message
     self.navigationSettled = navigationSettled
+    self.guardPolicy = guardPolicy; self.contentRules = contentRules
+    self.tabId = tabId; self.guardBlocked = guardBlocked
+  }
+  func prepareNavigation(_ address: String) {
+    blockedURL = nil
+    guard let view = webView, let url = URL(string: address) else { return }
+    contentRules.apply(to: view, enabled: guardPolicy.trackingEnabled(for: url.host ?? ""))
+  }
+  func updateTrackingRules() {
+    guard let view = webView else { return }
+    contentRules.apply(to: view, enabled: guardPolicy.trackingEnabled(for: view.url?.host ?? ""))
+  }
+  private func deny(_ url: URL, filename: String? = nil, mime: String? = nil) -> Bool {
+    guard let decision = guardPolicy.evaluate(url, tabId: tabId, filename: filename, mimeType: mime) else { return false }
+    if blockedURL != url.absoluteString {
+      blockedURL = url.absoluteString
+      webView?.isHidden = true
+      guardBlocked(url.absoluteString, decision)
+    }
+    return true
   }
   override func responds(to selector: Selector!) -> Bool {
     super.responds(to: selector) || (original?.responds(to: selector) ?? false)
@@ -172,6 +232,32 @@ final class BrowserNavigationProxy: NSObject, WKNavigationDelegate, WKDownloadDe
     currentNavigation = navigation
     downloadNavigation = nil; downloadURL = nil
     original?.webView?(webView, didStartProvisionalNavigation: navigation)
+  }
+  func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction,
+    preferences: WKWebpagePreferences, decisionHandler: @escaping (WKNavigationActionPolicy, WKWebpagePreferences) -> Void) {
+    if action.targetFrame?.isMainFrame != false, let url = action.request.url {
+      if deny(url) { decisionHandler(.cancel, preferences); return }
+      let safe = guardPolicy.safeSearch(url)
+      if action.request.httpMethod == "GET" && safe != url {
+        decisionHandler(.cancel, preferences)
+        var request = action.request; request.url = safe
+        prepareNavigation(safe.absoluteString); webView.load(request); return
+      }
+      prepareNavigation(url.absoluteString)
+    }
+    if let original = original, original.responds(to: NSSelectorFromString("webView:decidePolicyForNavigationAction:preferences:decisionHandler:")) {
+      original.webView?(webView, decidePolicyFor: action, preferences: preferences, decisionHandler: decisionHandler)
+    } else if let original = original, original.responds(to: NSSelectorFromString("webView:decidePolicyForNavigationAction:decisionHandler:")) {
+      original.webView?(webView, decidePolicyFor: action) { policy in decisionHandler(policy, preferences) }
+    } else { decisionHandler(.allow, preferences) }
+  }
+  func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+    if blockedURL == nil { original?.webView?(webView, didFinish: navigation) }
+  }
+  func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+    if let url = webView.url, deny(url) { webView.stopLoading(); return }
+    if blockedURL == nil { webView.isHidden = false }
+    original?.webView?(webView, didCommit: navigation)
   }
   private func consumeDownloadInterruption(_ navigation: WKNavigation?, error: Error) -> Bool {
     let failure = error as NSError
@@ -197,6 +283,9 @@ final class BrowserNavigationProxy: NSObject, WKNavigationDelegate, WKDownloadDe
     // an embedded sign-in/ad frame's HTTP failure into a full-page error.
     // Navigation-action, TLS, and WebKit origin policies still apply normally.
     guard response.isForMainFrame else { decisionHandler(.allow); return }
+    if let url = response.response.url, deny(url) {
+      decisionHandler(.cancel); return
+    }
     let attachment = (response.response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Content-Disposition")?.lowercased().hasPrefix("attachment") == true
     guard attachment || !response.canShowMIMEType else {
       if let original = original, original.responds(to: NSSelectorFromString("webView:decidePolicyForNavigationResponse:decisionHandler:")) {
@@ -205,9 +294,19 @@ final class BrowserNavigationProxy: NSObject, WKNavigationDelegate, WKDownloadDe
       return
     }
     guard ["https", "http"].contains(response.response.url?.scheme ?? "") else { decisionHandler(.cancel); return }
+    let downloadDecision = response.response.url.flatMap {
+      guardPolicy.evaluate($0, tabId: tabId, filename: response.response.suggestedFilename ?? $0.lastPathComponent, mimeType: response.response.mimeType)
+    }
+    let executableWarning = downloadDecision?["action"] as? String == "requireAdditionalCheck"
+    if let decision = downloadDecision, !executableWarning || decision["overrideAllowed"] as? Bool != true {
+      if let url = response.response.url { _ = deny(url, filename: response.response.suggestedFilename ?? url.lastPathComponent, mime: response.response.mimeType) }
+      decisionHandler(.cancel); return
+    }
     guard let presenter = webView.window?.rootViewController else { decisionHandler(.cancel); return }
-    let alert = UIAlertController(title: "Download file?",
-      message: (response.response.url?.host ?? "Website") + (privateMode ? "\nDownloaded files remain after closing private tabs." : ""), preferredStyle: .alert)
+    let alert = UIAlertController(title: executableWarning ? "This file can run software" : "Download file?",
+      message: (response.response.url?.host ?? "Website") +
+        (executableWarning ? "\nOnly download if you trust the source. The file type is risky; Wingman has not scanned its contents." : "") +
+        (privateMode ? "\nDownloaded files remain after closing private tabs." : ""), preferredStyle: .alert)
     let initiatingNavigation = currentNavigation
     let attemptedURL = response.response.url?.absoluteString ?? ""
     alert.addAction(UIAlertAction(title: "Cancel", style: .cancel) { [weak self] _ in
@@ -222,6 +321,13 @@ final class BrowserNavigationProxy: NSObject, WKNavigationDelegate, WKDownloadDe
     alert.addAction(UIAlertAction(title: "Download", style: .default) { [weak self, weak webView] _ in
       guard let self = self, webView?.window != nil,
         self.currentNavigation === initiatingNavigation else { decisionHandler(.cancel); return }
+      if let url = response.response.url,
+        let latest = self.guardPolicy.evaluate(url, tabId: self.tabId,
+          filename: response.response.suggestedFilename ?? url.lastPathComponent, mimeType: response.response.mimeType),
+        latest["action"] as? String != "requireAdditionalCheck" || latest["overrideAllowed"] as? Bool != true || !executableWarning {
+        _ = self.deny(url, filename: response.response.suggestedFilename ?? url.lastPathComponent, mime: response.response.mimeType)
+        decisionHandler(.cancel); return
+      }
       self.downloadNavigation = initiatingNavigation
       self.downloadURL = attemptedURL
       decisionHandler(.download)

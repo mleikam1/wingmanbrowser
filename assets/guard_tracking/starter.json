@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "id": "wingman-balanced-tracking-starter",
+  "version": "2026.09.10.1",
+  "createdAt": "2026-09-10T21:01:06Z",
+  "license": "CC-BY-SA-3.0",
+  "authors": "The EasyList authors (https://easylist.to/)",
+  "source": {
+    "url": "https://raw.githubusercontent.com/easylist/easylist/c55f475954a28426e8884a6c8d92099d23366536/easyprivacy/easyprivacy_trackingservers_thirdparty.txt",
+    "commit": "c55f475954a28426e8884a6c8d92099d23366536",
+    "sha256": "263c91173748a3adb099aeb139081a240addb1885efa6e31ef7b9538b5faa74d"
+  },
+  "changes": "Selected seven upstream third-party domain rules; encoded as JSON; additionally excludes all main-frame navigation. No resource-type restrictions were broadened.",
+  "scope": "subresources",
+  "thirdPartyOnly": true,
+  "includeSubdomains": true,
+  "domains": [
+    "fullstory.com",
+    "heapanalytics.com",
+    "hotjar.com",
+    "hotjar.io",
+    "mixpanel.com",
+    "mouseflow.com",
+    "scorecardresearch.com"
+  ]
+}

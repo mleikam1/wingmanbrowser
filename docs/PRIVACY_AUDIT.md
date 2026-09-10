@@ -1,5 +1,7 @@
 # Privacy and security implementation review
 
+Phase 2 adds local Guard controls and secure PIN storage. Its current data-flow, endpoint inventory, audit findings and verification scope are documented in [Privacy architecture](PRIVACY_ARCHITECTURE.md). The baseline review below remains the Phase 1 record.
+
 Reviewed September 10, 2026 against the mission **“We've got your back, not your data.”** This is a source review and focused automated verification of the local working tree. It is not a penetration test, a final signed-binary attestation, or a store-readiness claim. See [privacy architecture](PRIVACY.md), [native browser details](NATIVE_BROWSER.md), and [release checklist](RELEASE_CHECKLIST.md) for the operational limits.
 
 ## Scope and evidence

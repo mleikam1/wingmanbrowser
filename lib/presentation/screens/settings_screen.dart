@@ -10,9 +10,11 @@ class SettingsScreen extends StatelessWidget {
     required this.state,
     required this.onClear,
     required this.onDefaultBrowser,
+    this.onGuard,
   });
   final BrowserState state;
   final VoidCallback onClear, onDefaultBrowser;
+  final VoidCallback? onGuard;
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: state,
@@ -34,6 +36,15 @@ class SettingsScreen extends StatelessWidget {
               ),
               const SizedBox(height: 28),
               const _Section('Make yourself at home'),
+              if (onGuard != null)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.shield_outlined),
+                  title: const Text('Wingman Guard'),
+                  subtitle: const Text('Your protections, your choices.'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: onGuard,
+                ),
               DropdownButtonFormField<ThemeMode>(
                 isExpanded: true,
                 initialValue: state.settings.themeMode,
@@ -82,6 +93,17 @@ class SettingsScreen extends StatelessWidget {
                 padding: EdgeInsets.fromLTRB(4, 10, 4, 24),
                 child: Text(
                   'Searches go directly to your selected provider, which processes your query under its own privacy policy.',
+                ),
+              ),
+              SwitchListTile.adaptive(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Local address suggestions'),
+                subtitle: const Text(
+                  'From saved bookmarks and history. No keystrokes are sent to Wingman. Always off in private tabs.',
+                ),
+                value: state.settings.localSuggestions,
+                onChanged: (value) => state.saveSettings(
+                  state.settings.copyWith(localSuggestions: value),
                 ),
               ),
               if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android)
