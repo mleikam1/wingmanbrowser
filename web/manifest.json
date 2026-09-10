@@ -1,11 +1,11 @@
 {
-    "name": "wingman_browser",
-    "short_name": "wingman_browser",
+    "name": "Wingman Browser",
+    "short_name": "Wingman Browser",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#135f51",
+    "theme_color": "#135f51",
+    "description": "Wingman. We’ve got your back, not your data.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

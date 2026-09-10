@@ -1,0 +1,25 @@
+# Dependency decisions
+
+Use `pubspec.lock` and native resolution files for the exact resolved versions. Keep upgrades deliberate and rerun browser, storage and privacy checks after changes.
+
+| Direct dependency | Why it exists | Privacy and maintenance note |
+| --- | --- | --- |
+| Flutter SDK | Shared application UI, themes, lifecycle and platform channels | No separate application framework required |
+| `webview_flutter` 4.14.1 | Official Flutter wrapper for native browser engines | Arbitrary website traffic belongs to the selected site; never register browsing controllers with an ad SDK |
+| `webview_flutter_android` 4.14.1 | Android-specific WebView controls, requests and lifecycle | Browser capabilities and storage follow Android System WebView |
+| `webview_flutter_wkwebview` 3.26.1 | WKWebView controls and required private-store integration | A small vendored patch supports nonpersistent configuration; inspect its local README/diff when upgrading |
+| `sqflite` 2.4.4 | Structured, transactional native local persistence | No server or account; not an encryption layer |
+| `sqflite_common_ffi_web` 1.1.3 | Shared SQL repository for web through local WASM/IndexedDB | Upstream marks web support experimental; storage may be evicted and is origin-specific |
+| `path` 1.9.1 | Safe database-path composition | Local pure Dart utility |
+| `url_launcher` 6.3.2 | Explicit external links and the web search companion | Opening a link hands it to the destination app/browser |
+| `share_plus` 13.3.0 | User-requested platform share sheet | User chooses the receiving service; never invoked automatically |
+| `google_mobile_ads` 9.1.0 | User-requested Android/iOS Google test-ad foundation and UMP | Optional demo, default off, no production request path; SDK may process technical/ad data |
+| `cupertino_icons` 1.0.8 | Icon font referenced by Flutter's adaptive interface code | Assets only; prevents missing-font build warnings; no network code |
+
+Google's installed Flutter plugin declares Android Google Mobile Ads 25.4.0 and iOS Google Mobile Ads `~> 13.7`. Review the final resolved native SDK versions when preparing disclosures. The plugin includes consent SDK integration; Wingman does not add a second analytics system. [Official plugin package](https://pub.dev/packages/google_mobile_ads)
+
+Development-only dependencies include `flutter_test`, `integration_test`, `flutter_lints` and `sqflite_common_ffi` for real SQLite repository tests on the host. They are not runtime telemetry integrations.
+
+No Firebase Analytics, Google Analytics, Meta, attribution library, mediation adapter, behavioral analytics SDK or standalone crash-reporting SDK has been added. Google Mobile Ads itself has documented measurement behavior; “no separate analytics SDK” does not mean “no third-party technical processing.” See [PRIVACY.md](PRIVACY.md).
+
+The local WKWebView patch exists because changing the data store after creating a WKWebView cannot supply correct private isolation. It should be upstreamed or replaced by equivalent official support when available, preserving a private-isolation regression test. Its existing license is retained.

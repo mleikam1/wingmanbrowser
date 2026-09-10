@@ -19,7 +19,7 @@ android {
         applicationId = "com.wingmanbrowser.wingman_browser"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        minSdk = 24
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
@@ -42,4 +42,9 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+
+dependencies {
+    implementation("androidx.webkit:webkit:1.15.0")
 }

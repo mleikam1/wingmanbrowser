@@ -43,3 +43,8 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Local Kotlin compiler state and transient validation data.
+android/.kotlin/
+work/
+*.log
