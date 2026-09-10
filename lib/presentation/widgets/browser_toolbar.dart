@@ -16,10 +16,12 @@ class BrowserToolbar extends StatelessWidget {
     required this.onHome,
     required this.onTabs,
     required this.onMenuSelected,
+    this.guardAvailable = false,
   });
 
   final bool isHome, isPrivate, isLoading, isBookmarked, desktopMode;
   final int tabCount;
+  final bool guardAvailable;
   final VoidCallback? onBack, onForward;
   final VoidCallback onPrimaryAction, onHome, onTabs;
   final ValueChanged<String> onMenuSelected;
@@ -111,6 +113,21 @@ class BrowserToolbar extends StatelessWidget {
                     child: Text('Bookmarks'),
                   ),
                   const PopupMenuItem(value: 'history', child: Text('History')),
+                  if (guardAvailable)
+                    const PopupMenuItem(
+                      value: 'guard',
+                      child: Text('Wingman Guard'),
+                    ),
+                  if (guardAvailable && !isHome) ...[
+                    const PopupMenuItem(
+                      value: 'reportGuard',
+                      child: Text('This site should be blocked'),
+                    ),
+                    const PopupMenuItem(
+                      value: 'tracking',
+                      child: Text('Toggle temporary tracking exception'),
+                    ),
+                  ],
                   if (!isHome) ...[
                     const PopupMenuItem(value: 'copy', child: Text('Copy URL')),
                     const PopupMenuItem(

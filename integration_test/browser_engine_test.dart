@@ -289,7 +289,9 @@ ${request.uri.path == '/with-frame' ? '<iframe src="/failure" title="Failing emb
         await tester.pump();
       }
     }
+    debugPrint('STAGE clear native data starting');
     await engine.clearData();
+    debugPrint('STAGE clear native data returned');
     await data.clearHistory();
     expect(engine.liveEngineCount, 0);
     expect((await repository.load()).history, isEmpty);

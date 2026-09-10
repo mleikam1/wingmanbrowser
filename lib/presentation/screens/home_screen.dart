@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../../domain/search.dart';
+import '../../domain/local_suggestions.dart';
 import '../../monetization/home_ad_slot.dart';
 import '../../state/browser_state.dart';
 import '../theme.dart';
@@ -16,12 +17,14 @@ class HomeScreen extends StatelessWidget {
     required this.onSettings,
     required this.onBookmarks,
     required this.onPrivate,
+    this.guardCard,
   });
   final BrowserState state;
   final ValueChanged<String> onNavigate;
   final VoidCallback onSettings;
   final VoidCallback onBookmarks;
   final VoidCallback onPrivate;
+  final Widget? guardCard;
   @override
   Widget build(BuildContext context) {
     final private = state.activeTab.isPrivate;
@@ -93,10 +96,22 @@ class HomeScreen extends StatelessWidget {
               Omnibox(
                 onSubmit: onNavigate,
                 isPrivate: private,
+                localSuggestions: (input) =>
+                    const LocalSuggestionService().suggest(
+                      input,
+                      bookmarks: state.bookmarks,
+                      history: state.history,
+                      isPrivate: private,
+                      enabled: state.settings.localSuggestions,
+                    ),
                 searchProvider: SearchProvider.byId(
                   state.settings.searchProviderId,
                 ).name,
               ),
+              if (guardCard != null) ...[
+                const SizedBox(height: 20),
+                guardCard!,
+              ],
               const SizedBox(height: 32),
               Row(
                 children: [

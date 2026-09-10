@@ -7,8 +7,11 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
 import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
+import '../guard/guard_models.dart';
+import '../guard/safe_search_policy.dart';
 
 const _nativeChannel = MethodChannel('wingman/browser');
+typedef BrowserGuardRequest = GuardRequest;
 
 /// App-only channel for OS integration. No website JavaScript channel is installed.
 class NativeBrowserService {
@@ -17,6 +20,8 @@ class NativeBrowserService {
     void Function(String)? onMessage,
     void Function(int)? onRendererGone,
     void Function(int, String)? onNavigationSettled,
+    void Function(Map<String, dynamic>)? onGuardBlocked,
+    void Function(int, int)? onTrackersBlocked,
   }) async {
     if (kIsWeb) return;
     void accept(Object? value) {
@@ -35,6 +40,16 @@ class NativeBrowserService {
         onNavigationSettled?.call(
           (arguments['id'] as num).toInt(),
           arguments['attemptedUrl'] as String,
+        );
+      }
+      if (call.method == 'guardBlocked') {
+        onGuardBlocked?.call(Map<String, dynamic>.from(call.arguments as Map));
+      }
+      if (call.method == 'trackersBlocked') {
+        final arguments = call.arguments as Map;
+        onTrackersBlocked?.call(
+          (arguments['id'] as num).toInt(),
+          (arguments['count'] as num).toInt(),
         );
       }
     });
@@ -88,6 +103,20 @@ class BrowserPageStatus {
   bool canGoForward = false;
   bool isLoading = false;
   String? error;
+  GuardDecision? guardDecision;
+}
+
+class _GuardBlockedTab {
+  _GuardBlockedTab(
+    this.status,
+    this.isPrivate,
+    this.desktopMode,
+    this.previousUrl,
+  );
+  final BrowserPageStatus status;
+  final bool isPrivate;
+  final bool desktopMode;
+  final String? previousUrl;
 }
 
 class _EngineEntry {
@@ -97,6 +126,9 @@ class _EngineEntry {
   final bool isPrivate;
   final BrowserPageStatus status = BrowserPageStatus();
   String requestedUrl = '';
+  String? lastCommittedUrl;
+  int navigationRevision = 0;
+  bool needsLoad = false;
   bool closed = false;
   bool crashed = false;
   bool desktopMode = false;
@@ -115,6 +147,10 @@ class BrowserEnginePool extends ChangeNotifier with WidgetsBindingObserver {
     required this.prompt,
     required this.onPageChanged,
     required this.onMessage,
+    this.navigationPolicy,
+    this.onGuardBlock,
+    this.onTrackersBlocked,
+    this.beforeLoadForTesting,
   }) {
     WidgetsBinding.instance.addObserver(this);
   }
@@ -125,9 +161,24 @@ class BrowserEnginePool extends ChangeNotifier with WidgetsBindingObserver {
   final void Function(String tabId, String url, String title, bool completed)
   onPageChanged;
   final void Function(String message) onMessage;
+  final Future<GuardDecision> Function(BrowserGuardRequest request)?
+  navigationPolicy;
+  final void Function(GuardDecision decision, bool isPrivate)? onGuardBlock;
+  final void Function(int count, bool isPrivate)? onTrackersBlocked;
+  @visibleForTesting
+  final Future<void> Function(String url)? beforeLoadForTesting;
+  final Map<String, _GuardBlockedTab> _guardBlocks = {};
+  Map<String, Object?> _guardPolicy = {};
+  bool _guardSyncFailed = false;
+  int _policyRevision = 0;
+  int _appliedPolicyRevision = 0;
+  Future<void> _policyQueue = Future<void>.value();
   final Map<String, _EngineEntry> _entries = {};
   final List<String> _recency = [];
   final Map<String, int> _generations = {};
+  final Map<String, int> _requests = {};
+  final Map<String, int> _pendingPublicRequests = {};
+  int _nextRequest = 0;
   Future<void> _queue = Future<void>.value();
   String? _activeId;
   bool _disposed = false;
@@ -135,8 +186,21 @@ class BrowserEnginePool extends ChangeNotifier with WidgetsBindingObserver {
   List<String> get liveTabIds => List.unmodifiable(_entries.keys);
   int get liveEngineCount => _entries.length;
   BrowserPageStatus status(String tabId) =>
-      _entries[tabId]?.status ?? BrowserPageStatus();
+      _guardBlocks[tabId]?.status ??
+      _entries[tabId]?.status ??
+      BrowserPageStatus();
   Widget? view(String tabId) => _entries[tabId]?.widget;
+
+  int _beginRequest(String tabId, {bool pending = false}) {
+    final request = ++_nextRequest;
+    _requests[tabId] = request;
+    if (pending) {
+      _pendingPublicRequests[tabId] = request;
+    } else {
+      _pendingPublicRequests.remove(tabId);
+    }
+    return request;
+  }
 
   Future<void> open({
     required String tabId,
@@ -144,7 +208,27 @@ class BrowserEnginePool extends ChangeNotifier with WidgetsBindingObserver {
     required bool isPrivate,
     bool desktopMode = false,
   }) {
-    return _enqueue(() => _open(tabId, url, isPrivate, desktopMode));
+    final old = _entries[tabId];
+    // Selecting an existing page is not a new navigation intent. In particular,
+    // it must not cancel an in-flight delegate for that same issued load.
+    if (old != null &&
+        !old.closed &&
+        !old.crashed &&
+        !old.needsLoad &&
+        old.isPrivate == isPrivate &&
+        old.status.error == null &&
+        !_guardBlocks.containsKey(tabId) &&
+        !_pendingPublicRequests.containsKey(tabId) &&
+        (old.requestedUrl == url || old.status.url == url)) {
+      return _enqueue(() async {
+        activate(tabId);
+      });
+    }
+    final request = _beginRequest(tabId, pending: true);
+    if (old != null && old.status.isLoading) unawaited(_native('stop', old));
+    return _enqueue(
+      () => _open(tabId, url, isPrivate, desktopMode, request: request),
+    );
   }
 
   Future<void> _enqueue(Future<void> Function() operation) {
@@ -153,20 +237,269 @@ class BrowserEnginePool extends ChangeNotifier with WidgetsBindingObserver {
     return future;
   }
 
-  Future<void> _open(
+  Future<GuardDecision> _decision(String tabId, Uri uri, bool isPrivate) async {
+    try {
+      return await navigationPolicy?.call(
+            GuardRequest(uri: uri, tabId: tabId, isPrivate: isPrivate),
+          ) ??
+          GuardDecision(action: GuardAction.allow, host: uri.host);
+    } catch (_) {
+      // Pack updates preserve the last verified generation. A transient policy
+      // error cannot become an invented threat classification.
+      return GuardDecision(action: GuardAction.errorAllow, host: uri.host);
+    }
+  }
+
+  Uri _safeSearch(Uri uri) => const SafeSearchPolicy().apply(
+    uri,
+    adultFilteringEnabled:
+        _guardPolicy['guardEnabled'] == true &&
+        (_guardPolicy['enabledCategories'] as List? ?? const []).contains(
+          'adult',
+        ),
+  );
+
+  Future<void> updateGuardPolicy(Map<String, Object?> policy) {
+    // Publish the revision immediately. Policy writes have their own ordered
+    // queue so a slow controller creation cannot delay a requested lock.
+    final revision = ++_policyRevision;
+    final future = _policyQueue.then((_) async {
+      if (_disposed) return;
+      try {
+        if (!kIsWeb) {
+          await _nativeChannel.invokeMethod<void>('updateGuardPolicy', policy);
+        }
+        _guardPolicy = Map.unmodifiable(policy);
+        _guardSyncFailed = false;
+        _appliedPolicyRevision = revision;
+      } catch (_) {
+        _guardSyncFailed = true;
+        for (final entry in _entries.values.toList()) {
+          await _native('hideForGuard', entry);
+          _setPageError(
+            entry,
+            'Local protection could not be updated. Retry the Guard setting before browsing.',
+          );
+        }
+        rethrow;
+      }
+    });
+    _policyQueue = future.catchError((Object _) {});
+    return future;
+  }
+
+  Future<int> _waitForPolicy() async {
+    while (true) {
+      final revision = _policyRevision;
+      await _policyQueue;
+      if (revision == _policyRevision) return revision;
+    }
+  }
+
+  bool _canPrompt(_EngineEntry entry) =>
+      !entry.closed &&
+      !entry.crashed &&
+      entry.id == _activeId &&
+      entry.status.guardDecision == null &&
+      entry.status.error == null &&
+      !_guardSyncFailed &&
+      _appliedPolicyRevision == _policyRevision;
+
+  void _retryAfterPolicy(
     String tabId,
     String url,
     bool isPrivate,
     bool desktopMode,
-  ) async {
-    if (_disposed || kIsWeb) return;
+    int generation,
+    int request,
+  ) {
+    if (_requests[tabId] != request) return;
+    _entries[tabId]?.needsLoad = true;
+    unawaited(
+      _enqueue(() async {
+        if (!_disposed &&
+            generation == (_generations[tabId] ?? 0) &&
+            _requests[tabId] == request) {
+          await _open(
+            tabId,
+            url,
+            isPrivate,
+            desktopMode,
+            activateTab: false,
+            request: request,
+          );
+        }
+      }),
+    );
+  }
+
+  void _blockGuard(
+    String tabId,
+    String url,
+    bool isPrivate,
+    bool desktopMode,
+    GuardDecision decision,
+  ) {
+    if (_disposed) return;
+    final entry = _entries[tabId];
+    final old = _guardBlocks[tabId];
+    final previous = old?.previousUrl ?? entry?.lastCommittedUrl;
+    final blocked = BrowserPageStatus()
+      ..url = url
+      ..progress = 100
+      ..canGoBack = previous != null && previous != url
+      ..guardDecision = decision;
+    _guardBlocks[tabId] = _GuardBlockedTab(
+      blocked,
+      isPrivate,
+      desktopMode,
+      previous,
+    );
+    if (entry != null) {
+      entry.navigationRevision++;
+      entry.refreshRevision++;
+      entry.status.guardDecision = decision;
+      entry.status.isLoading = false;
+      unawaited(_native('hideForGuard', entry));
+    }
+    onPageChanged(tabId, url, '', false);
+    if (old?.status.url != url ||
+        old?.status.guardDecision?.action != decision.action) {
+      onGuardBlock?.call(decision, isPrivate);
+    }
+    _notify();
+  }
+
+  void guardBlocked(Map<String, dynamic> event) {
+    final entries = _entries.values.where(
+      (entry) => entry.nativeId == event['id'],
+    );
+    if (entries.isEmpty || event['decision'] is! Map) return;
+    final entry = entries.first;
+    final url = event['url'] as String? ?? '';
+    if (entry.closed ||
+        entry.crashed ||
+        _pendingPublicRequests.containsKey(entry.id) ||
+        !_isWebUri(Uri.tryParse(url))) {
+      return;
+    }
+    final decision = GuardDecision.fromJson(
+      Map<String, Object?>.from(event['decision'] as Map),
+    );
+    if (decision.isBlocked) {
+      _blockGuard(entry.id, url, entry.isPrivate, entry.desktopMode, decision);
+    }
+  }
+
+  void trackersBlocked(int nativeId, int count) {
+    if (count <= 0) return;
+    final entries = _entries.values.where(
+      (entry) => entry.nativeId == nativeId,
+    );
+    if (entries.isEmpty || entries.first.closed) return;
+    onTrackersBlocked?.call(count, entries.first.isPrivate);
+  }
+
+  Future<void> retryGuard(String tabId) {
+    final request = _beginRequest(tabId);
+    final blocked = _guardBlocks[tabId];
+    return _enqueue(() async {
+      if (blocked == null || _requests[tabId] != request) return;
+      await _open(
+        tabId,
+        blocked.status.url,
+        blocked.isPrivate,
+        blocked.desktopMode,
+        request: request,
+      );
+    });
+  }
+
+  Future<void> recheckGuard() => _enqueue(() async {
+    final ids = {..._entries.keys, ..._guardBlocks.keys};
+    for (final id in ids) {
+      final entry = _entries[id];
+      final blocked = _guardBlocks[id];
+      final url = blocked?.status.url ?? entry?.status.url ?? '';
+      final uri = Uri.tryParse(url);
+      if (!_isWebUri(uri)) continue;
+      final isPrivate = blocked?.isPrivate ?? entry!.isPrivate;
+      final desktopMode = blocked?.desktopMode ?? entry!.desktopMode;
+      final request = _requests[id];
+      final revision = await _waitForPolicy();
+      final decision = await _decision(id, uri!, isPrivate);
+      if (_disposed) return;
+      if (_requests[id] != request ||
+          revision != _policyRevision ||
+          status(id).url != url) {
+        continue;
+      }
+      if (decision.isBlocked) {
+        _blockGuard(id, url, isPrivate, desktopMode, decision);
+      } else if (blocked != null && id == _activeId) {
+        await _open(
+          id,
+          url,
+          isPrivate,
+          desktopMode,
+          activateTab: false,
+          request: request,
+        );
+      }
+    }
+  });
+
+  Future<void> _open(
+    String tabId,
+    String url,
+    bool isPrivate,
+    bool desktopMode, {
+    bool activateTab = true,
+    int? request,
+  }) async {
+    request ??= _requests[tabId] ??= ++_nextRequest;
+    if (_disposed || kIsWeb || _requests[tabId] != request) return;
+    final policyRevision = await _waitForPolicy();
+    if (_guardSyncFailed) {
+      onMessage(
+        'Local protection is unavailable. Retry the Guard setting before browsing.',
+      );
+      return;
+    }
     final generation = _generations[tabId] ?? 0;
-    final uri = Uri.tryParse(url);
+    var uri = Uri.tryParse(url);
     if (!_isWebUri(uri)) {
       onMessage('Enter a valid HTTP or HTTPS address.');
       return;
     }
+    uri = _safeSearch(uri!);
+    url = uri.toString();
+    final decision = await _decision(tabId, uri, isPrivate);
+    if (_disposed ||
+        generation != (_generations[tabId] ?? 0) ||
+        _requests[tabId] != request) {
+      return;
+    }
+    if (policyRevision != _policyRevision) {
+      _retryAfterPolicy(
+        tabId,
+        url,
+        isPrivate,
+        desktopMode,
+        generation,
+        request,
+      );
+      return;
+    }
+    if (decision.isBlocked) {
+      _pendingPublicRequests.remove(tabId);
+      _blockGuard(tabId, url, isPrivate, desktopMode, decision);
+      if (activateTab) activate(tabId);
+      return;
+    }
+    final wasBlocked = _guardBlocks.remove(tabId) != null;
     var entry = _entries[tabId];
+    if (entry != null) entry.status.guardDecision = null;
     if (entry?.crashed == true) {
       await _closeNow(tabId);
       entry = null;
@@ -214,7 +547,9 @@ class BrowserEnginePool extends ChangeNotifier with WidgetsBindingObserver {
       entry = created;
       try {
         await _configure(created);
-        if (_disposed || generation != (_generations[tabId] ?? 0)) {
+        if (_disposed ||
+            generation != (_generations[tabId] ?? 0) ||
+            _requests[tabId] != request) {
           created.closed = true;
           await _native('close', created);
           return;
@@ -242,14 +577,52 @@ class BrowserEnginePool extends ChangeNotifier with WidgetsBindingObserver {
         return;
       }
     }
-    activate(tabId);
-    if (entry.requestedUrl == url || entry.status.url == url) return;
+    if (_requests[tabId] != request) return;
+    if (policyRevision != _policyRevision) {
+      _retryAfterPolicy(
+        tabId,
+        url,
+        isPrivate,
+        desktopMode,
+        generation,
+        request,
+      );
+      return;
+    }
+    if (activateTab) activate(tabId);
+    if (!wasBlocked &&
+        !entry.needsLoad &&
+        (entry.requestedUrl == url || entry.status.url == url)) {
+      _pendingPublicRequests.remove(tabId);
+      return;
+    }
+    entry.needsLoad = true;
     entry.requestedUrl = url;
     entry.status.url = url;
     entry.status.error = null;
     entry.status.isLoading = true;
     _notify();
-    await entry.controller.loadRequest(uri!);
+    if (kDebugMode) await beforeLoadForTesting?.call(url);
+    await _native('prepareGuardNavigation', entry, {'url': url});
+    if (entry.closed ||
+        generation != (_generations[tabId] ?? 0) ||
+        _requests[tabId] != request) {
+      return;
+    }
+    if (policyRevision != _policyRevision || _guardSyncFailed) {
+      _retryAfterPolicy(
+        tabId,
+        url,
+        isPrivate,
+        desktopMode,
+        generation,
+        request,
+      );
+      return;
+    }
+    entry.needsLoad = false;
+    _pendingPublicRequests.remove(tabId);
+    await entry.controller.loadRequest(uri);
   }
 
   Future<void> _configure(_EngineEntry entry) async {
@@ -264,6 +637,59 @@ class BrowserEnginePool extends ChangeNotifier with WidgetsBindingObserver {
           final uri = Uri.tryParse(request.url);
           if (_isWebUri(uri)) {
             if (request.isMainFrame) {
+              if (_pendingPublicRequests.containsKey(entry.id)) {
+                return NavigationDecision.prevent;
+              }
+              final navigationRequest = _beginRequest(entry.id);
+              final policyRevision = await _waitForPolicy();
+              if (_guardSyncFailed) return NavigationDecision.prevent;
+              final revision = ++entry.navigationRevision;
+              final safeUri = _safeSearch(uri!);
+              final decision = await _decision(
+                entry.id,
+                safeUri,
+                entry.isPrivate,
+              );
+              if (entry.closed ||
+                  entry.crashed ||
+                  revision != entry.navigationRevision ||
+                  _requests[entry.id] != navigationRequest) {
+                return NavigationDecision.prevent;
+              }
+              if (policyRevision != _policyRevision) {
+                _retryAfterPolicy(
+                  entry.id,
+                  request.url,
+                  entry.isPrivate,
+                  entry.desktopMode,
+                  _generations[entry.id] ?? 0,
+                  navigationRequest,
+                );
+                return NavigationDecision.prevent;
+              }
+              if (decision.isBlocked) {
+                _blockGuard(
+                  entry.id,
+                  safeUri.toString(),
+                  entry.isPrivate,
+                  entry.desktopMode,
+                  decision,
+                );
+                return NavigationDecision.prevent;
+              }
+              _guardBlocks.remove(entry.id);
+              entry.status.guardDecision = null;
+              if (safeUri != uri) {
+                unawaited(
+                  open(
+                    tabId: entry.id,
+                    url: safeUri.toString(),
+                    isPrivate: entry.isPrivate,
+                    desktopMode: entry.desktopMode,
+                  ),
+                );
+                return NavigationDecision.prevent;
+              }
               entry.requestedUrl = request.url;
               entry.status.error = null;
             }
@@ -273,14 +699,12 @@ class BrowserEnginePool extends ChangeNotifier with WidgetsBindingObserver {
           if (request.isMainFrame &&
               uri != null &&
               {'mailto', 'tel', 'sms'}.contains(uri.scheme)) {
-            if (entry.id == _activeId &&
+            if (_canPrompt(entry) &&
                 await confirm(
                   'Open another app?',
                   'This page wants to open your ${uri.scheme == 'mailto' ? 'email' : 'phone or messaging'} app.',
                 ) &&
-                !entry.closed &&
-                !entry.crashed &&
-                entry.id == _activeId &&
+                _canPrompt(entry) &&
                 entry.status.url == requestedUrl) {
               try {
                 await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -294,7 +718,10 @@ class BrowserEnginePool extends ChangeNotifier with WidgetsBindingObserver {
           return NavigationDecision.prevent;
         },
         onPageStarted: (url) {
-          if (entry.closed || entry.crashed || entry.status.error != null) {
+          if (entry.closed ||
+              entry.crashed ||
+              entry.status.guardDecision != null ||
+              entry.status.error != null) {
             return;
           }
           entry.status.url = url;
@@ -303,7 +730,10 @@ class BrowserEnginePool extends ChangeNotifier with WidgetsBindingObserver {
           _updatePage(entry, false);
         },
         onPageFinished: (url) async {
-          if (entry.closed || entry.crashed || entry.status.error != null) {
+          if (entry.closed ||
+              entry.crashed ||
+              entry.status.guardDecision != null ||
+              entry.status.error != null) {
             return;
           }
           entry.status.url = url;
@@ -311,6 +741,7 @@ class BrowserEnginePool extends ChangeNotifier with WidgetsBindingObserver {
           await _updatePage(entry, entry.status.error == null);
           if (!entry.closed && !entry.crashed && entry.status.url == url) {
             entry.status.isLoading = false;
+            entry.lastCommittedUrl = url;
             _notify();
           }
         },
@@ -318,6 +749,7 @@ class BrowserEnginePool extends ChangeNotifier with WidgetsBindingObserver {
           if (entry.closed ||
               entry.crashed ||
               entry.status.error != null ||
+              entry.status.guardDecision != null ||
               change.url == null ||
               !_isWebUri(Uri.tryParse(change.url!))) {
             return;
@@ -327,7 +759,11 @@ class BrowserEnginePool extends ChangeNotifier with WidgetsBindingObserver {
           _scheduleMetadataRefresh(entry);
         },
         onProgress: (progress) {
-          if (entry.closed || entry.crashed) return;
+          if (entry.closed ||
+              entry.crashed ||
+              entry.status.guardDecision != null) {
+            return;
+          }
           entry.status.progress = progress;
           _notify();
         },
@@ -337,7 +773,10 @@ class BrowserEnginePool extends ChangeNotifier with WidgetsBindingObserver {
               error.errorCode == -999) {
             return;
           }
-          if (entry.closed || entry.crashed || error.isForMainFrame == false) {
+          if (entry.closed ||
+              entry.crashed ||
+              entry.status.guardDecision != null ||
+              error.isForMainFrame == false) {
             return;
           }
           if (error.errorType == WebResourceErrorType.unsupportedScheme) return;
@@ -379,9 +818,7 @@ class BrowserEnginePool extends ChangeNotifier with WidgetsBindingObserver {
         },
         onHttpAuthRequest: (request) async {
           final requestedUrl = entry.status.url;
-          if (entry.closed ||
-              entry.crashed ||
-              entry.id != _activeId ||
+          if (!_canPrompt(entry) ||
               !entry.status.url.startsWith('https:') ||
               request.host != _host(entry)) {
             request.onCancel();
@@ -393,9 +830,7 @@ class BrowserEnginePool extends ChangeNotifier with WidgetsBindingObserver {
             '',
           );
           if (name == null ||
-              entry.closed ||
-              entry.crashed ||
-              entry.id != _activeId ||
+              !_canPrompt(entry) ||
               entry.status.url != requestedUrl) {
             request.onCancel();
             return;
@@ -406,9 +841,7 @@ class BrowserEnginePool extends ChangeNotifier with WidgetsBindingObserver {
             '',
           );
           if (password == null ||
-              entry.closed ||
-              entry.crashed ||
-              entry.id != _activeId ||
+              !_canPrompt(entry) ||
               entry.status.url != requestedUrl) {
             request.onCancel();
             return;
@@ -418,37 +851,28 @@ class BrowserEnginePool extends ChangeNotifier with WidgetsBindingObserver {
       ),
     );
     await c.setOnJavaScriptAlertDialog((request) async {
-      if (entry.id == _activeId) {
+      if (_canPrompt(entry)) {
         await confirm('Message from ${_host(entry)}', request.message);
       }
     });
     await c.setOnJavaScriptConfirmDialog((request) async {
       final url = entry.status.url;
-      if (entry.closed || entry.crashed || entry.id != _activeId) return false;
+      if (!_canPrompt(entry)) return false;
       final answer = await confirm(
         'Confirm for ${_host(entry)}',
         request.message,
       );
-      return answer &&
-          !entry.closed &&
-          !entry.crashed &&
-          entry.id == _activeId &&
-          entry.status.url == url;
+      return answer && _canPrompt(entry) && entry.status.url == url;
     });
     await c.setOnJavaScriptTextInputDialog((request) async {
       final url = entry.status.url;
-      if (entry.closed || entry.crashed || entry.id != _activeId) return '';
+      if (!_canPrompt(entry)) return '';
       final answer = await prompt(
         'Input for ${_host(entry)}',
         request.message,
         request.defaultText ?? '',
       );
-      return !entry.closed &&
-              !entry.crashed &&
-              entry.id == _activeId &&
-              entry.status.url == url
-          ? answer ?? ''
-          : '';
+      return _canPrompt(entry) && entry.status.url == url ? answer ?? '' : '';
     });
     if (c.platform is AndroidWebViewController) {
       final android = c.platform as AndroidWebViewController;
@@ -457,17 +881,14 @@ class BrowserEnginePool extends ChangeNotifier with WidgetsBindingObserver {
       await android.setMediaPlaybackRequiresUserGesture(true);
       await android.setOnShowFileSelector((params) async {
         final requestedUrl = entry.status.url;
-        if (entry.closed || entry.crashed || entry.id != _activeId) return [];
+        if (!_canPrompt(entry)) return [];
         final files =
             await _nativeChannel.invokeListMethod<String>('chooseFiles', {
               'types': params.acceptTypes,
               'multiple': params.mode == FileSelectorMode.openMultiple,
             }) ??
             <String>[];
-        return !entry.closed &&
-                !entry.crashed &&
-                entry.id == _activeId &&
-                entry.status.url == requestedUrl
+        return _canPrompt(entry) && entry.status.url == requestedUrl
             ? files
             : <String>[];
       });
@@ -476,15 +897,13 @@ class BrowserEnginePool extends ChangeNotifier with WidgetsBindingObserver {
           final requestedUrl = entry.status.url;
           final uri = Uri.tryParse(request.origin);
           final allowed =
-              entry.id == _activeId &&
+              _canPrompt(entry) &&
               uri?.scheme == 'https' &&
               await confirm(
                 'Location access',
                 '${uri!.host} wants your approximate location for this session.',
               ) &&
-              !entry.closed &&
-              !entry.crashed &&
-              entry.id == _activeId &&
+              _canPrompt(entry) &&
               entry.status.url == requestedUrl &&
               await _nativeChannel.invokeMethod<bool>('requestPermissions', {
                     'types': ['location'],
@@ -493,9 +912,7 @@ class BrowserEnginePool extends ChangeNotifier with WidgetsBindingObserver {
           return GeolocationPermissionsResponse(
             allow:
                 allowed &&
-                !entry.closed &&
-                !entry.crashed &&
-                entry.id == _activeId &&
+                _canPrompt(entry) &&
                 entry.status.url == requestedUrl,
             retain: false,
           );
@@ -513,6 +930,7 @@ class BrowserEnginePool extends ChangeNotifier with WidgetsBindingObserver {
     final configured = await _nativeChannel.invokeMethod<bool>('configure', {
       'id': entry.nativeId,
       'private': entry.isPrivate,
+      'tabId': entry.id,
     });
     if (configured != true) throw StateError('Browser configuration failed');
   }
@@ -533,9 +951,7 @@ class BrowserEnginePool extends ChangeNotifier with WidgetsBindingObserver {
               : 'unsupported',
         )
         .toList();
-    if (entry.closed ||
-        entry.crashed ||
-        entry.id != _activeId ||
+    if (!_canPrompt(entry) ||
         !entry.status.url.startsWith('https:') ||
         types.contains('unsupported')) {
       await request.deny();
@@ -545,11 +961,7 @@ class BrowserEnginePool extends ChangeNotifier with WidgetsBindingObserver {
       'Website permission',
       'The page at ${_host(entry)} (including embedded content) wants to use your ${types.join(' and ')}. Allow for this request?',
     );
-    if (!allowed ||
-        entry.closed ||
-        entry.crashed ||
-        entry.id != _activeId ||
-        entry.status.url != requestedUrl) {
+    if (!allowed || !_canPrompt(entry) || entry.status.url != requestedUrl) {
       await request.deny();
       return;
     }
@@ -558,9 +970,7 @@ class BrowserEnginePool extends ChangeNotifier with WidgetsBindingObserver {
                 'types': types,
               }) ==
               true &&
-          !entry.closed &&
-          !entry.crashed &&
-          entry.id == _activeId &&
+          _canPrompt(entry) &&
           entry.status.url == requestedUrl) {
         await request.grant();
       } else {
@@ -572,6 +982,7 @@ class BrowserEnginePool extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   void _setPageError(_EngineEntry entry, String message, {String? failedUrl}) {
+    if (entry.closed || entry.status.guardDecision != null) return;
     final url = _isWebUri(Uri.tryParse(failedUrl ?? ''))
         ? failedUrl!
         : entry.requestedUrl;
@@ -588,7 +999,9 @@ class BrowserEnginePool extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> _updatePage(_EngineEntry entry, bool completed) async {
-    if (entry.status.error != null) return;
+    if (entry.status.error != null || entry.status.guardDecision != null) {
+      return;
+    }
     final requestedUrl = entry.status.url;
     try {
       final values = await Future.wait<Object?>([
@@ -599,6 +1012,7 @@ class BrowserEnginePool extends ChangeNotifier with WidgetsBindingObserver {
       if (entry.closed ||
           entry.crashed ||
           entry.status.error != null ||
+          entry.status.guardDecision != null ||
           entry.status.url != requestedUrl) {
         return;
       }
@@ -641,6 +1055,7 @@ class BrowserEnginePool extends ChangeNotifier with WidgetsBindingObserver {
     if (entry.closed ||
         entry.crashed ||
         entry.status.error != null ||
+        entry.status.guardDecision != null ||
         (entry.requestedUrl != attemptedUrl &&
             entry.status.url != attemptedUrl)) {
       return;
@@ -651,6 +1066,7 @@ class BrowserEnginePool extends ChangeNotifier with WidgetsBindingObserver {
       if (entry.closed ||
           entry.crashed ||
           entry.status.error != null ||
+          entry.status.guardDecision != null ||
           entry.requestedUrl != pendingUrl ||
           !_isWebUri(Uri.tryParse(currentUrl ?? ''))) {
         return;
@@ -667,6 +1083,21 @@ class BrowserEnginePool extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> back(String tabId) async {
+    final request = _beginRequest(tabId);
+    await _waitForPolicy();
+    if (_guardSyncFailed || _requests[tabId] != request) return;
+    final blocked = _guardBlocks[tabId];
+    if (blocked != null) {
+      if (blocked.previousUrl != null) {
+        await open(
+          tabId: tabId,
+          url: blocked.previousUrl!,
+          isPrivate: blocked.isPrivate,
+          desktopMode: blocked.desktopMode,
+        );
+      }
+      return;
+    }
     final entry = _entries[tabId];
     if (entry == null || entry.closed || entry.crashed) return;
     entry.status.error = null;
@@ -675,6 +1106,9 @@ class BrowserEnginePool extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> forward(String tabId) async {
+    final request = _beginRequest(tabId);
+    await _waitForPolicy();
+    if (_guardSyncFailed || _requests[tabId] != request) return;
     final entry = _entries[tabId];
     if (entry == null || entry.closed || entry.crashed) return;
     entry.status.error = null;
@@ -692,6 +1126,7 @@ class BrowserEnginePool extends ChangeNotifier with WidgetsBindingObserver {
           if (entry.closed ||
               entry.crashed ||
               entry.status.error != null ||
+              entry.status.guardDecision != null ||
               revision != entry.refreshRevision) {
             return;
           }
@@ -700,6 +1135,7 @@ class BrowserEnginePool extends ChangeNotifier with WidgetsBindingObserver {
             if (entry.closed ||
                 entry.crashed ||
                 entry.status.error != null ||
+                entry.status.guardDecision != null ||
                 revision != entry.refreshRevision ||
                 !_isWebUri(Uri.tryParse(url ?? ''))) {
               return;
@@ -715,20 +1151,77 @@ class BrowserEnginePool extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> reload(String tabId) async {
+    final request = _beginRequest(tabId);
+    final policyRevision = await _waitForPolicy();
+    if (_guardSyncFailed || _requests[tabId] != request) return;
+    if (_guardBlocks.containsKey(tabId)) return retryGuard(tabId);
     final entry = _entries[tabId];
     if (entry == null) return;
     if (entry.crashed) {
       final url = entry.status.url;
-      await close(tabId);
-      await open(
-        tabId: tabId,
-        url: url,
-        isPrivate: entry.isPrivate,
-        desktopMode: entry.desktopMode,
+      final wasActive = _activeId == tabId;
+      return _enqueue(() async {
+        if (_requests[tabId] != request) return;
+        await _closeNow(tabId);
+        if (_requests[tabId] != request) return;
+        await _open(
+          tabId,
+          url,
+          entry.isPrivate,
+          entry.desktopMode,
+          activateTab: false,
+          request: request,
+        );
+        if (_requests[tabId] == request && wasActive && _activeId == null) {
+          activate(tabId);
+        }
+      });
+    }
+    final requestedUrl = entry.status.url;
+    final uri = Uri.tryParse(requestedUrl);
+    if (!_isWebUri(uri)) return;
+    final decision = await _decision(tabId, uri!, entry.isPrivate);
+    if (entry.closed ||
+        entry.crashed ||
+        _requests[tabId] != request ||
+        entry.status.url != requestedUrl) {
+      return;
+    }
+    if (policyRevision != _policyRevision) {
+      _retryAfterPolicy(
+        tabId,
+        requestedUrl,
+        entry.isPrivate,
+        entry.desktopMode,
+        _generations[tabId] ?? 0,
+        request,
+      );
+      return;
+    }
+    if (decision.isBlocked) {
+      _blockGuard(
+        tabId,
+        requestedUrl,
+        entry.isPrivate,
+        entry.desktopMode,
+        decision,
       );
       return;
     }
     final failedUrl = entry.status.error == null ? null : entry.status.url;
+    await _native('prepareGuardNavigation', entry, {'url': requestedUrl});
+    if (_requests[tabId] != request || entry.status.url != requestedUrl) return;
+    if (policyRevision != _policyRevision || _guardSyncFailed) {
+      _retryAfterPolicy(
+        tabId,
+        requestedUrl,
+        entry.isPrivate,
+        entry.desktopMode,
+        _generations[tabId] ?? 0,
+        request,
+      );
+      return;
+    }
     entry.status.error = null;
     entry.status.isLoading = true;
     entry.status.progress = 0;
@@ -741,9 +1234,11 @@ class BrowserEnginePool extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> stop(String tabId) async {
+    final request = _beginRequest(tabId);
     final entry = _entries[tabId];
     if (entry == null) return;
     await _native('stop', entry);
+    if (_requests[tabId] != request) return;
     entry.status.isLoading = false;
     _notify();
   }
@@ -782,19 +1277,25 @@ class BrowserEnginePool extends ChangeNotifier with WidgetsBindingObserver {
         enabled ? desktopAgent : entry.mobileUserAgent,
       );
     }
-    if (reload) await entry.controller.reload();
+    if (reload) await this.reload(tabId);
   }
 
   Future<void> close(String tabId) {
     // Invalidate an in-flight construction immediately, then release in order.
     _generations[tabId] = (_generations[tabId] ?? 0) + 1;
+    _requests.remove(tabId);
+    _pendingPublicRequests.remove(tabId);
     return _enqueue(() => _closeNow(tabId));
   }
 
   Future<void> _closeNow(String tabId) async {
+    _guardBlocks.remove(tabId);
     final entry = _entries.remove(tabId);
     _recency.remove(tabId);
-    if (entry == null) return;
+    if (entry == null) {
+      _notify();
+      return;
+    }
     entry.closed = true;
     if (_activeId == tabId) _activeId = null;
     _notify();
@@ -807,9 +1308,15 @@ class BrowserEnginePool extends ChangeNotifier with WidgetsBindingObserver {
     bool cookies = true,
     bool cache = true,
     bool storage = true,
-  }) => _enqueue(
-    () => _clearDataNow(cookies: cookies, cache: cache, storage: storage),
-  );
+  }) {
+    for (final id in _requests.keys.toList()) {
+      _beginRequest(id);
+      _generations[id] = (_generations[id] ?? 0) + 1;
+    }
+    return _enqueue(
+      () => _clearDataNow(cookies: cookies, cache: cache, storage: storage),
+    );
+  }
 
   Future<void> _clearDataNow({
     required bool cookies,
@@ -817,11 +1324,8 @@ class BrowserEnginePool extends ChangeNotifier with WidgetsBindingObserver {
     required bool storage,
   }) async {
     for (final entry in _entries.values.toList()) {
-      if (cache) {
-        try {
-          await entry.controller.clearCache();
-        } catch (_) {}
-      }
+      // Stop every renderer before one native-store deletion. Clearing the
+      // shared WK store repeatedly while other views remain live can stall.
       await _closeNow(entry.id);
     }
     if (!kIsWeb) {
@@ -896,6 +1400,7 @@ class BrowserEnginePool extends ChangeNotifier with WidgetsBindingObserver {
   void dispose() {
     _disposed = true;
     WidgetsBinding.instance.removeObserver(this);
+    _guardBlocks.clear();
     for (final id in _entries.keys.toList()) {
       unawaited(close(id));
     }

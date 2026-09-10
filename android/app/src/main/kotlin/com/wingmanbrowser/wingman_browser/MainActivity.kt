@@ -35,11 +35,14 @@ class MainActivity : FlutterActivity() {
     private lateinit var engine: FlutterEngine
     private val profiles = mutableMapOf<Long, String>()
     private val destroyedViews = mutableSetOf<Long>()
+    private val guardPolicy by lazy { NativeGuardPolicy(this) }
+    private val guardSessions = mutableMapOf<Long, NativeGuardSession>()
     private var pendingLink: String? = null
     private var fileResult: MethodChannel.Result? = null
     private var permissionResult: MethodChannel.Result? = null
     private var requestedPermissions: Array<String> = emptyArray()
     private var initialized = false
+    private var safeBrowsingReady: Boolean? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -88,6 +91,38 @@ class MainActivity : FlutterActivity() {
             when (call.method) {
                 "initialize" -> { initialized = true; result.success(pendingLink); pendingLink = null }
                 "privateAvailable" -> result.success(privateAvailable())
+                "guardBenchmarkForTesting" -> {
+                    check((applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0)
+                    val samples = (0 until 1000).map { index ->
+                        val start = System.nanoTime()
+                        guardPolicy.evaluate("https://sub.host-${(index * 997 % 100000).toString().padStart(6, '0')}.benchmark.test/", "performance")
+                        (System.nanoTime() - start) / 1000.0
+                    }.sorted()
+                    result.success(mapOf("count" to samples.size, "p50Micros" to samples[500], "p95Micros" to samples[950]))
+                }
+                "memoryForTesting" -> {
+                    check((applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0)
+                    val info = android.os.Debug.MemoryInfo(); android.os.Debug.getMemoryInfo(info)
+                    val device = android.app.ActivityManager.MemoryInfo()
+                    (getSystemService(ACTIVITY_SERVICE) as android.app.ActivityManager).getMemoryInfo(device)
+                    result.success(mapOf("mainProcessPssKb" to info.totalPss, "deviceTotalMemoryMb" to device.totalMem / 1048576, "deviceAvailableMemoryMb" to device.availMem / 1048576))
+                }
+                "guardDecisionForTesting" -> {
+                    check((applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0)
+                    result.success(guardPolicy.evaluate(call.argument<String>("url") ?: "", call.argument<String>("tabId") ?: "", call.argument<String>("filename"), call.argument<String>("mimeType")))
+                }
+                "safeSearchForTesting" -> { check((applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0); result.success(guardPolicy.safeSearch(call.argument<String>("url") ?: "")) }
+                "normalizeHost" -> result.success(NativeGuardPolicy.normalizeHost(call.argument<String>("host") ?: ""))
+                "updateGuardPolicy" -> {
+                    @Suppress("UNCHECKED_CAST")
+                    guardPolicy.update(call.arguments as Map<String, Any?>)
+                    result.success(null)
+                }
+                "prepareGuardNavigation" -> {
+                    val id = call.argument<Number>("id")!!.toLong()
+                    guardSessions[id]?.prepare(call.argument<String>("url") ?: "")
+                    result.success(null)
+                }
                 "disablePublisherFirstPartyId" -> {
                     MobileAds.putPublisherFirstPartyIdEnabled(false)
                     result.success(null)
@@ -96,6 +131,10 @@ class MainActivity : FlutterActivity() {
                     val web = webView(call)
                     val id = call.argument<Number>("id")!!.toLong()
                     val privateMode = call.argument<Boolean>("private") == true
+                    val guard = NativeGuardSession(guardPolicy, call.argument<String>("tabId") ?: id.toString(),
+                        blocked = { url, decision -> channel.invokeMethod("guardBlocked", mapOf("id" to id, "url" to url, "decision" to decision)) },
+                        trackers = { count -> channel.invokeMethod("trackersBlocked", mapOf("id" to id, "count" to count)) })
+                    guardSessions[id] = guard
                     if (privateMode) {
                         check(privateAvailable()) { "Private browsing needs an updated Android System WebView" }
                         val name = "wingman_private_${UUID.randomUUID()}"
@@ -127,9 +166,11 @@ class MainActivity : FlutterActivity() {
                     // Third-party cookies are unnecessary for Wingman and disabled for sites by default.
                     val cookies = if (privateMode) WebViewCompat.getProfile(web).cookieManager else CookieManager.getInstance()
                     cookies.setAcceptThirdPartyCookies(web, false)
-                    if (Build.VERSION.SDK_INT >= 26 && WebViewFeature.isFeatureSupported(WebViewFeature.GET_WEB_VIEW_CLIENT)) {
+                    check(WebViewFeature.isFeatureSupported(WebViewFeature.GET_WEB_VIEW_CLIENT)) { "An updated Android System WebView is required for local browser protection" }
+                    if (WebViewFeature.isFeatureSupported(WebViewFeature.GET_WEB_VIEW_CLIENT)) {
                         val original = WebViewCompat.getWebViewClient(web)
                         val onRendererGone: (WebView) -> Unit = { failed ->
+                            guardSessions.remove(id)?.close()
                             destroyedViews.add(id)
                             (failed.parent as? ViewGroup)?.removeView(failed)
                             failed.destroy()
@@ -141,13 +182,34 @@ class MainActivity : FlutterActivity() {
                             }
                             channel.invokeMethod("rendererGone", id)
                         }
-                        web.webViewClient = if (Build.VERSION.SDK_INT >= 27) GuardedWebViewClient27(original, onRendererGone)
-                            else GuardedWebViewClient(original, onRendererGone)
+                        web.webViewClient = when {
+                            Build.VERSION.SDK_INT >= 27 -> GuardedWebViewClient27(original, guard, onRendererGone)
+                            Build.VERSION.SDK_INT >= 26 -> GuardedWebViewClient26(original, guard, onRendererGone)
+                            else -> GuardedWebViewClient(original, guard)
+                        }
                     }
                     web.setDownloadListener { url, userAgent, disposition, mimeType, _ ->
-                        offerDownload(url, userAgent, disposition, mimeType, privateMode, web)
+                        val filename = URLUtil.guessFileName(url, disposition, mimeType)
+                        val decision = guardPolicy.evaluate(url, guard.tabId, filename, mimeType)
+                        if (decision != null && (decision["action"] != "requireAdditionalCheck" || decision["overrideAllowed"] != true)) {
+                            guard.report(web, url, decision)
+                        } else {
+                            offerDownload(url, userAgent, disposition, mimeType, privateMode, web, guard, decision != null)
+                        }
                     }
-                    result.success(true)
+                    if (safeBrowsingReady == null && WebViewFeature.isFeatureSupported(WebViewFeature.START_SAFE_BROWSING)) {
+                        WebViewCompat.startSafeBrowsing(applicationContext) { ready ->
+                            safeBrowsingReady = ready
+                            if (!ready) channel.invokeMethod("message", "System threat checks are unavailable. Local Guard rules still apply.")
+                            result.success(true)
+                        }
+                    } else {
+                        if (safeBrowsingReady == null) {
+                            safeBrowsingReady = false
+                            channel.invokeMethod("message", "This WebView cannot report system threat-check readiness. Local Guard rules still apply.")
+                        }
+                        result.success(true)
+                    }
                 }
                 "terminateRendererForTesting" -> {
                     check((applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0)
@@ -156,6 +218,7 @@ class MainActivity : FlutterActivity() {
                         result.success(WebViewCompat.getWebViewRenderProcess(webView(call))?.terminate() == true)
                     } else result.success(false)
                 }
+                "hideForGuard" -> { val web = webView(call); web.stopLoading(); web.visibility = android.view.View.INVISIBLE; result.success(null) }
                 "stop" -> { webView(call).stopLoading(); result.success(null) }
                 "find" -> { webView(call).findAllAsync(call.argument<String>("query") ?: ""); result.success(null) }
                 "findNext" -> { webView(call).findNext(call.argument<Boolean>("forward") != false); result.success(null) }
@@ -209,6 +272,7 @@ class MainActivity : FlutterActivity() {
 
     private fun closeView(call: MethodCall, result: MethodChannel.Result) {
         val id = call.argument<Number>("id")!!.toLong()
+        guardSessions.remove(id)?.close()
         val web = if (destroyedViews.remove(id)) null else webView(call)
         web?.stopLoading()
         web?.loadUrl("about:blank")
@@ -253,16 +317,24 @@ class MainActivity : FlutterActivity() {
         else result.success(null)
     }
 
-    private fun offerDownload(raw: String, agent: String?, disposition: String?, mime: String?, privateMode: Boolean, web: WebView) {
+    private fun offerDownload(raw: String, agent: String?, disposition: String?, mime: String?, privateMode: Boolean, web: WebView, guard: NativeGuardSession, executableWarning: Boolean) {
         val url = validWebUrl(raw) ?: run { channel.invokeMethod("message", "This download type is not supported."); return }
         val uri = Uri.parse(url)
         val filename = URLUtil.guessFileName(url, disposition, mime)
             .replace(Regex("[^A-Za-z0-9._ -]"), "_").trim('.', ' ').take(120).ifBlank { "download" }
+        val initiatingUrl = web.url
         AlertDialog.Builder(this)
-            .setTitle("Download file?")
-            .setMessage("${uri.host}\n$filename" + if (privateMode) "\nDownloaded files remain after closing private tabs." else "")
+            .setTitle(if (executableWarning) "This file can run software" else "Download file?")
+            .setMessage("${uri.host}\n$filename" +
+                (if (executableWarning) "\nOnly download if you trust the source. The file type is risky; Wingman has not scanned its contents." else "") +
+                (if (privateMode) "\nDownloaded files remain after closing private tabs." else ""))
             .setNegativeButton("Cancel", null)
             .setPositiveButton("Download") { _, _ ->
+                if (guard.closed || web.url != initiatingUrl) return@setPositiveButton
+                val latest = guardPolicy.evaluate(url, guard.tabId, filename, mime)
+                if (latest != null && (latest["action"] != "requireAdditionalCheck" || latest["overrideAllowed"] != true || !executableWarning)) {
+                    guard.report(web, url, latest); return@setPositiveButton
+                }
                 try {
                     val request = DownloadManager.Request(uri)
                         .setTitle(filename).setMimeType(mime ?: "application/octet-stream")

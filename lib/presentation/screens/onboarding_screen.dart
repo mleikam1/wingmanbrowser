@@ -3,8 +3,13 @@ import 'package:flutter/material.dart';
 import '../widgets/brand.dart';
 
 class OnboardingScreen extends StatelessWidget {
-  const OnboardingScreen({super.key, required this.onContinue});
+  const OnboardingScreen({
+    super.key,
+    required this.onContinue,
+    this.onSetUpGuard,
+  });
   final VoidCallback onContinue;
+  final VoidCallback? onSetUpGuard;
   @override
   Widget build(BuildContext context) => Scaffold(
     body: SafeArea(
@@ -47,6 +52,20 @@ class OnboardingScreen extends StatelessWidget {
                   'Disclosed ads and partnerships on Wingman surfaces can fund the browser.',
                 ),
                 const SizedBox(height: 32),
+                if (onSetUpGuard != null) ...[
+                  const Text(
+                    'Want a little extra backup? Guard lets you choose content boundaries and time for Focus. No lifestyle categories are selected for you.',
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton(
+                      onPressed: onSetUpGuard,
+                      child: const Text('Set up Guard'),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton(
