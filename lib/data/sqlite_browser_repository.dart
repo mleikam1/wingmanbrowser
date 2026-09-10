@@ -122,6 +122,9 @@ class SqliteBrowserRepository implements BrowserRepository {
           orElse: () => ThemeMode.system,
         ),
         onboardingComplete: prefs['onboarding_complete'] == 'true',
+        guardJson: prefs['guard_configuration'] ?? '{}',
+        guardStatsJson: prefs['guard_statistics'] ?? '{}',
+        localSuggestions: prefs['local_suggestions'] != 'false',
       ),
     );
   }
@@ -220,6 +223,9 @@ class SqliteBrowserRepository implements BrowserRepository {
       'theme': settings.themeMode.name,
       'search_provider': SearchProvider.byId(settings.searchProviderId).id,
       'onboarding_complete': settings.onboardingComplete.toString(),
+      'guard_configuration': settings.guardJson,
+      'guard_statistics': settings.guardStatsJson,
+      'local_suggestions': settings.localSuggestions.toString(),
     };
     for (final entry in prefs.entries) {
       batch.insert('settings', {
