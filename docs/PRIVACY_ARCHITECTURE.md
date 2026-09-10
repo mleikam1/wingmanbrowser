@@ -1,8 +1,8 @@
-# Phase 2 privacy architecture
+# Browser privacy architecture
 
 **We've got your back, not your data.** Wingman Guard makes ordinary navigation decisions from local policy and local filter data. It does not send the destination to a Wingman classification server. Security threat protection, voluntary category controls and tracking-resource blocking remain separate systems.
 
-This document describes the application data boundaries and network inventory. It is not a substitute for the eventual operator's published privacy policy or final store disclosures. Phase 2 integration and validation evidence must be read alongside the final report; undocumented remote services are not implied by future architecture notes.
+This document describes the application data boundaries and network inventory. It is not a substitute for the eventual operator's published privacy policy or final store disclosures. Historical Phase 2 evidence is retained below; current changes and observed checks are recorded in [Phase 3 status](PHASE_3_STATUS.md). Undocumented remote services are not implied by future architecture notes.
 
 ## Data flow
 
@@ -21,11 +21,15 @@ flowchart LR
     Policy -->|normal activity only| Counts[Local aggregate counters]
     Private[Private session] --> Policy
     Private --> Memory[Private metadata in memory]
+    File[Explicitly selected bookmark file] --> Preview[Bounded inert import preview]
+    Preview -->|confirmed merge| Library[Local bookmarks and reading-list metadata]
+    Engine -->|explicit reader action| Reader[Transient sanitized plain text]
   end
   Engine -->|website requests| Websites[Website and its services]
   Engine -->|allowed submitted search| Search[Selected search provider]
   Engine -->|engine-managed checks| NativeSafety[Platform threat services]
-  Home[Owned Home explicit debug ad opt-in] --> Consent[Google UMP]
+  Home[Visible owned Home explicit debug ad opt-in] --> Eligibility[Local route and protection eligibility]
+  Eligibility -->|eligible and current| Consent[Google UMP]
   Consent -->|request permitted| Ads[Google test advertising]
   Public[Future common signed artifacts] -.->|inactive until configured| Rules
   Report[Explicit report preview] -->|chosen copy or share| Export[Clipboard or selected OS share target]
@@ -39,6 +43,9 @@ The public-artifact connection is inactive. The report composer exports only aft
 | --- | --- | --- |
 | Normal history | SQLite, most recent visit per URL; up to 90 days and 5,000 URLs | Clear history |
 | Bookmarks and normal tabs | Separate SQLite tables until removed | Explicit add/remove/close |
+| Reading list | Local SQLite v2: title, URL, created/read dates only; maximum 500 | Explicit normal-page save, read/unread and remove; no private-page save, offline page archive or cloud sync |
+| Bookmark import/export | User-selected Netscape HTML; inert bounded preview; explicit merge/export | Import ≤2 MiB/5,000 candidates; duplicate/cap recheck before commit. Exports disclose full URLs; chosen files and OS share caches may remain outside Wingman |
+| Reader text | Bounded visible article text in memory while the route exists | User-invoked local extraction, source attribution, no page-body database, cloud processing, remote-image loading or active HTML |
 | Private history/tab metadata | No persistent history or tab writes; in-memory metadata | Close private tab/session |
 | Guard categories, custom rules and Focus settings | Browser SQLite settings, separate from browsing-event tables | Settings; protected mutations require PIN when configured |
 | Signed filter packs | Local indexed data; retain previous valid pack for rollback | Last valid data remains useful offline; no per-navigation cloud query |
@@ -52,9 +59,23 @@ Normal local databases are not application-level encrypted by Wingman. Android a
 
 Private iOS pages use a nonpersistent WK data store configured before view creation. Android private pages use independent profiles and can temporarily write isolated site data to disk; close/eviction clears it and next launch removes abandoned profiles. Websites, network providers and OS services can still observe traffic they handle. See [Phase 1 storage detail](PRIVACY.md).
 
+## Phase 3A local-data and screen boundaries
+
+The reading list is metadata, not an offline content downloader. Save-current-page validates the source tab again before saving and rejects private/Home pages. Reading list → Add address also permits a validated, explicit HTTP(S) address from normal Home without visiting it; the action is unavailable in private mode. Confirmed library changes are serialized and visible only after a successful storage operation, preventing a misleading imported/saved success. Schema v2 adds the reading-list table while preserving v1 tables and preferences. Website-size preferences remain local.
+
+Bookmark parsing has no WebView, JavaScript runtime, URL fetcher or other-browser database access. A file chooser selection is the only import source. The HTML parser receives bounded UTF-8 Netscape exports; markup depth/tag/candidate limits precede parsing. URLs must be credential-free HTTP(S), titles are bounded plain text and export fields are escaped. Previewing never navigates. Export is a separate disclosure/confirmation followed by the OS destination chooser or web file download; Wingman cannot promise erasure of the resulting file or external share cache.
+
+Reader is an explicit local action on the current native page. It extracts visible article/main text, excluding scripts, form controls, editable content, hidden nodes, embedded frames and non-article chrome, with output/work limits. No credentials are read through JavaScript. It does not remove overlays, unhide content, bypass access checks or use an off-device summarizer. A changed/closed navigation invalidates the result. Flutter renders plain text and the source address, with no active links/images/HTML. The underlying website may continue its ordinary activity; reader mode is not a claim to terminate all website connections.
+
+Android uses app-window capture protection from activity creation; screenshots, recording and screen sharing of Wingman are restricted throughout the app, including ordinary pages. This conservative baseline avoids a transition frame exposing a private tab or PIN. iOS places an opaque native cover over inactive scenes for OS previews. It does **not** prevent a user taking a screenshot while actively using the iOS app. These controls are distinct from private storage isolation. Exact native checks and HTTP-auth/autofill/passkey limits belong in the [platform matrix](PLATFORM_CAPABILITY_MATRIX.md).
+
+Reader availability in 3A is **iOS only**, using an isolated WK content world. Android's installed WebView/AndroidX combination does not provide the reviewed isolated execution boundary required here; its Reader action is disabled. There is no shared-page-world JavaScript fallback. Explicit reading-list metadata and native text sizing remain available. This gate also avoids trusting website-overridden DOM functions to enforce exclusion of hidden/form content.
+
+Guard settings are passed to monetization only as a local coarse capability requirement, never a category, host, URL or inferred characteristic. Unknown/strict requirements withhold the unverified provider before UMP/SDK work. Live state checks and synchronous notifications invalidate attempts on private/Guard changes before the next UI frame, as well as on route and lifecycle changes. No new interests or inventory are added in 3A. [Monetization policy](MONETIZATION_POLICY.md)
+
 ## Network inventory
 
-Application-created flows, source-reviewed during Phase 2:
+Application-created flows, with Phase 3A local additions above and historical Phase 2 destinations retained:
 
 | Destination | Trigger and payload | Recipient/retention | Optionality |
 | --- | --- | --- | --- |
@@ -69,6 +90,7 @@ Application-created flows, source-reviewed during Phase 2:
 | Platform-managed Safe Browsing/fraudulent-site services | Native browser protection according to provider/OS behavior | Platform service providers; provider policy | Native security remains enabled where supported |
 | Companion's serving origin | Flutter/app/font/WASM/worker assets | Local development server or a future explicitly deployed host | Needed to load the web companion |
 | Wingman filter/config/report servers | **No active endpoint** | No resources/deployment or request receiver established in Phase 2 | Future separate configuration/action |
+| Wingman sync/AI/account services | **No active endpoint or SDK** | No configured Browser backend or deployed resource; no page, library or Guard data transmitted | Deferred; [sync gate](SYNC_SECURITY_DESIGN.md) |
 
 `lib/domain/search.dart` centralizes search/quick-navigation destinations; `lib/browser/browser_engine.dart` and native handlers create browsing/download requests. `lib/domain/local_suggestions.dart` has no remote suggestion request. PIN/cryptographic code has no network dependency. The tracker list's provenance URLs are metadata, not startup fetches. Runtime browser pages can contact additional servers chosen by those pages; this inventory is not a claim that arbitrary websites use only the listed hosts.
 

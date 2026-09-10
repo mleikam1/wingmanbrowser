@@ -4,9 +4,11 @@
 
 A Flutter browser using Android System WebView and iOS WKWebView, with a web Home/search companion. Wingman Guard adds optional local content boundaries, timed Focus, balanced tracker blocking and local Family settings. Normal history, bookmarks, preferences and tab metadata use local SQLite. Wingman has no browsing backend, account requirement, analytics upload or cloud sync.
 
+**More of what matters to you. Less of what gets in your way.** Phase 3's first delivery is **3A**: everyday browsing and privacy verification, bookmark file import/export, a local reading list, website text/page size, and gated local Reader. Follow [Phase 3 status and evidence](docs/PHASE_3_STATUS.md); milestones 3B–3F remain Deferred.
+
 Your browsing history is yours. Wingman doesn't sell your browsing history, build an advertising profile from the sites you visit, or inject Wingman ads into the websites you browse.
 
-This is a development foundation, not a claim of completed store approval or production distribution readiness. Consult the [validation report](docs/VALIDATION.md) for what was actually run and the [release checklist](docs/RELEASE_CHECKLIST.md) for remaining work.
+This is a development foundation, not a claim of completed store approval or production distribution readiness. Consult the [current Phase 3 report](docs/PHASE_3_STATUS.md), [historical validation report](docs/VALIDATION.md) and [release checklist](docs/RELEASE_CHECKLIST.md) for evidence and remaining work.
 
 ## Start here
 
@@ -60,6 +62,16 @@ For a physical iPhone, enable Developer Mode, trust this Mac, and select an auth
 
 ## Implemented foundation
 
+### Everyday browsing (Phase 3A)
+
+- **Bookmarks → Import file** accepts a Netscape HTML export you choose. Preview the new, duplicate and rejected counts before confirming a merge. It does not open addresses, execute HTML or inspect other browsers' databases. Limits: 2 MiB per file and 5,000 bookmarks. **Export bookmarks** discloses full addresses before opening a save/share destination; external files/share caches may remain.
+- **Save to reading list** keeps the current normal page's title/address locally. **Reading list → Add address** also saves an explicit web address without visiting it. Mark items read/unread or remove them. The 500-item list is metadata, not offline page downloads. Private pages cannot be saved. The v1→v2 SQLite migration preserves existing records and settings.
+- **Settings → Website size** adjusts Android text or iOS page zoom. **Open reader** on iOS extracts bounded visible article text locally into a transient attributed text view with size controls. Forms, hidden content, recognized access overlays and active HTML are excluded. Android Reader is disabled pending a verified isolated-script implementation; the Web companion cannot extract external pages.
+- Android capture protection covers the app window from startup, restricting screenshots and screen sharing. iOS shields inactive app previews; active-use screenshots remain possible. [Platform capability and authentication limits](docs/PLATFORM_CAPABILITY_MATRIX.md)
+- Pending ads and Reader requests are invalidated when their context changes. Guard-block events carry navigation identity, and pending site-data deletion cannot falsely report clearing a different selection. [Privacy boundaries](docs/PRIVACY_ARCHITECTURE.md), [monetization policy](docs/MONETIZATION_POLICY.md)
+
+Current category filtering is **experimental**, with a small development starter. [Coverage and limitations](docs/GUARD_COVERAGE_AND_LIMITATIONS.md). Help Now, commitments, chosen interests, optional encrypted sync, extension beta and cloud assistance are not delivered in 3A. [Sync security gate](docs/SYNC_SECURITY_DESIGN.md)
+
 ### Wingman Guard (Phase 2)
 
 Open **Wingman Guard** from Home or Settings. Turn on Guard and choose categories; none are preselected. Standard browsing keeps native security enabled. Focus adds temporary category/site boundaries. Private tabs follow the same Guard policy, while their activity stays out of saved history and statistics.
@@ -101,7 +113,7 @@ Websites, search providers, operating systems and enabled ad services may proces
 flutter run -d <android-or-ios-device-id> --dart-define=WINGMAN_TEST_ADS=true
 ```
 
-On normal Home, tap **Load test advertisement**. Only Google-approved test inventory can load, after the UMP consent check. The flag alone does not start requests. No ad request receives browsing history, URLs, searches or page contents. Automated tests never click advertisements.
+On normal Home, with verified standard protection requirements, tap **Load test advertisement**. Unknown or stricter Guard requirements withhold this unverified provider before consent or SDK calls. Only Google-approved test inventory can load after the UMP consent check. The flag alone does not start requests. No ad request receives browsing history, URLs, searches or page contents. Automated tests never click advertisements.
 
 Centralized `WINGMAN_ANDROID_BANNER_ID` / `WINGMAN_IOS_BANNER_ID` inputs are reserved for a reviewed production integration; supplying them cannot enable release ads. Native sample app IDs must also be replaced through reviewed configuration. [Ads, consent and sponsorship setup](docs/MONETIZATION.md).
 
@@ -118,7 +130,21 @@ flutter build ios --simulator --debug
 flutter build ios --release --no-codesign
 ```
 
-For mobile integration tests, start a target then run `flutter test integration_test -d <device-id>`. Compile results, host tests and actual browser scenarios are distinct evidence in the validation report.
+For mobile regression tests, start a target, then run each fixture separately:
+
+```sh
+flutter test integration_test/browser_engine_test.dart -d <device-id>
+flutter test integration_test/guard_engine_test.dart -d <device-id>
+flutter test integration_test/reader_privacy_test.dart -d <device-id>
+```
+
+The separate synthetic HTTPS authentication check uses public fixture values, not a real account or password vault:
+
+```sh
+flutter test integration_test/http_auth_privacy_test.dart -d <device-id>
+```
+
+Performance, test-ad and HTTPS authentication fixtures have separate setup and scopes described in [native validation](docs/phase3/NATIVE_VALIDATION.md) and [monetization notes](docs/MONETIZATION.md). Compile results, host tests and runtime scenarios are distinct evidence. The web build used for current runtime checks is `flutter build web --no-web-resources-cdn`.
 
 After configuring signing, these commands create local release artifacts:
 
@@ -140,7 +166,8 @@ iOS renders with WKWebView and handles delivered app links, but cannot claim def
 Created locally on branch `main`; initial baseline: `8c748adf1ecb271132bdba4ad25263e1a9e172d9`. No existing repository changes were overwritten. Run `git log -1 --oneline` for the current final revision; consult the validation report for the recorded handoff state.
 
 - [Architecture](docs/ARCHITECTURE.md)
-- [Phase 2 privacy data flow and request inventory](docs/PRIVACY_ARCHITECTURE.md)
+- [Current Phase 3 status](docs/PHASE_3_STATUS.md)
+- [Privacy data flow and request inventory](docs/PRIVACY_ARCHITECTURE.md)
 - [Protection providers and data licenses](docs/PHASE2_PROVIDERS.md)
 - [Future device-wide protection and desktop extensions](docs/FUTURE_PROTECTION.md)
 - [Privacy and SDK disclosures](docs/PRIVACY.md)

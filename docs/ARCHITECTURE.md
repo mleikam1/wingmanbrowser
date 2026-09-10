@@ -39,7 +39,9 @@ Home unmounts its ad widget when a browsing page is displayed. Engine notificati
 
 ## Persistence and private sessions
 
-SQLite has distinct history, bookmark, normal-tab and settings tables. Writes are transactional and parameterized. History stores the latest visit per URL, bounded by 90 days and 5,000 entries. Private records are filtered both by state and before repository SQL parameters; private history returns before database access. Bookmarking from a private tab is disabled.
+SQLite schema v2 has distinct history, bookmark, normal-tab, settings and reading-list tables. Its migration preserves v1 records. Writes are transactional and parameterized. History stores the latest visit per URL, bounded by 90 days and 5,000 entries. Private records are filtered both by state and before repository SQL parameters; private history returns before database access. Bookmarking or saving a private page to the reading list is disabled.
+
+Library mutations use a serialized durable queue and update visible state only after storage succeeds. Reading lists contain at most 500 title/address/read-state records, with no saved page body. Bookmark import accepts an explicitly selected Netscape HTML file, bounds actual bytes/markup/candidates, decodes inertly in a native worker, previews counts/text, then rechecks duplicates and the 5,000-bookmark cap before a confirmed commit. Web decoding remains bounded on the UI thread. Export is a separately disclosed OS share or browser download.
 
 Native storage uses `wingman.db`. iOS stores it in backup-excluded Library/Application Support/Wingman. Web runs local SQLite WASM in a worker over origin-specific IndexedDB; storage can be evicted and is not a backup. SQLite secure deletion does not guarantee erasure of previous OS backups or snapshots. There is no server, account or synchronization component.
 

@@ -2,6 +2,20 @@
 
 This is an engineering handoff, not evidence of store approval. Local builds cannot enroll the operator, approve entitlements, configure real advertising or secure distribution signing. The validation report records completed checks.
 
+## Phase 3A claims and acceptance gate
+
+Use [Phase 3 status](PHASE_3_STATUS.md) for observed results and [platform matrix](PLATFORM_CAPABILITY_MATRIX.md) for unsupported authentication and physical-device gaps. The following must be checked on the final code:
+
+- Database v1→v2 preserves history, bookmarks, normal sessions and settings; reading-list mutations and confirmed bookmark imports report durable failures. Validate malformed/oversized imports, duplicate/cap handling, inert preview, cancellation and explicit export.
+- Reader extracts bounded visible article text only after a user action; omit forms, hidden/access-restricted content and remote resources. Check changed/closed/private tabs and page-size behavior on actual native engines.
+- Android capture protection is present before the first app frame. iOS inactive scene previews are shielded; do not claim foreground screenshots are prevented on iOS. Repeat private-cookie/storage/cleanup/restoration tests and separately record authentication-state limits.
+- Delayed native Guard events cannot replace a newer navigation. Data-clear timeouts cannot report success or race new website storage writes.
+- Owned ads fail closed for unknown/strict requirements and revalidate route/lifecycle changes across asynchronous consent/SDK work. Release ads remain disabled.
+- Record runtime network-observation scope separately for owned services, websites, native security and optional providers. Source inspection alone is insufficient.
+- Compare identified-device/mode performance against the fresh baseline; investigate regressions and preserve the distinction between synthetic debug fixtures and physical-device release behavior.
+
+Milestones 3B–3F remain Deferred. No extension package, encrypted sync, Help Now, chosen-interest experience, remote assistance, publishing workflow or deployed backend is implied by 3A. A later release cannot enable unreviewed decryption, hidden tracking or production inventory through a remote flag. Known critical privacy defects remain release blockers.
+
 ## Guard release gates
 
 Phase 2 supplies a limited local starter pack and browser-level controls. Before production distribution:
