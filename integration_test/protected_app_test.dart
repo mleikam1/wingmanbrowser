@@ -48,7 +48,11 @@ void main() {
     // it excludes installation/process launch and is not a cold-start metric.
     final started = Stopwatch()..start();
     await app.main();
-    await tester.pumpAndSettle();
+    // The root now lazily loads owner state only after the secure handoff gate.
+    await settleUntil(
+      tester,
+      () => find.byType(app.WingmanApp).evaluate().isNotEmpty,
+    );
     started.stop();
     expect(find.byType(app.WingmanApp), findsOneWidget);
     final application = tester.widget<app.WingmanApp>(
@@ -58,7 +62,7 @@ void main() {
     final policy = application.policy;
     expect(state.initialized, isTrue);
     expect(policy.status.usable, isTrue);
-    expect(policy.status.resourceCount, 14);
+    expect(policy.status.resourceCount, 18);
     expect(find.textContaining('Built for discovery.'), findsOneWidget);
     expect(
       find.textContaining('Protected startup could not finish.'),
@@ -194,7 +198,7 @@ void main() {
       expect(native?['contentViews'], 0);
       expect(requests, 0);
       debugPrint(
-        'MANDATORY app catalog=14 localSearch=true article=true saves=true catalogTabSwitch=true coreLocks=true coreLockTapNoOverride=true rejectedUrl=true requests=0 views=0',
+        'MANDATORY app catalog=18 localSearch=true article=true saves=true catalogTabSwitch=true coreLocks=true coreLockTapNoOverride=true rejectedUrl=true requests=0 views=0',
       );
     } finally {
       // Restore only the reviewed IDs changed by this test; do not erase the
@@ -209,8 +213,8 @@ void main() {
       }
       await state.flush();
       await tester.pumpWidget(const SizedBox());
-      state.dispose();
-      policy.dispose();
+      // SignatureApplicationRoot owns disposal of its retained owner context
+      // and policy. Do not dispose those controllers a second time here.
       await server.close(force: true);
     }
   });

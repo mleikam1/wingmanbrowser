@@ -8,9 +8,11 @@ import '../domain/search.dart';
 import '../policy/policy_models.dart';
 import '../policy/legacy_settings_migration.dart';
 import 'browser_repository.dart';
+import '../signature/storage/document_store.dart';
 import 'database_native.dart' if (dart.library.js_interop) 'database_web.dart';
 
-class SqliteBrowserRepository implements BrowserRepository {
+class SqliteBrowserRepository
+    implements BrowserRepository, SignatureDocumentStore {
   SqliteBrowserRepository({
     this.factory,
     this.databasePath = 'wingman.db',
@@ -26,7 +28,7 @@ class SqliteBrowserRepository implements BrowserRepository {
 
   Future<Database> _open() async {
     final options = OpenDatabaseOptions(
-      version: 3,
+      version: 4,
       onConfigure: (db) async {
         // Reclaimed records are overwritten within SQLite. Platform backups,
         // browser eviction and filesystem snapshots remain OS/browser concerns.
@@ -55,10 +57,12 @@ class SqliteBrowserRepository implements BrowserRepository {
         )''');
         await _createReadingList(db);
         await _createProtectionArchive(db);
+        await _createSignatureDocuments(db);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) await _createReadingList(db);
         if (oldVersion < 3) await _createProtectionArchive(db);
+        if (oldVersion < 4) await _createSignatureDocuments(db);
       },
     );
     return factory?.openDatabase(databasePath, options: options) ??
@@ -135,6 +139,48 @@ class SqliteBrowserRepository implements BrowserRepository {
     await db.execute(
       'CREATE TABLE IF NOT EXISTS retired_tabs(id TEXT NOT NULL,url TEXT NOT NULL,title TEXT NOT NULL,position INTEGER NOT NULL,desktop_mode INTEGER NOT NULL,PRIMARY KEY(id,url))',
     );
+  }
+
+  Future<void> _createSignatureDocuments(DatabaseExecutor db) => db.execute(
+    'CREATE TABLE IF NOT EXISTS signature_documents(name TEXT PRIMARY KEY, document TEXT NOT NULL)',
+  );
+
+  @override
+  Future<Map<String, Object?>?> readDocument(String key) async {
+    if (!SignatureDocumentStore.keys.contains(key)) {
+      throw const FormatException('Unknown local feature document.');
+    }
+    final db = await _db;
+    final sizes = await db.rawQuery(
+      'SELECT length(CAST(document AS BLOB)) AS bytes FROM signature_documents WHERE name=?',
+      [key],
+    );
+    if (sizes.isEmpty) return null;
+    if ((sizes.single['bytes'] as int) > SignatureDocumentStore.maximumBytes) {
+      throw const FormatException('Local feature storage limit reached.');
+    }
+    final rows = await db.query(
+      'signature_documents',
+      columns: ['document'],
+      where: 'name=?',
+      whereArgs: [key],
+      limit: 1,
+    );
+    final data = jsonDecode(rows.single['document'] as String);
+    if (data is! Map || !data.keys.every((e) => e is String)) {
+      throw const FormatException('Invalid local feature document.');
+    }
+    return checkedDocument(key, Map<String, Object?>.from(data));
+  }
+
+  @override
+  Future<void> writeDocument(String key, Map<String, Object?> value) async {
+    final document = jsonEncode(checkedDocument(key, value));
+    final db = await _db;
+    await db.insert('signature_documents', {
+      'name': key,
+      'document': document,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   Future<void> _migratePermanentProtection(DatabaseExecutor db) async {

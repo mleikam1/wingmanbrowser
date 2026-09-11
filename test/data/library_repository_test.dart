@@ -131,7 +131,7 @@ void main() {
       expect(data.settings.pageScale, 150);
       expect(data.settings.guardStatsJson, '{"blocked":12}');
       final raw = await databaseFactoryFfi.openDatabase(filePath);
-      expect(await raw.getVersion(), 3);
+      expect(await raw.getVersion(), 4);
       expect(
         (await raw.query('retired_tabs')).single['url'],
         'https://normal.test',

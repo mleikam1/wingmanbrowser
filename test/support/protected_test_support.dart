@@ -51,7 +51,7 @@ Future<PolicyRuntime> loadTestPolicy({DateTime Function()? clock}) =>
       repository: SignedPolicyRepository(
         bundle: LocalCatalogBundle(),
         clock: PolicyClock(
-          wallClock: clock ?? () => DateTime.utc(2026, 9, 10, 12),
+          wallClock: clock ?? () => DateTime.utc(2026, 9, 11, 12),
         ),
       ),
       checkpointStore: MemoryTrust(),

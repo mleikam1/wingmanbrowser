@@ -1,8 +1,8 @@
 {
   "schema": 1,
   "policyVersion": 1,
-  "version": "1.0.0",
-  "sequence": 1,
+  "version": "1.1.0",
+  "sequence": 2,
   "reviewedAt": "2026-09-10T00:00:00Z",
   "expiresAt": "2027-03-10T00:00:00Z",
   "reviewer": "Wingman development editorial review",
@@ -203,6 +203,67 @@
       "sourceUrls": [
         "https://www.samhsa.gov/find-support/in-crisis"
       ]
+    },
+    {
+      "id": "measure-before-you-plan",
+      "title": "Measure before you plan",
+      "summary": "Record dimensions clearly before an everyday organizing task.",
+      "collection": "home-projects",
+      "assetPath": "assets/policy/articles/measure-before-you-plan.txt",
+      "contexts": [
+        "general",
+        "student"
+      ],
+      "sourceUrls": [
+        "https://www.nist.gov/pml/owm/si-units-length",
+        "https://www.nist.gov/pml/us-surveyfoot"
+      ],
+      "reviewedAt": "2026-09-11T00:00:00Z"
+    },
+    {
+      "id": "plan-a-small-project",
+      "title": "Plan a small project",
+      "summary": "Choose a modest goal, gather questions, and know when to stop.",
+      "collection": "home-projects",
+      "assetPath": "assets/policy/articles/plan-a-small-project.txt",
+      "contexts": [
+        "general",
+        "student"
+      ],
+      "sourceUrls": [
+        "https://www.nist.gov/pml/owm/si-units-length"
+      ],
+      "reviewedAt": "2026-09-11T00:00:00Z"
+    },
+    {
+      "id": "sports-notebook",
+      "title": "A sports notebook",
+      "summary": "Separate observations, questions, and interpretations.",
+      "collection": "sports",
+      "assetPath": "assets/policy/articles/sports-notebook.txt",
+      "contexts": [
+        "general",
+        "student"
+      ],
+      "sourceUrls": [
+        "https://oscnewsletter.olympics.com/article/131/three-questions-to-ioc-president-thomas-bach_lang=en.html"
+      ],
+      "reviewedAt": "2026-09-11T00:00:00Z"
+    },
+    {
+      "id": "fair-play-and-focus",
+      "title": "Fair play and focus",
+      "summary": "Reflect on preparation, cooperation, and respectful participation.",
+      "collection": "sports",
+      "assetPath": "assets/policy/articles/fair-play-and-focus.txt",
+      "contexts": [
+        "general",
+        "student"
+      ],
+      "sourceUrls": [
+        "https://oscnewsletter.olympics.com/article/131/three-questions-to-ioc-president-thomas-bach_lang=en.html"
+      ],
+      "reviewedAt": "2026-09-11T00:00:00Z"
     }
   ]
 }

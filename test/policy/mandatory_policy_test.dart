@@ -32,11 +32,11 @@ void main() {
     () async {
       final app = await PolicyRuntime.initialize(
         checkpointStore: MemoryPolicyCheckpointStore(),
-        clock: () => policyTestTime,
+        clock: () => DateTime.utc(2026, 9, 11, 12),
       );
       addTearDown(app.dispose);
       expect(app.status.usable, true, reason: app.status.errorCode);
-      expect(app.catalog, hasLength(14));
+      expect(app.catalog, hasLength(18));
       for (final record in app.catalog) {
         expect(record.body.length, greaterThan(120));
         expect(record.contexts, containsAll(ContentContext.values));
@@ -57,7 +57,7 @@ void main() {
           true,
         );
       }
-      expect(app.search(''), hasLength(14));
+      expect(app.search(''), hasLength(18));
       expect(app.search('https://unknown.test'), isEmpty);
       expect(MandatorySafetyPolicy.categories, hasLength(6));
     },

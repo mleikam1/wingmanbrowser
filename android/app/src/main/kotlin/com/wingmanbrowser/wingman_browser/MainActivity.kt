@@ -1,6 +1,7 @@
 package com.wingmanbrowser.wingman_browser
 
 import android.app.DownloadManager
+import android.app.KeyguardManager
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -24,6 +25,7 @@ class MainActivity : FlutterActivity() {
     private lateinit var channel: MethodChannel
     private var pendingLink: String? = null
     private var initialized = false
+    private var discardingHandoffLinks = false
     private var clearing = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -52,6 +54,7 @@ class MainActivity : FlutterActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        if (discardingHandoffLinks) return
         validWebUrl(intent.dataString)?.let {
             if (initialized) channel.invokeMethod("incomingUri", it) else pendingLink = it
         }
@@ -71,12 +74,34 @@ class MainActivity : FlutterActivity() {
     private fun handle(call: MethodCall, result: MethodChannel.Result) {
         try {
             when (call.method) {
-                "initialize" -> { initialized = true; result.success(pendingLink); pendingLink = null }
+                "discardHandoffIncoming" -> {
+                    // Deny-only: guest addresses must never be replayed into the
+                    // owner shell after authentication or process replacement.
+                    pendingLink = null
+                    initialized = false
+                    discardingHandoffLinks = true
+                    result.success(null)
+                }
+                "initialize" -> {
+                    if (discardingHandoffLinks) pendingLink = null
+                    discardingHandoffLinks = false
+                    initialized = true
+                    result.success(pendingLink)
+                    pendingLink = null
+                }
                 "setSensitiveContent" -> result.success(null) // Cannot weaken the native baseline.
                 "capabilityState" -> result.success(mapOf(
                     "capability" to "bundledPlainTextOnly", "liveBrowsing" to false,
                     "contentViews" to contentViewCount(window.decorView),
+                    "handoffIncomingDiscarded" to discardingHandoffLinks, "incomingReady" to initialized,
+                    "keyboardVisible" to (if (Build.VERSION.SDK_INT >= 30)
+                        window.decorView.rootWindowInsets?.isVisible(android.view.WindowInsets.Type.ime()) else null),
                     "secureWindow" to ((window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE) != 0)))
+                "handoffCapabilities" -> result.success(mapOf(
+                    "staticOnly" to true, "liveBrowsing" to false,
+                    "contentViews" to contentViewCount(window.decorView),
+                    "deviceAuthenticationAvailable" to
+                        (getSystemService(KEYGUARD_SERVICE) as KeyguardManager).isDeviceSecure))
                 "privateAvailable", "defaultBrowser" -> result.success(false)
                 "normalizeHost" -> result.success(NativeGuardPolicy.normalizeHost(call.argument<String>("host") ?: ""))
                 "quarantineLegacyContent" -> {

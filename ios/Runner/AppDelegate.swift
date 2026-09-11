@@ -1,6 +1,7 @@
 import Flutter
 import UIKit
 import WebKit
+import LocalAuthentication
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
@@ -10,6 +11,7 @@ import WebKit
   static func receive(_ url: URL) {
     guard ["http", "https"].contains(url.scheme?.lowercased() ?? ""),
       url.host != nil, url.user == nil, url.absoluteString.count < 16384 else { return }
+    if browserBridge?.discardingHandoffLinks == true { return }
     if let bridge = browserBridge, bridge.initialized {
       bridge.channel.invokeMethod("incomingUri", arguments: url.absoluteString)
     } else { pendingURL = url.absoluteString }
@@ -33,6 +35,7 @@ import WebKit
 final class BrowserNativeBridge {
   let channel: FlutterMethodChannel
   var initialized = false
+  var discardingHandoffLinks = false
   private var clearing = false
 
   init(registrar: FlutterPluginRegistrar) {
@@ -44,17 +47,43 @@ final class BrowserNativeBridge {
     (view is WKWebView ? 1 : 0) + view.subviews.reduce(0) { $0 + contentViewCount($1) }
   }
 
+  private func activeTextInputCount(_ view: UIView) -> Int {
+    ((view is UITextInput && view.isFirstResponder) ? 1 : 0)
+      + view.subviews.reduce(0) { $0 + activeTextInputCount($1) }
+  }
+
   func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
     let args = call.arguments as? [String: Any] ?? [:]
     switch call.method {
+    case "discardHandoffIncoming":
+      // Deny-only; no guest link can be replayed into the restored owner shell.
+      AppDelegate.pendingURL = nil
+      initialized = false
+      discardingHandoffLinks = true
+      result(nil)
     case "initialize":
-      initialized = true; result(AppDelegate.pendingURL); AppDelegate.pendingURL = nil
+      if discardingHandoffLinks { AppDelegate.pendingURL = nil }
+      discardingHandoffLinks = false
+      initialized = true
+      result(AppDelegate.pendingURL)
+      AppDelegate.pendingURL = nil
     case "privateAvailable", "defaultBrowser": result(false)
     case "setSensitiveContent": result(nil) // Every inactive scene is covered natively.
+    case "handoffCapabilities":
+      let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+      let authentication = LAContext()
+      // Read prerequisites only. Never prompt, enroll or change device settings.
+      let available = authentication.canEvaluatePolicy(.deviceOwnerAuthentication, error: nil)
+      authentication.invalidate()
+      result(["staticOnly": true, "liveBrowsing": false,
+        "contentViews": scenes.flatMap { $0.windows }.reduce(0) { $0 + contentViewCount($1) },
+        "deviceAuthenticationAvailable": available])
     case "capabilityState":
       let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
       result(["capability": "bundledPlainTextOnly", "liveBrowsing": false,
         "contentViews": scenes.flatMap { $0.windows }.reduce(0) { $0 + contentViewCount($1) },
+        "handoffIncomingDiscarded": discardingHandoffLinks, "incomingReady": initialized,
+        "activeTextInputs": scenes.flatMap { $0.windows }.reduce(0) { $0 + activeTextInputCount($1) },
         "shieldVisible": scenes.contains { ($0.delegate as? SceneDelegate)?.privacyShieldVisible == true }])
     case "normalizeHost": result(NativeGuardPolicy.normalizeHost(args["host"] as? String ?? ""))
     case "localDataDirectory":

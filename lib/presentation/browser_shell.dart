@@ -4,6 +4,19 @@ import '../config/product_edition.dart';
 import '../browser/browser_engine.dart';
 import '../policy/policy_runtime.dart';
 import '../state/browser_state.dart';
+import '../signature/signature_services.dart';
+import '../signature/storage/document_store.dart';
+import '../signature/workspaces/discovery_session.dart';
+import '../signature/workspaces/workspace_controller.dart';
+import '../signature/workspaces/workspace_screen.dart';
+import '../signature/privacy/privacy_journal.dart';
+import '../signature/privacy/trust_receipt_screen.dart';
+import '../signature/official_routes/official_routes_screen.dart';
+import '../signature/commit_review/commit_review_screen.dart';
+import '../signature/compatibility/compatibility_report.dart';
+import '../signature/compatibility/compatibility_report_screen.dart';
+import '../signature/compatibility/compatibility_profiles.dart';
+import '../signature/handoff/handoff_gate.dart';
 
 const _collections = <String, String>{
   'science': 'Science',
@@ -12,32 +25,26 @@ const _collections = <String, String>{
   'digital-life': 'Digital life',
   'outdoors': 'Outdoors',
   'support': 'Support',
+  'home-projects': 'Home projects',
+  'sports': 'Sports',
 };
-
-class _DiscoveryTab {
-  _DiscoveryTab({this.isPrivate = false});
-  final bool isPrivate;
-  final List<String?> trail = [null];
-  int position = 0;
-  String? get resourceId => trail[position];
-  void visit(String? id) {
-    if (id == resourceId) return;
-    trail.removeRange(position + 1, trail.length);
-    trail.add(id);
-    position = trail.length - 1;
-    if (trail.length > 50) {
-      trail.removeAt(0);
-      position--;
-    }
-  }
-}
 
 /// Production content accepts only verified IDs. No HTML, linkifier, live
 /// controller, or external launcher is reachable from this surface.
 class BrowserShell extends StatefulWidget {
-  const BrowserShell({super.key, required this.state, required this.policy});
+  const BrowserShell({
+    super.key,
+    required this.state,
+    required this.policy,
+    this.signatures,
+    this.session,
+    this.handoff,
+  });
   final BrowserState state;
   final PolicyRuntime policy;
+  final SignatureServices? signatures;
+  final DiscoverySession? session;
+  final HandoffController? handoff;
   @override
   State<BrowserShell> createState() => _BrowserShellState();
 }
@@ -46,14 +53,22 @@ class _BrowserShellState extends State<BrowserShell>
     with WidgetsBindingObserver {
   final _native = NativeBrowserService();
   final _queryController = TextEditingController();
-  final _tabs = <_DiscoveryTab>[_DiscoveryTab()];
-  int _activeTab = 0;
-  int _destination = 0;
-  String _query = '';
-  String? _collection;
-  String? _notice;
+  late final DiscoverySession _session;
+  List<DiscoveryTab> get _tabs => _session.tabs;
+  int get _activeTab => _session.active;
+  set _activeTab(int v) => _session.active = v;
+  int get _destination => _session.destination;
+  set _destination(int v) => _session.destination = v;
+  String get _query => _session.query;
+  set _query(String v) => _session.query = v;
+  String? get _collection => _session.collection;
+  set _collection(String? v) => _session.collection = v;
+  String? get _notice => _session.notice;
+  set _notice(String? v) => _session.notice = v;
+  bool _officialSearch = false;
+  CompatibilityProfileRegistry? _compatibility;
   bool _covered = false;
-  _DiscoveryTab get _tab => _tabs[_activeTab];
+  DiscoveryTab get _tab => _tabs[_activeTab];
   bool get _ephemeral =>
       _tab.isPrivate || productEdition != ProductEdition.consumer;
   ContentContext get _context => productEdition == ProductEdition.consumer
@@ -62,9 +77,362 @@ class _BrowserShellState extends State<BrowserShell>
   AdditionalRestrictions get _additional =>
       widget.state.protectedPreferences.additional;
 
+  bool _eligibleId(String id, {bool? private}) => widget.policy.policy
+      .evaluate(
+        PolicyRequest.bundled(
+          id,
+          context: _context,
+          isPrivate: private ?? _tab.isPrivate,
+        ),
+        additional: _additional,
+      )
+      .isAllowed;
+
+  SignatureServices? get _features {
+    if (widget.signatures == null) return null;
+    if (!_tab.isPrivate) return widget.signatures;
+    if (_session.privateServices == null) {
+      final service = SignatureServices(
+        store: MemorySignatureDocumentStore(),
+        eligible: (id) => _eligibleId(id, private: true),
+        isPrivate: true,
+      );
+      _session.privateServices = service;
+      service.addListener(_changed);
+      service.workspaces.addListener(_changed);
+      unawaited(service.initialize());
+    }
+    return _session.privateServices;
+  }
+
+  bool get _toolsReady => _features?.initialized == true;
+  Future<void> _pushFeature(
+    Widget page, {
+    ValueChanged<Route<void>>? onRoute,
+  }) async {
+    FocusScope.of(context).unfocus();
+    final route = MaterialPageRoute<void>(builder: (_) => page);
+    onRoute?.call(route);
+    await Navigator.of(context).push<void>(route);
+    if (mounted) setState(() {});
+  }
+
+  void _openFeatureResource(String id) {
+    if (!mounted) return;
+    final r = widget.policy.resource(id);
+    if (r == null || !_eligible(r)) {
+      _deny();
+      return;
+    }
+    Navigator.of(context).popUntil((route) => route.isFirst);
+    _open(r);
+  }
+
+  void _official([String query = '']) {
+    if (!_toolsReady) return;
+    _pushFeature(
+      OfficialRoutesScreen(
+        policy: widget.policy,
+        additional: () => _additional,
+        journal: _features!.journal,
+        onOpenResource: _openFeatureResource,
+        isPrivate: _tab.isPrivate,
+        context: _context,
+        initialQuery: query,
+      ),
+    );
+  }
+
+  void _commitReview({ApprovedResource? resource}) {
+    if (!_toolsReady) return;
+    final service = _features!, private = _ephemeral;
+    _pushFeature(
+      CommitReviewScreen(
+        policy: widget.policy,
+        additional: () => _additional,
+        journal: service.journal,
+        isPrivate: private,
+        context: _context,
+        initialResource: resource,
+        savedAnalyses: () => service.workspaces.snapshot.analyses,
+        onSave: service.workspaces.saveAnalysis,
+        onDelete: service.workspaces.deleteAnalysis,
+      ),
+    );
+  }
+
+  void _receipt() {
+    if (!_toolsReady) return;
+    final service = _features!, tabId = _tab.id;
+    _pushFeature(
+      TrustReceiptScreen(
+        journal: service.journal,
+        configuration: () => service.configuration(widget.policy),
+        canContinue: () =>
+            mounted &&
+            _tab.id == tabId &&
+            !(widget.handoff?.blocksOwner ?? false),
+      ),
+    );
+  }
+
+  void _repair() {
+    if (!_toolsReady) return;
+    final service = _features!, tabId = _tab.id;
+    _pushFeature(
+      CompatibilityReportScreen(
+        journal: service.journal,
+        diagnostics: CompatibilityDiagnostics(
+          appVersion: '0.5.0',
+          policyVersion: MandatorySafetyPolicy.version,
+          capability: CompatibilityCapability.bundledReader,
+        ),
+        canContinue: () =>
+            mounted &&
+            _tab.id == tabId &&
+            !(widget.handoff?.blocksOwner ?? false),
+      ),
+    );
+  }
+
+  void _handoff(List<String> ids) {
+    final controller = widget.handoff;
+    if (_tab.isPrivate || controller == null || !controller.canStart) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Hand It Over is available only for reviewed public text on a supported native device. Private content cannot be shared.',
+          ),
+        ),
+      );
+      return;
+    }
+    final preview = controller.preview(ids, additional: _additional);
+    if (preview == null) {
+      _deny();
+      return;
+    }
+    _pushFeature(HandoffSetupPage(controller: controller, preview: preview));
+  }
+
+  void _workspaces({String? spaceId, String? taskId}) {
+    if (!_toolsReady) return;
+    final service = _features!;
+    final origin = _tab;
+    var active = true;
+    Route<void>? originatingRoute;
+    bool currentIntent() =>
+        mounted &&
+        active &&
+        originatingRoute?.isCurrent == true &&
+        _tab.id == origin.id;
+    unawaited(
+      _pushFeature(
+        WorkspaceScreen(
+          controller: service.workspaces,
+          policy: widget.policy,
+          additional: () => _additional,
+          journal: service.journal,
+          readingIds: () => _ephemeral
+              ? const []
+              : widget.state.protectedPreferences.readingIds.toList(),
+          onOpenResource: _openFeatureResource,
+          onResumeTask: (task) =>
+              _resumeTask(task, service, origin, currentIntent),
+          onAssociateCurrentTab: (id) => _associateTask(id, service, origin),
+          onFinishTask: (task, close) async {
+            await _finishTask(
+              task,
+              close && currentIntent(),
+              private: origin.isPrivate,
+            );
+          },
+          onDetachTab: (task, tab) =>
+              _detachTaskTab(task, tab, service, origin.isPrivate),
+          onDeleteTask: (task) => _deleteTask(task, service, origin.isPrivate),
+          onOfficialSearch: _official,
+          onHandoff: !_tab.isPrivate && widget.handoff?.canStart == true
+              ? _handoff
+              : null,
+          initialSpaceId: spaceId,
+          initialTaskId: taskId,
+          contentContext: _context,
+          isPrivate: _ephemeral,
+        ),
+        onRoute: (route) => originatingRoute = route,
+      ).whenComplete(() => active = false),
+    );
+  }
+
+  Future<void> _associateTask(
+    String taskId,
+    SignatureServices service,
+    DiscoveryTab origin,
+  ) async {
+    final model = service.workspaces;
+    if (origin.taskId != null && origin.taskId != taskId) {
+      throw StateError('Detach this tab from its other task first.');
+    }
+    final resource = origin.resourceId;
+    await model.associateTab(
+      taskId,
+      origin.id,
+      resource != null && _eligibleId(resource, private: origin.isPrivate)
+          ? resource
+          : null,
+    );
+    if (_tabs.contains(origin)) origin.taskId = taskId;
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _resumeTask(
+    FinishWorkspace task,
+    SignatureServices service,
+    DiscoveryTab origin,
+    bool Function() currentIntent,
+  ) async {
+    final model = service.workspaces, private = origin.isPrivate;
+    if (!currentIntent()) return;
+    final references = task.tabs.isEmpty
+        ? [const TaskTabReference(tabId: 'new-task-tab')]
+        : task.tabs;
+    DiscoveryTab? first;
+    for (final reference in references) {
+      if (!currentIntent()) return;
+      var tab = _tabs
+          .where(
+            (t) =>
+                t.id == reference.tabId &&
+                t.taskId == task.id &&
+                t.isPrivate == private,
+          )
+          .firstOrNull;
+      if (tab == null) {
+        if (_tabs.length >= 12) {
+          throw StateError('Close a tab before restoring more task tabs.');
+        }
+        // A restored document never annexes an unrelated live tab with a
+        // matching ID. New ownership is established on a fresh tab instead.
+        tab = DiscoveryTab(isPrivate: private)..taskId = task.id;
+        if (reference.resourceId != null &&
+            _eligibleId(reference.resourceId!)) {
+          tab.visit(reference.resourceId);
+        }
+        await model.replaceRestoredTab(
+          task.id,
+          reference.tabId,
+          tab.id,
+          tab.resourceId,
+        );
+        if (!currentIntent()) return;
+        _tabs.add(tab);
+      }
+      first ??= tab;
+    }
+    if (first != null && mounted && currentIntent()) {
+      setState(() {
+        _activeTab = _tabs.indexOf(first!);
+        _destination = 0;
+        _query = '';
+        _queryController.clear();
+        _notice = null;
+      });
+      Navigator.of(context).popUntil((route) => route.isFirst);
+    }
+  }
+
+  Future<void> _deleteTask(
+    String taskId,
+    SignatureServices service,
+    bool private,
+  ) async {
+    await service.workspaces.deleteTask(taskId);
+    for (final tab in _tabs.where(
+      (t) => t.taskId == taskId && t.isPrivate == private,
+    )) {
+      tab.taskId = null;
+    }
+  }
+
+  Future<void> _detachTaskTab(
+    String taskId,
+    String tabId,
+    SignatureServices service,
+    bool private,
+  ) async {
+    await service.workspaces.detachTab(taskId, tabId);
+    for (final tab in _tabs.where(
+      (t) => t.id == tabId && t.taskId == taskId && t.isPrivate == private,
+    )) {
+      tab.taskId = null;
+    }
+  }
+
+  Future<void> _finishTask(
+    FinishWorkspace task,
+    bool closeTabs, {
+    required bool private,
+  }) async {
+    if (closeTabs) {
+      _session.closeTaskTabs(task.id, private: private);
+      if (mounted) {
+        setState(() {
+          _query = '';
+          _queryController.clear();
+          _destination = 0;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Associated task tabs closed.'),
+            action: private || !_session.canUndoTaskClosure
+                ? null
+                : SnackBarAction(
+                    label: 'Undo',
+                    onPressed: () {
+                      if (!mounted || _tab.isPrivate) return;
+                      setState(() => _session.undoTaskClosure(_eligibleId));
+                    },
+                  ),
+          ),
+        );
+      }
+    }
+    for (final tab in _tabs.where(
+      (t) => t.taskId == task.id && t.isPrivate == private,
+    )) {
+      tab.taskId = null;
+    }
+    if (closeTabs && private && !_tabs.any((t) => t.isPrivate)) {
+      // Remove the private workspace route before destroying its controllers.
+      Navigator.of(context).popUntil((route) => route.isFirst);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _session.clearPrivateServicesIfUnused();
+        if (mounted) setState(() {});
+      });
+    }
+  }
+
+  void _recordTaskNavigation() {
+    final task = _tab.taskId, service = _features;
+    if (task != null && service?.initialized == true) {
+      unawaited(
+        _run(
+          () => service!.workspaces.associateTab(task, _tab.id, _current()?.id),
+        ),
+      );
+    }
+  }
+
   @override
   void initState() {
     super.initState();
+    _session = widget.session ?? DiscoverySession();
+    _queryController.text = _query;
+    widget.signatures?.addListener(_changed);
+    widget.signatures?.workspaces.addListener(_changed);
+    _session.privateServices?.addListener(_changed);
+    _session.privateServices?.workspaces.addListener(_changed);
+    _compatibility = CompatibilityProfileRegistry(policy: widget.policy);
     WidgetsBinding.instance.addObserver(this);
     widget.state.addListener(_changed);
     widget.policy.addListener(_changed);
@@ -76,6 +444,12 @@ class _BrowserShellState extends State<BrowserShell>
     WidgetsBinding.instance.removeObserver(this);
     widget.state.removeListener(_changed);
     widget.policy.removeListener(_changed);
+    widget.signatures?.removeListener(_changed);
+    widget.signatures?.workspaces.removeListener(_changed);
+    _session.privateServices?.removeListener(_changed);
+    _session.privateServices?.workspaces.removeListener(_changed);
+    if (widget.session == null) _session.dispose();
+    _compatibility?.dispose();
     _native.dispose();
     _queryController.dispose();
     super.dispose();
@@ -85,7 +459,7 @@ class _BrowserShellState extends State<BrowserShell>
     try {
       await _native.initialize(
         onIncomingUri: (_) {
-          if (mounted) _deny();
+          if (mounted && !(widget.handoff?.blocksOwner ?? false)) _deny();
         },
       );
     } catch (_) {
@@ -118,14 +492,18 @@ class _BrowserShellState extends State<BrowserShell>
     return r != null && _eligible(r) ? r : null;
   }
 
-  void _home() => setState(() {
-    _tab.visit(null);
-    _destination = 0;
-    _query = '';
-    _collection = null;
-    _queryController.clear();
-    _notice = null;
-  });
+  void _home() {
+    setState(() {
+      _tab.visit(null);
+      _destination = 0;
+      _query = '';
+      _collection = null;
+      _queryController.clear();
+      _notice = null;
+    });
+    _recordTaskNavigation();
+  }
+
   void _open(ApprovedResource r) {
     if (!_eligible(r)) {
       _deny();
@@ -137,6 +515,7 @@ class _BrowserShellState extends State<BrowserShell>
       _destination = 0;
       _notice = null;
     });
+    _recordTaskNavigation();
   }
 
   void _deny() {
@@ -153,6 +532,10 @@ class _BrowserShellState extends State<BrowserShell>
   }
 
   void _search(String input) {
+    if (_officialSearch && _features?.initialized == true) {
+      _official(input);
+      return;
+    }
     final value = input.trim();
     // URI-like input never becomes an outbound search, regardless of scheme.
     if (RegExp(
@@ -163,6 +546,10 @@ class _BrowserShellState extends State<BrowserShell>
       return;
     }
     FocusScope.of(context).unfocus();
+    _features?.journal.record(
+      PrivacyActivity.localCatalogSearch,
+      PrivacyOutcome.completed,
+    );
     setState(() {
       _tab.visit(null);
       _destination = 0;
@@ -178,6 +565,49 @@ class _BrowserShellState extends State<BrowserShell>
       appBar: AppBar(
         title: Text(_tab.isPrivate ? 'Wingman · Private' : 'Wingman'),
         actions: [
+          if (_toolsReady)
+            PopupMenuButton<String>(
+              tooltip: 'Page tools',
+              onSelected: (action) {
+                switch (action) {
+                  case 'commit':
+                    _commitReview(resource: resource);
+                  case 'space':
+                    _workspaces();
+                  case 'handoff':
+                    if (resource != null) _handoff([resource.id]);
+                  case 'repair':
+                    _repair();
+                }
+              },
+              itemBuilder: (_) => [
+                const PopupMenuItem(
+                  value: 'commit',
+                  child: Text('Before You Commit'),
+                ),
+                const PopupMenuItem(
+                  value: 'space',
+                  child: Text('Spaces & Finish Mode'),
+                ),
+                if (resource != null)
+                  PopupMenuItem(
+                    value: 'handoff',
+                    enabled:
+                        !_tab.isPrivate && widget.handoff?.canStart == true,
+                    child: Text(
+                      _tab.isPrivate
+                          ? 'Hand It Over · public text only'
+                          : widget.handoff?.canStart == true
+                          ? 'Share with Hand It Over'
+                          : 'Hand It Over · unavailable here',
+                    ),
+                  ),
+                const PopupMenuItem(
+                  value: 'repair',
+                  child: Text("Something isn’t working"),
+                ),
+              ],
+            ),
           IconButton(
             tooltip: 'Protection details',
             onPressed: _protection,
@@ -332,7 +762,9 @@ class _BrowserShellState extends State<BrowserShell>
                     contextMenuBuilder: safeTextContextMenu,
                     onSubmitted: _search,
                     decoration: InputDecoration(
-                      labelText: 'Search the approved library',
+                      labelText: _officialSearch
+                          ? 'Find a reviewed official destination'
+                          : 'Search the approved library',
                       hintText: 'Try moon, drawing, or support',
                       counterText: '',
                       prefixIcon: const Icon(Icons.search),
@@ -343,10 +775,32 @@ class _BrowserShellState extends State<BrowserShell>
                       ),
                     ),
                   ),
+                  if (_toolsReady) ...[
+                    const SizedBox(height: 12),
+                    SegmentedButton<bool>(
+                      segments: const [
+                        ButtonSegment(value: false, label: Text('Library')),
+                        ButtonSegment(
+                          value: true,
+                          label: Text('Official'),
+                          icon: Icon(Icons.verified_outlined),
+                        ),
+                      ],
+                      selected: {_officialSearch},
+                      onSelectionChanged: (v) =>
+                          setState(() => _officialSearch = v.single),
+                    ),
+                    TextButton.icon(
+                      onPressed: () => _official(),
+                      icon: const Icon(Icons.open_in_new),
+                      label: const Text('Explore Official Routes'),
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   const Text(
                     'Search runs on this device. Live web search is unavailable.',
                   ),
+                  if (_toolsReady) ..._homeWorkspaces(),
                   const SizedBox(height: 20),
                   Wrap(
                     spacing: 8,
@@ -441,6 +895,63 @@ class _BrowserShellState extends State<BrowserShell>
     );
   }
 
+  List<Widget> _homeWorkspaces() {
+    final model = _features!.workspaces;
+    final task = model.snapshot.tasks
+        .where((t) => t.status == FinishStatus.active)
+        .firstOrNull;
+    return [
+      if (model.storageError != null) _info(model.storageError!),
+      if (task != null)
+        Card(
+          child: ListTile(
+            leading: const Icon(Icons.flag_outlined),
+            title: Text(
+              task.goal,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            subtitle: const Text('Your active Finish Mode task'),
+            onTap: () => _workspaces(taskId: task.id),
+          ),
+        ),
+      if (model.snapshot.spacesEnabled) ...[
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Your Spaces',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+            ),
+            TextButton(
+              onPressed: () => _workspaces(),
+              child: const Text('Manage'),
+            ),
+          ],
+        ),
+        if (model.snapshot.spaces.isEmpty)
+          TextButton.icon(
+            onPressed: () => _workspaces(),
+            icon: const Icon(Icons.add),
+            label: const Text('Choose a Space for what matters to you'),
+          ),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final space in model.snapshot.spaces)
+              ActionChip(
+                label: Text(space.name),
+                onPressed: () => _workspaces(spaceId: space.id),
+              ),
+          ],
+        ),
+      ],
+    ];
+  }
+
   Widget _article(ApprovedResource r) {
     final prefs = widget.state.protectedPreferences;
     final bookmarked = prefs.bookmarkedIds.contains(r.id);
@@ -462,14 +973,20 @@ class _BrowserShellState extends State<BrowserShell>
                     IconButton(
                       tooltip: 'Back',
                       onPressed: _tab.position > 0
-                          ? () => setState(() => _tab.position--)
+                          ? () {
+                              setState(() => _tab.position--);
+                              _recordTaskNavigation();
+                            }
                           : null,
                       icon: const Icon(Icons.arrow_back),
                     ),
                     IconButton(
                       tooltip: 'Forward',
                       onPressed: _tab.position + 1 < _tab.trail.length
-                          ? () => setState(() => _tab.position++)
+                          ? () {
+                              setState(() => _tab.position++);
+                              _recordTaskNavigation();
+                            }
                           : null,
                       icon: const Icon(Icons.arrow_forward),
                     ),
@@ -541,18 +1058,19 @@ class _BrowserShellState extends State<BrowserShell>
                     ],
                   ),
                 const SizedBox(height: 24),
-                // No SelectableText: OS lookup/search/share are external bypasses.
-                for (final paragraph in r.body.split('\n\n'))
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 20),
-                    child: Text(
-                      paragraph,
-                      style: TextStyle(
-                        fontSize: 18 * widget.state.settings.pageScale / 100,
-                        height: 1.65,
-                      ),
-                    ),
+                // Policy is rechecked in the fixed-schema text adapter too.
+                CompatibleReaderText(
+                  resourceId: r.id,
+                  registry: _compatibility!,
+                  additional: _additional,
+                  context: _context,
+                  isPrivate: _tab.isPrivate,
+                  style: TextStyle(
+                    fontSize: 18 * widget.state.settings.pageScale / 100,
+                    height: 1.65,
                   ),
+                ),
+                const SizedBox(height: 20),
                 const Divider(),
                 Text(
                   'Reviewed ${_date(r.reviewedAt)} · Review expires ${_date(r.expiresAt)}',
@@ -616,7 +1134,9 @@ class _BrowserShellState extends State<BrowserShell>
                     style: Theme.of(context).textTheme.headlineSmall,
                   ),
                   const SizedBox(height: 8),
-                  const Text('Tabs start fresh when Wingman restarts.'),
+                  const Text(
+                    'Ordinary tabs start fresh on restart. Finish Mode can restore its explicitly saved task tabs.',
+                  ),
                   for (var i = 0; i < _tabs.length; i++)
                     ListTile(
                       leading: Icon(
@@ -643,17 +1163,46 @@ class _BrowserShellState extends State<BrowserShell>
                       },
                       trailing: IconButton(
                         tooltip: 'Close tab ${i + 1}',
-                        onPressed: () {
+                        onPressed: () async {
+                          final removed = _tabs[i];
+                          final taskId = removed.taskId;
+                          final sheetRoute = ModalRoute.of(context);
+                          final service = removed.isPrivate
+                              ? _session.privateServices
+                              : widget.signatures;
+                          if (taskId != null &&
+                              service?.initialized == true &&
+                              !await _run(
+                                // Reconcile captured ownership after the
+                                // durable detach even if this sheet closes.
+                                () => _detachTaskTab(
+                                  taskId,
+                                  removed.id,
+                                  service!,
+                                  removed.isPrivate,
+                                ),
+                              )) {
+                            return;
+                          }
+                          if (!mounted ||
+                              !context.mounted ||
+                              sheetRoute?.isCurrent != true) {
+                            return;
+                          }
                           setState(() {
-                            _tabs.removeAt(i);
-                            if (i < _activeTab) _activeTab--;
+                            final index = _tabs.indexOf(removed);
+                            if (index < 0) return;
+                            _tabs.removeAt(index);
+                            removed.dispose();
+                            if (index < _activeTab) _activeTab--;
                             _query = '';
                             _queryController.clear();
                             _collection = null;
                             _notice = null;
                             _destination = 0;
-                            if (_tabs.isEmpty) _tabs.add(_DiscoveryTab());
+                            if (_tabs.isEmpty) _tabs.add(DiscoveryTab());
                             _activeTab = _activeTab.clamp(0, _tabs.length - 1);
+                            _session.clearPrivateServicesIfUnused();
                           });
                           update(() {});
                         },
@@ -688,7 +1237,7 @@ class _BrowserShellState extends State<BrowserShell>
     );
   }
 
-  String _safeTabTitle(_DiscoveryTab tab) {
+  String _safeTabTitle(DiscoveryTab tab) {
     final r = tab.resourceId == null
         ? null
         : widget.policy.resource(tab.resourceId!);
@@ -697,7 +1246,7 @@ class _BrowserShellState extends State<BrowserShell>
 
   void _newTab(BuildContext sheet, bool private) {
     setState(() {
-      _tabs.add(_DiscoveryTab(isPrivate: private));
+      _tabs.add(DiscoveryTab(isPrivate: private));
       _activeTab = _tabs.length - 1;
       _destination = 0;
       _query = '';
@@ -721,6 +1270,16 @@ class _BrowserShellState extends State<BrowserShell>
           leading: const Icon(Icons.lock_outline),
           title: Text(category.label),
           subtitle: const Text('Always restricted'),
+        ),
+      if (_toolsReady)
+        ListTile(
+          leading: const Icon(Icons.receipt_long_outlined),
+          title: const Text('Trust Receipt'),
+          subtitle: const Text('Observed activity and configured privacy'),
+          onTap: () {
+            Navigator.pop(context);
+            _receipt();
+          },
         ),
       const Divider(),
       Text(
@@ -768,6 +1327,15 @@ class _BrowserShellState extends State<BrowserShell>
                   'Settings',
                   style: Theme.of(context).textTheme.headlineSmall,
                 ),
+                if (_toolsReady)
+                  ListTile(
+                    leading: const Icon(Icons.dashboard_outlined),
+                    title: const Text('Spaces & Finish Mode'),
+                    onTap: () {
+                      Navigator.pop(context);
+                      _workspaces();
+                    },
+                  ),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<ThemeMode>(
                   initialValue: widget.state.settings.themeMode,
@@ -863,7 +1431,9 @@ class _BrowserShellState extends State<BrowserShell>
                       } else {
                         _tabs.clear();
                       }
-                      if (_tabs.isEmpty) _tabs.add(_DiscoveryTab());
+                      _session.clearPrivateServicesIfUnused();
+                      _session.clearTaskUndo();
+                      if (_tabs.isEmpty) _tabs.add(DiscoveryTab());
                       _activeTab = 0;
                       _destination = 0;
                       _query = '';
@@ -879,14 +1449,14 @@ class _BrowserShellState extends State<BrowserShell>
                 Text(
                   _tab.isPrivate
                       ? 'Closes private tabs and clears their searches. Your normal saved library and restrictions stay unchanged.'
-                      : 'Clears current reviewed saves, tabs, and searches. Keeps additional restrictions and quarantined legacy records. It does not erase completed downloads or data in other apps.',
+                      : 'Clears current reviewed bookmarks, reading-list saves, tabs, and searches. Keeps additional restrictions, quarantined records, Spaces, saved tasks, findings and the Trust Receipt. Delete those within their tools. It does not erase completed downloads or data in other apps.',
                 ),
                 const SizedBox(height: 24),
                 const Text(
                   'No advertising SDK, ad requests, analytics, or account sign-in. School device management is not connected in this milestone.',
                 ),
                 const SizedBox(height: 16),
-                const Text('Wingman 0.4 · Protected discovery foundation'),
+                const Text('Wingman 0.5 · Local tools, permanent protection'),
               ],
             ),
           ),

@@ -1,0 +1,622 @@
+{
+  "schema": 1,
+  "version": 1,
+  "routes": [
+    {
+      "id": "apple-support",
+      "organization": "Apple",
+      "task": "Product support and repair help",
+      "destination": "https://support.apple.com/contact",
+      "identityHost": "support.apple.com",
+      "navigationScope": "exact",
+      "region": "Global; choose country at destination",
+      "language": "English",
+      "reviewedAt": "2026-09-11T00:00:00Z",
+      "expiresAt": "2026-12-10T00:00:00Z",
+      "status": "reviewed",
+      "policyVersion": 1,
+      "policyCategoryIds": [
+        "sexual-explicit",
+        "gambling",
+        "alcohol-promotion",
+        "recreational-drug-promotion",
+        "tobacco-nicotine",
+        "security-threat"
+      ],
+      "evidence": [
+        {
+          "source": "https://www.apple.com/contact/",
+          "explanation": "Apple’s corporate contact page links to its support contact service."
+        },
+        {
+          "source": "https://support.apple.com/contact",
+          "explanation": "The direct address was checked separately from the corporate link’s campaign parameter."
+        }
+      ],
+      "relatedGuideIds": [
+        "spot-a-suspicious-message"
+      ]
+    },
+    {
+      "id": "microsoft-support",
+      "organization": "Microsoft",
+      "task": "Product and account support",
+      "destination": "https://support.microsoft.com/contactus",
+      "identityHost": "support.microsoft.com",
+      "navigationScope": "exact",
+      "region": "Global; choose country at destination",
+      "language": "English",
+      "reviewedAt": "2026-09-11T00:00:00Z",
+      "expiresAt": "2026-12-10T00:00:00Z",
+      "status": "reviewed",
+      "policyVersion": 1,
+      "policyCategoryIds": [
+        "sexual-explicit",
+        "gambling",
+        "alcohol-promotion",
+        "recreational-drug-promotion",
+        "tobacco-nicotine",
+        "security-threat"
+      ],
+      "evidence": [
+        {
+          "source": "https://www.microsoft.com/en-us/",
+          "explanation": "The corporate footer links Contact Microsoft to support.microsoft.com/contactus."
+        },
+        {
+          "source": "https://support.microsoft.com/contactus",
+          "explanation": "The destination identifies Microsoft Support and provides product support choices."
+        }
+      ],
+      "relatedGuideIds": [
+        "accounts-have-more-than-one-lock"
+      ]
+    },
+    {
+      "id": "adobe-support",
+      "organization": "Adobe",
+      "task": "Creative Cloud and Acrobat help",
+      "destination": "https://helpx.adobe.com/support.html",
+      "identityHost": "helpx.adobe.com",
+      "navigationScope": "exact",
+      "region": "Global; choose region at destination",
+      "language": "English",
+      "reviewedAt": "2026-09-11T00:00:00Z",
+      "expiresAt": "2026-12-10T00:00:00Z",
+      "status": "reviewed",
+      "policyVersion": 1,
+      "policyCategoryIds": [
+        "sexual-explicit",
+        "gambling",
+        "alcohol-promotion",
+        "recreational-drug-promotion",
+        "tobacco-nicotine",
+        "security-threat"
+      ],
+      "evidence": [
+        {
+          "source": "https://www.adobe.com/about-adobe/contact.html",
+          "explanation": "Adobe’s corporate contact page links its product help to this Help Center."
+        },
+        {
+          "source": "https://helpx.adobe.com/support.html",
+          "explanation": "The destination identifies the Adobe Help Center."
+        }
+      ],
+      "relatedGuideIds": []
+    },
+    {
+      "id": "firefox-download",
+      "organization": "Mozilla",
+      "task": "Firefox browser download choices",
+      "destination": "https://www.firefox.com/en-US/download/all/",
+      "identityHost": "www.firefox.com",
+      "navigationScope": "exact",
+      "region": "Global; English starting page",
+      "language": "English",
+      "reviewedAt": "2026-09-11T00:00:00Z",
+      "expiresAt": "2026-12-10T00:00:00Z",
+      "status": "reviewed",
+      "policyVersion": 1,
+      "policyCategoryIds": [
+        "sexual-explicit",
+        "gambling",
+        "alcohol-promotion",
+        "recreational-drug-promotion",
+        "tobacco-nicotine",
+        "security-threat"
+      ],
+      "evidence": [
+        {
+          "source": "https://www.mozilla.org/en-US/firefox/",
+          "explanation": "Mozilla’s Firefox product address redirects to firefox.com; its Download Firefox link reaches the language and platform selector."
+        },
+        {
+          "source": "https://www.firefox.com/en-US/download/all/",
+          "explanation": "The final selector address was checked. This review does not authorize a file download or any chosen build."
+        }
+      ],
+      "relatedGuideIds": [
+        "spot-a-suspicious-message"
+      ]
+    },
+    {
+      "id": "firefox-support",
+      "organization": "Mozilla",
+      "task": "Firefox browser support",
+      "destination": "https://support.mozilla.org/en-US/",
+      "identityHost": "support.mozilla.org",
+      "navigationScope": "exact",
+      "region": "Global; English starting page",
+      "language": "English",
+      "reviewedAt": "2026-09-11T00:00:00Z",
+      "expiresAt": "2026-12-10T00:00:00Z",
+      "status": "reviewed",
+      "policyVersion": 1,
+      "policyCategoryIds": [
+        "sexual-explicit",
+        "gambling",
+        "alcohol-promotion",
+        "recreational-drug-promotion",
+        "tobacco-nicotine",
+        "security-threat"
+      ],
+      "evidence": [
+        {
+          "source": "https://www.firefox.com/en-US/",
+          "explanation": "The Firefox product page links Support to support.mozilla.org."
+        },
+        {
+          "source": "https://support.mozilla.org/en-US/",
+          "explanation": "The support address was checked without referral parameters."
+        }
+      ],
+      "relatedGuideIds": []
+    },
+    {
+      "id": "google-account-help",
+      "organization": "Google",
+      "task": "Google Account and Gmail recovery guidance",
+      "destination": "https://support.google.com/accounts/answer/7682439?hl=en",
+      "identityHost": "support.google.com",
+      "navigationScope": "exact",
+      "region": "Global; English starting page",
+      "language": "English",
+      "reviewedAt": "2026-09-11T00:00:00Z",
+      "expiresAt": "2026-12-10T00:00:00Z",
+      "status": "reviewed",
+      "policyVersion": 1,
+      "policyCategoryIds": [
+        "sexual-explicit",
+        "gambling",
+        "alcohol-promotion",
+        "recreational-drug-promotion",
+        "tobacco-nicotine",
+        "security-threat"
+      ],
+      "evidence": [
+        {
+          "source": "https://about.google/company-info/contact-google/",
+          "explanation": "Google’s corporate contact page identifies support.google.com as its Help Center."
+        },
+        {
+          "source": "https://support.google.com/accounts/answer/7682439?hl=en",
+          "explanation": "The support article describes account recovery and links Google Accounts. Authentication routes and session parameters are outside this record."
+        }
+      ],
+      "relatedGuideIds": [
+        "accounts-have-more-than-one-lock"
+      ]
+    },
+    {
+      "id": "irs-help",
+      "organization": "Internal Revenue Service",
+      "task": "Federal tax help and contact options",
+      "destination": "https://www.irs.gov/help/let-us-help-you",
+      "identityHost": "www.irs.gov",
+      "navigationScope": "exact",
+      "region": "United States",
+      "language": "English",
+      "reviewedAt": "2026-09-11T00:00:00Z",
+      "expiresAt": "2026-12-10T00:00:00Z",
+      "status": "reviewed",
+      "policyVersion": 1,
+      "policyCategoryIds": [
+        "sexual-explicit",
+        "gambling",
+        "alcohol-promotion",
+        "recreational-drug-promotion",
+        "tobacco-nicotine",
+        "security-threat"
+      ],
+      "evidence": [
+        {
+          "source": "https://www.usa.gov/agencies/internal-revenue-service",
+          "explanation": "The federal agency directory links the IRS help page; its older telephone-assistance path redirects to this destination."
+        },
+        {
+          "source": "https://www.irs.gov/help/let-us-help-you",
+          "explanation": "The final IRS help address was checked. No tax advice, phone details, or eligibility determinations are republished."
+        }
+      ],
+      "relatedGuideIds": []
+    },
+    {
+      "id": "ssa-card",
+      "organization": "Social Security Administration",
+      "task": "Replacement Social Security card information",
+      "destination": "https://www.ssa.gov/number-card/replace-card",
+      "identityHost": "www.ssa.gov",
+      "navigationScope": "exact",
+      "region": "United States",
+      "language": "English",
+      "reviewedAt": "2026-09-11T00:00:00Z",
+      "expiresAt": "2026-12-10T00:00:00Z",
+      "status": "reviewed",
+      "policyVersion": 1,
+      "policyCategoryIds": [
+        "sexual-explicit",
+        "gambling",
+        "alcohol-promotion",
+        "recreational-drug-promotion",
+        "tobacco-nicotine",
+        "security-threat"
+      ],
+      "evidence": [
+        {
+          "source": "https://www.usa.gov/agencies/social-security-administration",
+          "explanation": "The federal agency directory links Replace your Social Security card to this SSA page."
+        },
+        {
+          "source": "https://www.ssa.gov/number-card/replace-card",
+          "explanation": "The information destination was checked; the separate secure application is outside the reviewed scope."
+        }
+      ],
+      "relatedGuideIds": []
+    },
+    {
+      "id": "usps-address",
+      "organization": "United States Postal Service",
+      "task": "Change-of-address starting page",
+      "destination": "https://moversguide.usps.com/mgo/disclaimer",
+      "identityHost": "moversguide.usps.com",
+      "navigationScope": "exact",
+      "region": "United States",
+      "language": "English",
+      "reviewedAt": "2026-09-11T00:00:00Z",
+      "expiresAt": "2026-12-10T00:00:00Z",
+      "status": "reviewed",
+      "policyVersion": 1,
+      "policyCategoryIds": [
+        "sexual-explicit",
+        "gambling",
+        "alcohol-promotion",
+        "recreational-drug-promotion",
+        "tobacco-nicotine",
+        "security-threat"
+      ],
+      "evidence": [
+        {
+          "source": "https://www.usa.gov/agencies/u-s-postal-service",
+          "explanation": "The agency directory’s mailing-address change link reaches the USPS Movers Guide."
+        },
+        {
+          "source": "https://moversguide.usps.com/mgo/disclaimer",
+          "explanation": "The destination returns the USPS change-of-address application shell. JavaScript workflow, charges, and submitted forms were not tested."
+        }
+      ],
+      "relatedGuideIds": []
+    },
+    {
+      "id": "us-passport",
+      "organization": "U.S. Department of State",
+      "task": "Apply for a U.S. passport",
+      "destination": "https://travel.state.gov/en/passports/apply.html",
+      "identityHost": "travel.state.gov",
+      "navigationScope": "exact",
+      "region": "United States",
+      "language": "English",
+      "reviewedAt": "2026-09-11T00:00:00Z",
+      "expiresAt": "2026-12-10T00:00:00Z",
+      "status": "reviewed",
+      "policyVersion": 1,
+      "policyCategoryIds": [
+        "sexual-explicit",
+        "gambling",
+        "alcohol-promotion",
+        "recreational-drug-promotion",
+        "tobacco-nicotine",
+        "security-threat"
+      ],
+      "evidence": [
+        {
+          "source": "https://www.usa.gov/agencies/u-s-postal-service",
+          "explanation": "The federal directory’s passport link reaches the State Department; its older need-passport path redirects to the recorded address."
+        },
+        {
+          "source": "https://travel.state.gov/en/passports/apply.html",
+          "explanation": "The final passport-information page was checked. Applications, fees, and linked services are not approved by this identity record."
+        }
+      ],
+      "relatedGuideIds": []
+    },
+    {
+      "id": "identity-theft",
+      "organization": "Federal Trade Commission",
+      "task": "Identity-theft reporting and recovery starting page",
+      "destination": "https://www.identitytheft.gov/",
+      "identityHost": "www.identitytheft.gov",
+      "navigationScope": "exact",
+      "region": "United States",
+      "language": "English",
+      "reviewedAt": "2026-09-11T00:00:00Z",
+      "expiresAt": "2026-12-10T00:00:00Z",
+      "status": "reviewed",
+      "policyVersion": 1,
+      "policyCategoryIds": [
+        "sexual-explicit",
+        "gambling",
+        "alcohol-promotion",
+        "recreational-drug-promotion",
+        "tobacco-nicotine",
+        "security-threat"
+      ],
+      "evidence": [
+        {
+          "source": "https://www.usa.gov/identity-theft",
+          "explanation": "USAGov names the FTC and links IdentityTheft.gov for reporting and recovery."
+        },
+        {
+          "source": "https://www.identitytheft.gov/",
+          "explanation": "The linked destination responded with an application shell. No report or recovery form was submitted."
+        }
+      ],
+      "relatedGuideIds": [
+        "spot-a-suspicious-message",
+        "finding-support"
+      ]
+    },
+    {
+      "id": "credit-reports",
+      "organization": "Annual Credit Report Request Service",
+      "task": "Credit report request starting page",
+      "destination": "https://www.annualcreditreport.com/index.action",
+      "identityHost": "www.annualcreditreport.com",
+      "navigationScope": "exact",
+      "region": "United States",
+      "language": "English",
+      "reviewedAt": "2026-09-11T00:00:00Z",
+      "expiresAt": "2026-12-10T00:00:00Z",
+      "status": "reviewed",
+      "policyVersion": 1,
+      "policyCategoryIds": [
+        "sexual-explicit",
+        "gambling",
+        "alcohol-promotion",
+        "recreational-drug-promotion",
+        "tobacco-nicotine",
+        "security-threat"
+      ],
+      "evidence": [
+        {
+          "source": "https://www.consumerfinance.gov/ask-cfpb/how-do-i-get-a-free-copy-of-my-credit-reports-en-5/",
+          "explanation": "The CFPB directs users to AnnualCreditReport.com for the authorized credit-report request service."
+        },
+        {
+          "source": "https://www.annualcreditreport.com/index.action",
+          "explanation": "The official link redirects to this starting page. No identity details were entered and the request workflow was not tested."
+        }
+      ],
+      "relatedGuideIds": []
+    },
+    {
+      "id": "uk-passport",
+      "organization": "HM Passport Office",
+      "task": "Apply for or renew a UK passport",
+      "destination": "https://www.gov.uk/apply-renew-passport",
+      "identityHost": "www.gov.uk",
+      "navigationScope": "exact",
+      "region": "United Kingdom",
+      "language": "English",
+      "reviewedAt": "2026-09-11T00:00:00Z",
+      "expiresAt": "2026-12-10T00:00:00Z",
+      "status": "reviewed",
+      "policyVersion": 1,
+      "policyCategoryIds": [
+        "sexual-explicit",
+        "gambling",
+        "alcohol-promotion",
+        "recreational-drug-promotion",
+        "tobacco-nicotine",
+        "security-threat"
+      ],
+      "evidence": [
+        {
+          "source": "https://www.gov.uk/browse/abroad/passports",
+          "explanation": "GOV.UK’s passport service directory links its online application guidance to this address."
+        },
+        {
+          "source": "https://www.gov.uk/apply-renew-passport",
+          "explanation": "The information page was checked. The separate application service is outside this identity scope."
+        }
+      ],
+      "relatedGuideIds": []
+    },
+    {
+      "id": "canada-passport",
+      "organization": "Government of Canada",
+      "task": "Canadian passport services when applying in Canada",
+      "destination": "https://www.canada.ca/en/immigration-refugees-citizenship/services/canadian-passports.html",
+      "identityHost": "www.canada.ca",
+      "navigationScope": "exact",
+      "region": "Canada",
+      "language": "English",
+      "reviewedAt": "2026-09-11T00:00:00Z",
+      "expiresAt": "2026-12-10T00:00:00Z",
+      "status": "reviewed",
+      "policyVersion": 1,
+      "policyCategoryIds": [
+        "sexual-explicit",
+        "gambling",
+        "alcohol-promotion",
+        "recreational-drug-promotion",
+        "tobacco-nicotine",
+        "security-threat"
+      ],
+      "evidence": [
+        {
+          "source": "https://travel.gc.ca/travelling/documents/passport",
+          "explanation": "The Government of Canada travel portal redirects its passport entry to this Canada.ca service page."
+        },
+        {
+          "source": "https://www.canada.ca/en/immigration-refugees-citizenship/services/canadian-passports.html",
+          "explanation": "The page distinguishes applicants in Canada from those in the United States or elsewhere. Wingman does not infer the user’s location."
+        }
+      ],
+      "relatedGuideIds": []
+    },
+    {
+      "id": "national-parks",
+      "organization": "National Park Service",
+      "task": "Plan a national park visit",
+      "destination": "https://www.nps.gov/planyourvisit/index.htm",
+      "identityHost": "www.nps.gov",
+      "navigationScope": "exact",
+      "region": "United States",
+      "language": "English",
+      "reviewedAt": "2026-09-11T00:00:00Z",
+      "expiresAt": "2026-12-10T00:00:00Z",
+      "status": "reviewed",
+      "policyVersion": 1,
+      "policyCategoryIds": [
+        "sexual-explicit",
+        "gambling",
+        "alcohol-promotion",
+        "recreational-drug-promotion",
+        "tobacco-nicotine",
+        "security-threat"
+      ],
+      "evidence": [
+        {
+          "source": "https://www.usa.gov/agencies/national-park-service",
+          "explanation": "USAGov identifies nps.gov as the National Park Service website."
+        },
+        {
+          "source": "https://www.nps.gov/planyourvisit/index.htm",
+          "explanation": "The NPS trip-planning page was checked. Park alerts, reservations, maps and linked resources remain outside this scope."
+        }
+      ],
+      "relatedGuideIds": [
+        "notice-nature"
+      ]
+    },
+    {
+      "id": "football-laws",
+      "organization": "The International Football Association Board",
+      "task": "Association football laws of the game",
+      "destination": "https://theifab.com/laws/latest/about-the-laws/",
+      "identityHost": "theifab.com",
+      "navigationScope": "exact",
+      "region": "International",
+      "language": "English",
+      "reviewedAt": "2026-09-11T00:00:00Z",
+      "expiresAt": "2026-12-10T00:00:00Z",
+      "status": "reviewed",
+      "policyVersion": 1,
+      "policyCategoryIds": [
+        "sexual-explicit",
+        "gambling",
+        "alcohol-promotion",
+        "recreational-drug-promotion",
+        "tobacco-nicotine",
+        "security-threat"
+      ],
+      "evidence": [
+        {
+          "source": "https://inside.fifa.com/refereeing/media-releases/var-decision-communications-trials-confirmed-by-the-ifab",
+          "explanation": "FIFA’s institutional announcement identifies The IFAB and links theifab.com as the laws publisher."
+        },
+        {
+          "source": "https://theifab.com/laws/latest/about-the-laws/",
+          "explanation": "The laws overview was checked. No rule text, downloadable book, team feeds, or media are republished."
+        }
+      ],
+      "relatedGuideIds": [
+        "fair-play-and-focus",
+        "sports-notebook"
+      ]
+    },
+    {
+      "id": "basketball-rules",
+      "organization": "FIBA",
+      "task": "International basketball rules information",
+      "destination": "https://about.fiba.basketball/en/our-sport/official-basketball-rules",
+      "identityHost": "about.fiba.basketball",
+      "navigationScope": "exact",
+      "region": "International",
+      "language": "English",
+      "reviewedAt": "2026-09-11T00:00:00Z",
+      "expiresAt": "2026-12-10T00:00:00Z",
+      "status": "reviewed",
+      "policyVersion": 1,
+      "policyCategoryIds": [
+        "sexual-explicit",
+        "gambling",
+        "alcohol-promotion",
+        "recreational-drug-promotion",
+        "tobacco-nicotine",
+        "security-threat"
+      ],
+      "evidence": [
+        {
+          "source": "https://about.fiba.basketball/en/our-sport/official-basketball-rules",
+          "explanation": "FIBA’s organizational site identifies itself as publisher of the international basketball rules."
+        },
+        {
+          "source": "https://about.fiba.basketball/en/services/resource-hub/downloads",
+          "explanation": "Its resource hub lists rule documents separately by version. Wingman does not republish or download those documents."
+        }
+      ],
+      "relatedGuideIds": [
+        "sports-notebook",
+        "fair-play-and-focus"
+      ]
+    },
+    {
+      "id": "nfl-rules",
+      "organization": "National Football League",
+      "task": "American football NFL rulebook information",
+      "destination": "https://operations.nfl.com/rules-officiating/2026-nfl-rulebook",
+      "identityHost": "operations.nfl.com",
+      "navigationScope": "exact",
+      "region": "United States",
+      "language": "English",
+      "reviewedAt": "2026-09-11T00:00:00Z",
+      "expiresAt": "2026-12-10T00:00:00Z",
+      "status": "reviewed",
+      "policyVersion": 1,
+      "policyCategoryIds": [
+        "sexual-explicit",
+        "gambling",
+        "alcohol-promotion",
+        "recreational-drug-promotion",
+        "tobacco-nicotine",
+        "security-threat"
+      ],
+      "evidence": [
+        {
+          "source": "https://www.nfl.com/",
+          "explanation": "NFL.com links Football Operations and its rulebook."
+        },
+        {
+          "source": "https://operations.nfl.com/rules-officiating/2026-nfl-rulebook",
+          "explanation": "The current rulebook address was checked after its older path redirected. No game data, video, rules text, or betting material is republished."
+        }
+      ],
+      "relatedGuideIds": [
+        "sports-notebook",
+        "fair-play-and-focus"
+      ]
+    }
+  ]
+}

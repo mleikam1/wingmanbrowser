@@ -117,7 +117,7 @@ void main() {
         expect(prefs['customBlock'], ['distracting.test']);
         expect(prefs.containsKey('allowOnce'), false);
         final raw = await databaseFactoryFfi.openDatabase(filename);
-        expect(await raw.getVersion(), 3);
+        expect(await raw.getVersion(), 4);
         expect(
           (await raw.query('retired_tabs')).single['title'],
           'RAW-OLD-TITLE',

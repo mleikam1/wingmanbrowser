@@ -13,14 +13,14 @@ void main() {
         final watch = Stopwatch()..start();
         final policy = await loadTestPolicy();
         initialization.add(watch.elapsedMicroseconds);
-        expect(policy.catalog.length, 14);
+        expect(policy.catalog.length, 18);
         for (var iteration = 0; iteration < 100; iteration++) {
           watch.reset();
           final result = policy.search(
             ['moon', 'drawing', 'support', 'unmatched'][iteration % 4],
           );
           searches.add(watch.elapsedMicroseconds);
-          expect(result.length, lessThanOrEqualTo(14));
+          expect(result.length, lessThanOrEqualTo(18));
         }
         policy.dispose();
       }
