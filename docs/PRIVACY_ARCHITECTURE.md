@@ -44,11 +44,12 @@ No full-packet production-device audit or third-party legal certification has be
 
 ## Signature features: local state and explicit disclosure
 
-Normal consumer feature documents use the existing local SQLite database and fixed `workspace`, `privacy`, and reserved `compatibility` namespaces. There is no separate backend or per-feature account. Each document is bounded to 512 KiB. Private and Student/unknown services wrap storage with a separate memory implementation, so a mistaken save request still cannot read or write the owner's backing store.
+Normal consumer feature documents use the existing local SQLite database and fixed `workspace`, `privacy`, `ui`, `launchpad`, and reserved `compatibility` namespaces. There is no separate backend or per-feature account. Each document is bounded to 512 KiB. Private and Student/unknown services wrap storage with a separate memory implementation, so a mistaken save request still cannot read or write the owner's backing store.
 
 | Feature data | Boundary and retention |
 |---|---|
 | Official Routes | Common bundled identity/evidence catalog, searched locally. Identity review does not grant live navigation or imply the organization endorses Wingman |
+| Launchpad | Explicit local shortcut names, typed targets, saved website addresses, folder labels, display choices and independently selected collection sources. No browsing request, remote icon fetch or receipt payload is generated. Normal Privacy & data can clear this document without deleting bookmarks/Spaces or reimporting legacy shortcuts; private/Student choices use separate memory. Catalog provenance and saved preferences never grant live navigation |
 | Spaces | Up to 8 user-chosen spaces; choices, notes, checklists and approved-resource IDs. Each has at most 12 choices, 50 saved IDs, 20 checklist entries and 4,000 note characters. Choices are not inferred from browsing or blocks |
 | Finish Mode | Up to 12 workspaces, with explicit goal, notes, checklists, up to 12 tab references and 50 saved result IDs. These are organizational groups, not website-storage isolation |
 | Before You Commit | User-invoked bounded local analysis. Findings are transient by default; up to 8 explicitly saved normal analyses. Excerpts and goals/notes can be sensitive and remain out of receipts. Private saving is unavailable |

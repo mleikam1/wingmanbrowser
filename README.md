@@ -4,7 +4,7 @@
 
 **Built for discovery. Designed with boundaries.**
 
-Version 0.6 implements the consumer UI handoff across Home, navigation, Library, Settings and seven connected local experiences: Official Routes, Before You Commit, Your Spaces, Finish Mode, Hand It Over, Trust Receipt, and Compatibility Repair. The offline library contains 18 original reviewed articles; the separate Official Routes catalog contains 18 reviewed organizational destinations. Local search, session tabs, bookmarks, reading lists, themes and text sizing remain available. There is no advertising SDK or account requirement.
+Version 0.7 adds **Your Launchpad**: locally saved, editable shortcuts and single-level folders, a searchable starter catalog, and optional Sports, Shopping and Learning source collections. It extends the consumer UI and seven connected local experiences: Official Routes, Before You Commit, Your Spaces, Finish Mode, Hand It Over, Trust Receipt, and Compatibility Repair. The offline library contains 18 original reviewed articles; the separate Official Routes catalog contains 18 reviewed organizational destinations. Local search, session tabs, bookmarks, reading lists, themes and text sizing remain available. There is no advertising SDK or account requirement.
 
 **Live websites and external navigation are disabled.** The previous native engines could not establish positive eligibility for every response and resource before rendering. Their plugins and launch paths have been removed. This useful bounded milestone is not a production whole-web classifier, managed-school deployment, or store release.
 
@@ -14,7 +14,9 @@ Previous tabs, history, bookmarks, and reading-list metadata are quarantined bef
 
 ## UI handoff review
 
-See the [complete screen registry](docs/ui/SCREEN_REGISTRY.md), [design system](docs/ui/DESIGN_SYSTEM.md), [navigation boundaries](docs/ui/NAVIGATION.md) and [fresh QA evidence and exact preview commands](docs/ui/QA_REPORT.md). The implementation is on `ui-handoff/implementation`; the HTML in `Wingman_UI_Design_Handoff/` is reference material, while `lib/main.dart` is the application. The separate debug gallery uses synthetic memory fixtures.
+See the [complete screen registry](docs/ui/SCREEN_REGISTRY.md), [design system](docs/ui/DESIGN_SYSTEM.md), [navigation boundaries](docs/ui/NAVIGATION.md) and [UI handoff QA](docs/ui/QA_REPORT.md). That handoff was merged before this milestone. The HTML in `Wingman_UI_Design_Handoff/` is reference material, while `lib/main.dart` is the application. The separate debug gallery uses synthetic memory fixtures.
+
+The current Launchpad work is on the local `launchpad/implementation` branch. Read its [specification](docs/ui/LAUNCHPAD_SPEC.md), [implementation status](docs/ui/LAUNCHPAD_STATUS.md), [site compatibility review](docs/ui/LAUNCHPAD_SITE_COMPATIBILITY.md), and [test results, screenshots and preview instructions](docs/ui/LAUNCHPAD_QA.md).
 
 ## Preview
 
@@ -48,7 +50,13 @@ Open [the local preview](http://127.0.0.1:8791/). The web build is a catalog app
 
 ## Use the new experiences
 
-Home has one search entry, approved-resource shortcuts, an optional current task and your selected Spaces. The focused search has an explicit Official choice. Use **Menu → Wingman tools** for Before You Commit, Spaces & Finish Mode, and Hand It Over. **Menu → Protection & settings** contains Trust Receipt and compatibility reporting. Settings, Reader and feature pages return to their originating session.
+Home has one search entry, Your Launchpad, optional chosen content, an optional current task and your selected Spaces. Use **Add** for suggested resources/tools, an address or a bookmark; **Edit** and tile long-press/context actions open organization controls. Reordering saves immediately; **Organize** opens a stable item panel for consecutive keyboard moves. Choose multiple suggestions or skip; nothing is inferred from history. The Home settings control manages shortcut density, visibility, collections and other Home sections.
+
+The starter catalog contains 8 local tools, 18 reviewed original articles and 8 researched website candidates. ESPN, Walmart, Target, Best Buy, Home Depot, Wikipedia, NASA and Khan Academy are explicitly **inactive** website records in this build. Saving one requires acknowledgment, stores only a local record and submits nothing. No website is made navigable by its name, icon, folder or category. Exact blockers and the ESPN/Walmart research journeys are recorded in the compatibility review.
+
+For an eligible open article, **Menu → Add to Launchpad** previews a separate shortcut; Library offers the same explicit action for saved articles. Removing a shortcut does not delete its bookmark. Optional collection cards can save an eligible resource into a selected Space. Private customization stays in its temporary session; private pages cannot be pinned into normal Home. All artwork is local, with no favicon, title or preview fetch.
+
+The focused search has an explicit Official choice. Use **Menu → Wingman tools** for Before You Commit, Spaces & Finish Mode, and Hand It Over. **Menu → Protection & settings** contains Trust Receipt and compatibility reporting. Settings, Reader and feature pages return to their originating session.
 
 Create Home Projects, Learning and Sports yourself; nothing is inferred. Spaces contain notes/checklists and reviewed resources. Home Projects includes unit conversion; Sports uses your choices and reviewed official-source evidence, without a live score feed. Finish Mode owns only explicitly associated companion tabs. Finishing previews save/close choices and offers safe undo for normal task closure; private closure never restores destroyed data.
 
@@ -71,6 +79,8 @@ flutter run -d chrome --web-port=8792
 ```sh
 flutter analyze --no-pub
 flutter test --no-pub
+flutter test integration_test/launchpad_app_test.dart --no-uninstall -d emulator-5556
+flutter test integration_test/launchpad_native_test.dart --no-uninstall -d emulator-5556
 flutter test integration_test/protected_app_test.dart --no-uninstall -d emulator-5556
 flutter test integration_test/signature_app_test.dart --no-uninstall -d emulator-5556
 flutter test integration_test/browser_engine_test.dart --no-uninstall -d emulator-5556
