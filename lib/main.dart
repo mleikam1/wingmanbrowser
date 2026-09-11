@@ -13,6 +13,7 @@ import 'presentation/home/welcome_screen.dart';
 import 'signature/handoff/handoff_gate.dart';
 import 'signature/privacy/privacy_journal.dart';
 import 'signature/signature_services.dart';
+import 'signature/launchpad/launchpad.dart';
 import 'signature/workspaces/discovery_session.dart';
 
 Future<void> main() async {
@@ -77,6 +78,29 @@ class _SignatureApplicationRootState extends State<SignatureApplicationRoot> {
     await state.init();
     final signatures = SignatureServices(
       store: repository,
+      launchpadEligibility: LaunchpadEligibilityService(
+        resourceEligible: (id) => widget.policy.policy
+            .evaluate(
+              PolicyRequest.bundled(
+                id,
+                context: productEdition == ProductEdition.consumer
+                    ? ContentContext.general
+                    : ContentContext.student,
+              ),
+              additional: state.protectedPreferences.additional,
+            )
+            .isAllowed,
+        resourceLookup: widget.policy.resource,
+        evaluateWebsite: (uri) => widget.policy.policy.evaluate(
+          PolicyRequest.navigation(
+            uri,
+            context: productEdition == ProductEdition.consumer
+                ? ContentContext.general
+                : ContentContext.student,
+          ),
+          additional: state.protectedPreferences.additional,
+        ),
+      ),
       eligible: (id) => widget.policy.policy
           .evaluate(
             PolicyRequest.bundled(

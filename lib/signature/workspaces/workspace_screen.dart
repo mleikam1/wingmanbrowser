@@ -23,6 +23,7 @@ class WorkspaceScreen extends StatefulWidget {
     this.onHandoff,
     this.initialSpaceId,
     this.initialTaskId,
+    this.initialTasks = false,
     this.contentContext = ContentContext.general,
     this.isPrivate = false,
   });
@@ -41,7 +42,7 @@ class WorkspaceScreen extends StatefulWidget {
   final ValueChanged<List<String>>? onHandoff;
   final String? initialSpaceId, initialTaskId;
   final ContentContext contentContext;
-  final bool isPrivate;
+  final bool isPrivate, initialTasks;
   @override
   State<WorkspaceScreen> createState() => _WorkspaceScreenState();
 }
@@ -55,7 +56,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     super.initState();
     _spaceId = widget.initialSpaceId;
     _taskId = widget.initialTaskId;
-    _tasks = _taskId != null;
+    _tasks = widget.initialTasks || _taskId != null;
   }
 
   bool _eligible(String id) => widget.policy.policy

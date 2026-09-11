@@ -198,7 +198,7 @@ class _PrivacyDataScreenState extends State<PrivacyDataScreen>
                 Text(
                   widget.isPrivate
                       ? 'Private tools and activity stay in this session. Normal library data and quarantine counts are hidden here.'
-                      : 'Reviewed bookmarks and reading state stay in local storage. Notes, tasks and saved findings are deleted within their tools. The Trust Receipt retains up to 200 typed events for 14 days; closed apps cannot run retention cleanup.',
+                      : 'Reviewed bookmarks, reading state and Launchpad choices stay in local storage. Launchpad includes saved addresses, folder names and selected collection sources; they are not sent to a service or added to the Trust Receipt. Notes, tasks and saved findings are deleted within their tools. The Trust Receipt retains up to 200 typed events for 14 days; closed apps cannot run retention cleanup.',
                 ),
                 const SizedBox(height: 16),
                 if (!widget.isPrivate) ...[

@@ -56,7 +56,7 @@ void main() {
         expect(data.hasAction(ui.SemanticsAction.tap), isTrue);
         final heading = private
             ? 'A little space to yourself.'
-            : 'Where would you\nlike to go?';
+            : 'Where would you like to go?';
         expect(
           find.bySemanticsLabel(RegExp(RegExp.escape(heading))),
           findsOneWidget,

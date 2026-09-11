@@ -6,6 +6,8 @@ import '../browser/browser_engine.dart';
 import '../policy/policy_runtime.dart';
 import '../state/browser_state.dart';
 import '../signature/signature_services.dart';
+import '../signature/launchpad/launchpad.dart';
+import 'launchpad/launchpad.dart';
 import '../signature/storage/document_store.dart';
 import '../signature/workspaces/discovery_session.dart';
 import '../signature/workspaces/workspace_controller.dart';
@@ -85,6 +87,7 @@ class _BrowserShellState extends State<BrowserShell>
   bool _officialSearch = false;
   CompatibilityProfileRegistry? _compatibility;
   bool _covered = false;
+  late final Listenable _launchpadChanges;
   final Map<String, ScrollController> _scrolls = {};
   ScrollController _scrollFor(String page) {
     final owner = _tab, key = '${_tab.id}:$page';
@@ -133,11 +136,20 @@ class _BrowserShellState extends State<BrowserShell>
         store: MemorySignatureDocumentStore(),
         eligible: (id) => _eligibleId(id, private: true),
         isPrivate: true,
+        launchpadEligibility: LaunchpadEligibilityService(
+          resourceEligible: (id) => _eligibleId(id, private: true),
+          resourceLookup: widget.policy.resource,
+          evaluateWebsite: (uri) => widget.policy.policy.evaluate(
+            PolicyRequest.navigation(uri, context: _context, isPrivate: true),
+            additional: _additional,
+          ),
+        ),
       );
       _session.privateServices = service;
       service.addListener(_changed);
       service.workspaces.addListener(_changed);
       service.ui.addListener(_changed);
+      service.launchpad.addListener(_changed);
       unawaited(service.initialize());
     }
     return _session.privateServices;
@@ -346,7 +358,7 @@ class _BrowserShellState extends State<BrowserShell>
     if (chosen != null && _validOrigin(origin)) _handoff(chosen);
   }
 
-  void _workspaces({String? spaceId, String? taskId}) {
+  void _workspaces({String? spaceId, String? taskId, bool tasks = false}) {
     if (!_toolsReady) {
       _toolsUnavailable();
       return;
@@ -390,6 +402,7 @@ class _BrowserShellState extends State<BrowserShell>
               : null,
           initialSpaceId: spaceId,
           initialTaskId: taskId,
+          initialTasks: tasks,
           contentContext: _context,
           isPrivate: _ephemeral,
         ),
@@ -561,13 +574,16 @@ class _BrowserShellState extends State<BrowserShell>
   void initState() {
     super.initState();
     _session = widget.session ?? DiscoverySession();
+    _launchpadChanges = Listenable.merge([widget.policy, widget.state]);
     _queryController.text = _query;
     widget.signatures?.addListener(_changed);
     widget.signatures?.workspaces.addListener(_changed);
     widget.signatures?.ui.addListener(_changed);
+    widget.signatures?.launchpad.addListener(_changed);
     _session.privateServices?.addListener(_changed);
     _session.privateServices?.workspaces.addListener(_changed);
     _session.privateServices?.ui.addListener(_changed);
+    _session.privateServices?.launchpad.addListener(_changed);
     _compatibility = CompatibilityProfileRegistry(policy: widget.policy);
     WidgetsBinding.instance.addObserver(this);
     widget.state.addListener(_changed);
@@ -583,9 +599,11 @@ class _BrowserShellState extends State<BrowserShell>
     widget.signatures?.removeListener(_changed);
     widget.signatures?.workspaces.removeListener(_changed);
     widget.signatures?.ui.removeListener(_changed);
+    widget.signatures?.launchpad.removeListener(_changed);
     _session.privateServices?.removeListener(_changed);
     _session.privateServices?.workspaces.removeListener(_changed);
     _session.privateServices?.ui.removeListener(_changed);
+    _session.privateServices?.launchpad.removeListener(_changed);
     if (widget.session == null) _session.dispose();
     _compatibility?.dispose();
     _native.dispose();
@@ -899,7 +917,27 @@ class _BrowserShellState extends State<BrowserShell>
 
   Widget _homeView() {
     final model = _features?.workspaces;
+    final service = _features;
+    final launchpadActions = _launchpadActions();
     return HomeScreen(
+      launchpad: service?.initialized == true
+          ? LaunchpadSection(
+              controller: service!.launchpad,
+              actions: launchpadActions,
+              isPrivate: _ephemeral,
+            )
+          : const WingmanStatus(
+              title: 'Opening your Launchpad',
+              message:
+                  'Your saved choices will appear when local storage is ready.',
+            ),
+      contentCollections: service?.initialized == true
+          ? LaunchpadContentCollections(
+              controller: service!.launchpad,
+              actions: launchpadActions,
+              isPrivate: _ephemeral,
+            )
+          : null,
       preferences: (_features?.ui.snapshot ?? UiPreferences()).copyWith(
         showSpaces:
             (_features?.ui.snapshot.showSpaces ?? true) &&
@@ -960,6 +998,7 @@ class _BrowserShellState extends State<BrowserShell>
       storageError:
           widget.state.storageError ??
           _features?.ui.storageError ??
+          _features?.launchpad.storageError ??
           model?.storageError,
       controller: _scrollFor('home'),
     );
@@ -1549,7 +1588,235 @@ class _BrowserShellState extends State<BrowserShell>
     Navigator.pop(sheet);
   }
 
+  LaunchpadActions _launchpadActions({bool Function()? stillMatchesPage}) {
+    final origin = _tab;
+    final service = _features;
+    bool current() =>
+        _validOrigin(origin) && (stillMatchesPage?.call() ?? true);
+    return LaunchpadActions(
+      canContinue: current,
+      changes: _launchpadChanges,
+      catalog: LaunchpadCatalog(resources: widget.policy.catalog),
+      push: (page) async {
+        if (current()) await _pushFeature(page);
+      },
+      onOpen: (target, {bool newTab = false}) async {
+        if (!current() || service == null) return;
+        if (target.kind == LaunchpadKind.website) {
+          _deny(
+            widget.policy.policy.evaluate(
+              PolicyRequest.navigation(
+                Uri.parse(target.value),
+                context: _context,
+                isPrivate: origin.isPrivate,
+              ),
+              additional: _additional,
+            ),
+          );
+          return;
+        }
+        if (target.kind == LaunchpadKind.resource) {
+          final resource = widget.policy.resource(target.value);
+          if (resource == null ||
+              !_eligibleId(target.value, private: origin.isPrivate)) {
+            _deny(
+              widget.policy.policy.evaluate(
+                PolicyRequest.bundled(
+                  target.value,
+                  context: _context,
+                  isPrivate: origin.isPrivate,
+                ),
+                additional: _additional,
+              ),
+            );
+            return;
+          }
+          if (newTab && _tabs.length >= 12) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'The 12-tab limit is reached. Close a tab first.',
+                ),
+              ),
+            );
+            return;
+          }
+          Navigator.of(context).popUntil((route) => route.isFirst);
+          if (newTab) {
+            setState(() {
+              _tabs.add(DiscoveryTab(isPrivate: origin.isPrivate));
+              _activeTab = _tabs.length - 1;
+              _destination = 0;
+              _query = '';
+              _queryController.clear();
+              _collection = null;
+              _notice = null;
+            });
+          }
+          _open(resource);
+          return;
+        }
+        if (!service.launchpad.eligibility.assess(target).canOpen) return;
+        Navigator.of(context).popUntil((route) => route.isFirst);
+        switch (target.tool) {
+          case LaunchpadTool.explore:
+            _explore();
+          case LaunchpadTool.officialRoutes:
+            _official();
+          case LaunchpadTool.library:
+            _library();
+          case LaunchpadTool.spaces:
+            _workspaces();
+          case LaunchpadTool.finishMode:
+            _workspaces(tasks: true);
+          case LaunchpadTool.beforeYouCommit:
+            _commitReview();
+          case LaunchpadTool.trustReceipt:
+            _receipt();
+          case LaunchpadTool.compatibility:
+            _repair();
+          case LaunchpadTool.helpNow:
+            _helpNow();
+          case null:
+            break;
+        }
+      },
+      bookmarks: () {
+        if (!current() || origin.isPrivate || _ephemeral) return const [];
+        return [
+          for (final resource in widget.policy.catalog)
+            if (widget.state.protectedPreferences.bookmarkedIds.contains(
+                  resource.id,
+                ) &&
+                _eligibleId(resource.id, private: false))
+              LaunchpadPinDraft(
+                title: resource.title,
+                target: LaunchpadTarget.resource(resource.id),
+                localIconKey: 'book',
+                fromBookmark: true,
+              ),
+        ];
+      },
+      onAddToSpace: (target) async {
+        if (!current() ||
+            service == null ||
+            target.kind != LaunchpadKind.resource ||
+            !_eligibleId(target.value, private: origin.isPrivate)) {
+          return;
+        }
+        final chosen = await showWingmanSheet<String>(
+          context: context,
+          builder: (sheet) => SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'Add to Your Spaces',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'This saves a separate reviewed reference. Removing the Launchpad shortcut will not remove it from your Space.',
+                ),
+                for (final space in service.workspaces.snapshot.spaces)
+                  TextButton(
+                    onPressed: () => Navigator.pop(sheet, space.id),
+                    child: Text(space.name),
+                  ),
+                if (service.workspaces.snapshot.spaces.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 16),
+                    child: Text(
+                      'Create a Space first, then choose this action again.',
+                    ),
+                  ),
+                TextButton(
+                  onPressed: () => Navigator.pop(sheet, '__manage'),
+                  child: const Text('Manage Spaces'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(sheet),
+                  child: const Text('Cancel'),
+                ),
+              ],
+            ),
+          ),
+        );
+        if (!current() || chosen == null) return;
+        if (chosen == '__manage') {
+          _workspaces();
+          return;
+        }
+        if (service.workspaces.space(chosen) == null ||
+            !_eligibleId(target.value, private: origin.isPrivate)) {
+          return;
+        }
+        final saved = await _run(
+          () => service.workspaces.saveToSpace(chosen, target.value),
+        );
+        if (saved && mounted && current()) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Added to your Space.')));
+        }
+      },
+      onManageSpaces: () {
+        if (current()) _workspaces();
+      },
+      onHomeSections: () {
+        if (current()) _homeSections();
+      },
+    );
+  }
+
   void _customize() {
+    if (!_toolsReady) {
+      _toolsUnavailable();
+      return;
+    }
+    _pushFeature(
+      LaunchpadCustomizeScreen(
+        controller: _features!.launchpad,
+        actions: _launchpadActions(),
+        isPrivate: _ephemeral,
+      ),
+    );
+  }
+
+  void _pinToLaunchpad(
+    String id, {
+    bool fromBookmark = false,
+    bool committedPage = false,
+  }) {
+    if (!_toolsReady || _ephemeral) return;
+    final origin = _tab, resource = widget.policy.resource(id);
+    if (resource == null ||
+        !_eligibleId(id, private: false) ||
+        (committedPage && origin.resourceId != id)) {
+      return;
+    }
+    _pushFeature(
+      LaunchpadEditorScreen(
+        controller: _features!.launchpad,
+        actions: _launchpadActions(
+          stillMatchesPage: () =>
+              !origin.isPrivate && (!committedPage || origin.resourceId == id),
+        ),
+        isPrivate: false,
+        initialDraft: LaunchpadPinDraft(
+          title: resource.title,
+          target: LaunchpadTarget.resource(id),
+          localIconKey: 'book',
+          fromBookmark: fromBookmark,
+          fromCurrentPage: committedPage,
+        ),
+      ),
+    );
+  }
+
+  void _homeSections() {
     if (!_toolsReady) {
       _toolsUnavailable();
       return;
@@ -1562,6 +1829,7 @@ class _BrowserShellState extends State<BrowserShell>
         eligible: (id) => _eligibleId(id, private: origin.isPrivate),
         canContinue: () => _validOrigin(origin),
         onSpaces: () => _workspaces(),
+        onLaunchpad: _customize,
         isPrivate: _ephemeral,
       ),
     );
@@ -1586,6 +1854,9 @@ class _BrowserShellState extends State<BrowserShell>
         onOpenApprovedResource: _openFeatureResource,
         initialSection: section,
         onPrivacy: _settings,
+        onPinToLaunchpad: _ephemeral
+            ? null
+            : (id) => _pinToLaunchpad(id, fromBookmark: true),
       ),
     );
   }
@@ -1660,6 +1931,7 @@ class _BrowserShellState extends State<BrowserShell>
             PrivacyDataCategory.session,
             if (_toolsReady) PrivacyDataCategory.trustReceipt,
             if (!_ephemeral) ...[
+              if (_toolsReady) PrivacyDataCategory.launchpad,
               PrivacyDataCategory.reviewedBookmarks,
               PrivacyDataCategory.readingList,
               PrivacyDataCategory.legacyHistory,
@@ -1745,6 +2017,11 @@ class _BrowserShellState extends State<BrowserShell>
           throw StateError('Private scope');
         }
         switch (category) {
+          case PrivacyDataCategory.launchpad:
+            if (service == null) throw StateError('Launchpad unavailable');
+            await service.launchpad.clearSavedData(
+              canContinue: () => _validOrigin(origin),
+            );
           case PrivacyDataCategory.reviewedBookmarks:
             await widget.state.clearReviewedLibrary(bookmarks: true);
           case PrivacyDataCategory.readingList:
@@ -1900,6 +2177,18 @@ class _BrowserShellState extends State<BrowserShell>
           'Page information',
           Icons.info_outline,
           () => _pageInfo(resource),
+        ),
+        MenuAction(
+          'Add to Launchpad',
+          Icons.add_to_home_screen,
+          resource == null || _ephemeral || !_toolsReady
+              ? null
+              : () => _pinToLaunchpad(resource.id, committedPage: true),
+          subtitle: _ephemeral
+              ? 'Unavailable for private or temporary pages'
+              : resource == null
+              ? 'Open an eligible article first'
+              : 'Pin this installed article to Home',
         ),
         MenuAction(
           'Reader',

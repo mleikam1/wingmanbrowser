@@ -19,6 +19,7 @@ class LibraryScreen extends StatefulWidget {
     required this.onOpenApprovedResource,
     this.initialSection = LibrarySection.hub,
     this.onPrivacy,
+    this.onPinToLaunchpad,
   });
   final BrowserState state;
   final PolicyRuntime policy;
@@ -27,6 +28,7 @@ class LibraryScreen extends StatefulWidget {
   final ValueChanged<String> onOpenApprovedResource;
   final LibrarySection initialSection;
   final VoidCallback? onPrivacy;
+  final ValueChanged<String>? onPinToLaunchpad;
   @override
   State<LibraryScreen> createState() => _LibraryScreenState();
 }
@@ -429,6 +431,20 @@ class _LibraryScreenState extends State<LibraryScreen> {
                     Wrap(
                       spacing: 8,
                       children: [
+                        if (widget.onPinToLaunchpad != null)
+                          TextButton.icon(
+                            onPressed: _busy.contains(resource.id)
+                                ? null
+                                : () {
+                                    if (widget.canContinue() &&
+                                        !widget.isPrivate &&
+                                        _eligible(resource.id)) {
+                                      widget.onPinToLaunchpad!(resource.id);
+                                    }
+                                  },
+                            icon: const Icon(Icons.add_to_home_screen),
+                            label: const Text('Add to Launchpad'),
+                          ),
                         if (reading)
                           TextButton(
                             onPressed: _busy.contains(resource.id)

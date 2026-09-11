@@ -12,6 +12,7 @@ class CustomizeHomeScreen extends StatefulWidget {
     required this.canContinue,
     required this.onSpaces,
     required this.isPrivate,
+    this.onLaunchpad,
   });
   final UiPreferencesController controller;
   final PolicyRuntime policy;
@@ -19,6 +20,7 @@ class CustomizeHomeScreen extends StatefulWidget {
   final bool Function() canContinue;
   final VoidCallback onSpaces;
   final bool isPrivate;
+  final VoidCallback? onLaunchpad;
   @override
   State<CustomizeHomeScreen> createState() => _CustomizeHomeScreenState();
 }
@@ -34,7 +36,7 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
         title: const Text('Restore default Home?'),
         scrollable: true,
         content: const Text(
-          'This replaces Home section visibility, order and shortcuts. Your Spaces, tasks, saved findings and library stay.',
+          'This restores Home section visibility and order. Your Launchpad, Spaces, tasks, saved findings and library stay.',
         ),
         actions: [
           TextButton(
@@ -177,32 +179,15 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
                 ],
               ),
             const SizedBox(height: 24),
-            const WingmanSection(title: 'Reviewed shortcuts'),
+            const WingmanSection(title: 'Your Launchpad'),
             const Text(
-              'Choose up to six. Each shortcut is checked again before it appears or opens.',
+              'Manage pinned shortcuts, folders and optional collections separately from these Home sections.',
             ),
-            for (final resource in widget.policy.catalog.where(
-              (r) => widget.eligible(r.id),
-            ))
-              CheckboxListTile(
-                contentPadding: EdgeInsets.zero,
-                title: Text(resource.title),
-                value: prefs.shortcutIds.contains(resource.id),
-                onChanged:
-                    _busy ||
-                        (!prefs.shortcutIds.contains(resource.id) &&
-                            prefs.shortcutIds.length >= 6)
-                    ? null
-                    : (checked) => _update((p) {
-                        if (!widget.eligible(resource.id)) {
-                          throw StateError('Review changed.');
-                        }
-                        final ids = [...p.shortcutIds];
-                        checked == true
-                            ? ids.add(resource.id)
-                            : ids.remove(resource.id);
-                        return p.copyWith(shortcutIds: ids);
-                      }),
+            if (widget.onLaunchpad != null)
+              OutlinedButton.icon(
+                onPressed: _busy ? null : widget.onLaunchpad,
+                icon: const Icon(Icons.apps),
+                label: const Text('Customize Launchpad'),
               ),
             const SizedBox(height: 16),
             OutlinedButton.icon(

@@ -108,7 +108,7 @@ void main() {
       final (state, _) = await mount(tester, repository: repo);
       expect(find.textContaining('UNREVIEWED'), findsNothing);
       expect(state.quarantined.total, 2);
-      expect(find.text('Where would you\nlike to go?'), findsOneWidget);
+      expect(find.text('Where would you like to go?'), findsOneWidget);
       await search(tester, 'moon');
       expect(find.text('A month of moonlight'), findsOneWidget);
       expect(find.text('Read a rock'), findsNothing);

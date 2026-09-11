@@ -22,6 +22,8 @@ class HomeScreen extends StatelessWidget {
     required this.onSpaces,
     required this.onTask,
     required this.spaceCards,
+    this.launchpad,
+    this.contentCollections,
     this.task,
     this.isPrivate = false,
     this.notice,
@@ -42,6 +44,7 @@ class HomeScreen extends StatelessWidget {
   final ValueChanged<String> onOpen, onTask;
   final List<Widget> spaceCards;
   final FinishWorkspace? task;
+  final Widget? launchpad, contentCollections;
   final bool isPrivate, policyUsable;
   final String? notice, storageError;
   final ScrollController? controller;
@@ -49,51 +52,20 @@ class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context), colors = WingmanTokens.of(context);
-    final shortcuts = resources
-        .where((r) => preferences.shortcutIds.contains(r.id))
-        .toList();
     final modules = <String, Widget>{
       'shortcuts': Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 384),
-            child: SizedBox(
-              width: double.infinity,
-              child: Wrap(
-                alignment: WrapAlignment.spaceBetween,
-                spacing: 12,
-                runSpacing: 12,
-                children: [
-                  _Shortcut(
-                    icon: Icons.menu_book_outlined,
-                    label: 'Learn',
-                    onTap: onExplore,
-                  ),
-                  _Shortcut(
-                    icon: Icons.account_balance_outlined,
-                    label: 'Official',
-                    onTap: onOfficial,
-                  ),
-                  _Shortcut(
-                    icon: Icons.bookmark_border,
-                    label: 'Library',
-                    onTap: onLibrary,
-                  ),
-                  _Shortcut(icon: Icons.add, label: 'Add', onTap: onCustomize),
-                ],
-              ),
-            ),
-          ),
-          if (shortcuts.isNotEmpty) ...[
-            const SizedBox(height: 16),
-            for (final resource in shortcuts)
+          launchpad ??
               WingmanSettingsRow(
-                icon: Icons.offline_pin_outlined,
-                title: resource.title,
-                subtitle: 'Reviewed offline resource',
-                onTap: () => onOpen(resource.id),
+                icon: Icons.add_circle_outline,
+                title: 'Your Launchpad',
+                subtitle: 'Choose the shortcuts that matter to you',
+                onTap: onCustomize,
               ),
+          if (contentCollections != null) ...[
+            const SizedBox(height: 20),
+            contentCollections!,
           ],
         ],
       ),
@@ -305,10 +277,10 @@ class HomeScreen extends StatelessWidget {
                 Text(
                   isPrivate
                       ? 'A little space to yourself.'
-                      : 'Where would you\nlike to go?',
-                  style: theme.textTheme.headlineMedium,
+                      : 'Where would you like to go?',
+                  style: theme.textTheme.titleLarge,
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 8),
                 Text(
                   isPrivate
                       ? 'Same protection. This private session stays separate from your saved activity.'
@@ -319,7 +291,7 @@ class HomeScreen extends StatelessWidget {
                     color: colors.secondaryText,
                   ),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 16),
                 Semantics(
                   button: true,
                   enabled: true,
@@ -404,43 +376,4 @@ class HomeScreen extends StatelessWidget {
       ],
     );
   }
-}
-
-class _Shortcut extends StatelessWidget {
-  const _Shortcut({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-  @override
-  Widget build(BuildContext context) => SizedBox(
-    width: 72,
-    child: Column(
-      children: [
-        IconButton.filledTonal(
-          onPressed: onTap,
-          style: IconButton.styleFrom(
-            foregroundColor: WingmanTokens.of(context).action,
-            backgroundColor: WingmanTokens.of(context).raised,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-          ),
-          tooltip: label,
-          icon: Icon(icon),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          textAlign: TextAlign.center,
-          style: Theme.of(
-            context,
-          ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w700),
-        ),
-      ],
-    ),
-  );
 }

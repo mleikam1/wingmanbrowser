@@ -108,7 +108,7 @@ void main() {
     if (find.text('Get started').evaluate().isNotEmpty) {
       await tap(tester, find.text('Get started'));
     }
-    expect(find.text('Where would you\nlike to go?'), findsOneWidget);
+    expect(find.text('Where would you like to go?'), findsOneWidget);
     expect(
       find.textContaining('Protected startup could not finish.'),
       findsNothing,

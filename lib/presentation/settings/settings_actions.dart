@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 enum PrivacyDataCategory {
   reviewedBookmarks,
   readingList,
+  launchpad,
   legacyHistory,
   websiteStorage,
   trustReceipt,
@@ -54,6 +55,7 @@ extension PrivacyDataLabel on PrivacyDataCategory {
   String get label => switch (this) {
     PrivacyDataCategory.reviewedBookmarks => 'Reviewed bookmarks',
     PrivacyDataCategory.readingList => 'Reading list and read status',
+    PrivacyDataCategory.launchpad => 'Your Launchpad and sources',
     PrivacyDataCategory.legacyHistory => 'Quarantined earlier history',
     PrivacyDataCategory.websiteStorage => 'Legacy website data',
     PrivacyDataCategory.trustReceipt => 'This Trust Receipt journal',
@@ -64,6 +66,8 @@ extension PrivacyDataLabel on PrivacyDataCategory {
       'Removes saved reviewed-resource IDs. Other library items and notes stay.',
     PrivacyDataCategory.readingList =>
       'Removes reading-list IDs and their read marks. Article bundles stay installed.',
+    PrivacyDataCategory.launchpad =>
+      'Removes saved shortcuts, addresses, folder names, collection sources and Launchpad display choices. Keeps bookmarks, Spaces and protection. Earlier shortcuts will not return automatically.',
     PrivacyDataCategory.legacyHistory =>
       'Deletes earlier history records without displaying their titles or addresses. Other quarantined records stay.',
     PrivacyDataCategory.websiteStorage =>
@@ -73,6 +77,6 @@ extension PrivacyDataLabel on PrivacyDataCategory {
     PrivacyDataCategory.session =>
       isPrivate
           ? 'Closes private tabs and clears their transient tools. Normal saved items stay.'
-          : 'Closes normal discovery tabs and clears their searches. Keeps bookmarks, reading saves, restrictions, Spaces, tasks, findings, receipt and quarantine.',
+          : 'Closes normal discovery tabs and clears their searches. Keeps Launchpad, bookmarks, reading saves, restrictions, Spaces, tasks, findings, receipt and quarantine.',
   };
 }

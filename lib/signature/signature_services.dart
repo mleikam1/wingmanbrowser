@@ -6,15 +6,24 @@ import 'privacy/privacy_journal.dart';
 import 'storage/document_store.dart';
 import 'workspaces/workspace_controller.dart';
 import '../presentation/design_system/ui_preferences.dart';
+import 'launchpad/launchpad.dart';
 
 class SignatureServices extends ChangeNotifier {
   SignatureServices({
     required SignatureDocumentStore store,
     required bool Function(String) eligible,
+    LaunchpadEligibilityService? launchpadEligibility,
     this.isPrivate = false,
   }) : ephemeral = isPrivate || productEdition != ProductEdition.consumer,
        ui = UiPreferencesController(
          store: store,
+         ephemeral: isPrivate || productEdition != ProductEdition.consumer,
+       ),
+       launchpad = LaunchpadController(
+         store: store,
+         eligibility:
+             launchpadEligibility ??
+             LaunchpadEligibilityService(resourceEligible: eligible),
          ephemeral: isPrivate || productEdition != ProductEdition.consumer,
        ),
        _store = SessionSignatureDocumentStore(
@@ -37,6 +46,7 @@ class SignatureServices extends ChangeNotifier {
   final SignatureDocumentStore _store;
   final WorkspaceController workspaces;
   final UiPreferencesController ui;
+  final LaunchpadController launchpad;
   late final PrivacyJournal journal;
   bool initialized = false;
   bool _closed = false;
@@ -46,6 +56,7 @@ class SignatureServices extends ChangeNotifier {
     var failed = false;
     await Future.wait([
       ui.initialize(),
+      launchpad.initialize(),
       workspaces.initialize(),
       (() async {
         try {
@@ -82,7 +93,12 @@ class SignatureServices extends ChangeNotifier {
             : PrivacyPolicyFreshness.unavailable,
       );
   Future<void> flush() async {
-    await Future.wait([journal.flush(), workspaces.flush(), ui.flush()]);
+    await Future.wait([
+      journal.flush(),
+      workspaces.flush(),
+      ui.flush(),
+      launchpad.flush(),
+    ]);
   }
 
   @override
@@ -91,6 +107,7 @@ class SignatureServices extends ChangeNotifier {
     journal.dispose();
     workspaces.dispose();
     ui.dispose();
+    launchpad.dispose();
     super.dispose();
   }
 }
