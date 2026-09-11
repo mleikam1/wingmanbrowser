@@ -1,6 +1,19 @@
 # Hand It Over: static reviewed sharing
 
-Status: **Implemented and tested** for the static handoff controller and separate guest application on the dedicated Android emulator and iOS simulator. The 23 focused handoff host tests pass in the final full suite of 326 passing tests (two optional skips); the earlier focused root/workspace run passed 38 tests. All four native start/resume phases also pass after the incoming-link guard change. The full production-root active-handoff restart path is source-reviewed, not separately exercised with a production credential; that integration limit is explicit below. Interactive website handoff is **Disabled pending review** on every platform. Flutter web handoff is unavailable.
+Status: **Implemented and tested** for the static handoff controller and separate guest application on the dedicated Android emulator and iOS simulator. The 0.6 UI changes retain the controller/store security and pass all four native start/resume phases again, as recorded below. The earlier 0.5 baseline had 23 focused handoff host tests within 326 passing tests (two optional skips); those historical results remain separately identified. The full production-root active-handoff restart path is source-reviewed, not separately exercised with a production credential; that integration limit is explicit below. Interactive website handoff is **Disabled pending review** on every platform. Flutter web handoff is unavailable.
+
+## 0.6 UI verification — 2026-09-11
+
+H01–H03 now use the shared visual system, responsive opaque guest surfaces and a large custom keypad. No controller/store/native security code changed. The updated UI passed 33 Handoff host tests (23 existing security tests, eight 200% layout tests and two capture journeys) in the first 402-test full run. All six synthetic light/dark captures were inspected. These host renders do not establish native snapshot or screen-reader behavior.
+
+The real secure-storage/600,000-iteration fixtures passed again using `--no-uninstall`, with distinct OS process IDs between start and resume:
+
+| Platform | Process IDs start → resume | Activation / authenticated return | Build start / resume | Suite start / resume | Logs in parent workspace |
+|---|---|---|---|---|---|
+| Android 16/API36 emulator | 29465 → 29614 | 2,241 / 2,467 ms | 15.2 / 18.0 s | 18 / 30 s | `work/ui-native-handoff-android-start.log`, `work/ui-native-handoff-android-resume.log` |
+| iOS 26.3.1 simulator | 33439 → 34118 | 1,938 / 1,696 ms | 22.2 / 19.9 s | 6 / 6 s | `work/ui-native-handoff-ios-start.log`, `work/ui-native-handoff-ios-resume.log` |
+
+Each is one debug integration observation, not cold-start, release or physical-device performance. Android includes deliberate incoming-intent wait windows. All three real targeted Android VIEW deliveries returned exit 0; guest input, owner construction, content views and controlled-loopback requests remained absent, and no address replayed after authenticated owner initialization. Both platforms passed the owner-input positive control, guest/return input absence, back/deep-route confinement, wrong-code denial and durable inactive return. iOS validates the native discard lifecycle and framework routes; no unregistered universal-link transaction or OS authentication success is implied. A real production-key owner-session restart and exhaustive inactive-snapshot timing remain separate limits.
 
 The implemented scope shares one to eight exact approved bundled articles, with a combined 120,000-character limit. The owner previews the full text and creates and confirms a fresh 8–12 digit owner-return code. The guest can read the selected articles or request an authenticated return. No website, WebView, account, cookie, form, download, note, finding, bookmark or other owner tab is copied or opened. No code can change the permanent content policy.
 

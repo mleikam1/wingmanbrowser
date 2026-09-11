@@ -2,6 +2,8 @@
 
 This document describes the **bundled plain-text milestone**. It does not certify arbitrary live websites, documents, media, remote search, authentication or downloads as safe. Those capabilities are unavailable. Only the separate signed catalog evaluator can admit bundled content to the Flutter reader.
 
+The original milestone results below remain historical. The 0.6 UI rerun uses the 18-resource catalog and records current native denial, real main journeys, Handoff process restoration, startup findings/corrections and exact fixture cleanup in [UI native validation](ui/native_validation.md). Live capabilities remain unavailable. iOS now remembers only an actually completed quarantine within one native process with no website-store writer; every new process awaits its first purge, and explicit Clear data still performs deletion. No timeout or error grants content access.
+
 ## Enforceable boundary
 
 `lib/browser/browser_engine.dart` contains no WebView, URL launcher or network import. Its compatibility adapter rejects every navigation before a controller or native renderer can be allocated. Legacy policy callbacks, allow-once payloads, private flags, roles and test callbacks are never consulted for permission. The former annotation-only JavaScript test hook now throws unconditionally. The live Reader extraction script is removed.

@@ -53,7 +53,7 @@ No support numbers, partnerships, endorsements, sports feeds, scores, or licensi
 
 Development source research used the web tool. **Wingman runtime catalog search does not request those sources.** The module contains no HTTP client, URL launcher, thumbnail or favicon request, review-submission endpoint, or query upload. Its journal events contain only typed activity/outcome categories. This is a source/runtime distinction, not a claim about every request the development browser made.
 
-Live official-site opening acceptance remains disabled until a tested renderer/resource eligibility boundary exists. The current useful journey is: search an organization or task, choose the region, inspect the exact identity evidence, then optionally open a separately eligible Wingman guide. The review-request help explains that no submission service is connected; nothing is silently sent.
+Live official-site opening acceptance remains disabled until a tested renderer/resource eligibility boundary exists. The current useful journey is: search an organization or task, choose the region, inspect the exact identity evidence, then optionally open a separately eligible Wingman guide. The review-request screen prepares a bounded local draft and explains that no submission service is connected; nothing is silently sent.
 
 ## Companion guide review (2026-09-11)
 
@@ -66,3 +66,15 @@ The existing fourteen signed resource rows and trusted public key are unchanged.
 Focused verification: **24 module tests passed**, followed by **34 combined module and mandatory-policy tests passed** against the 18-article signed catalog (`work/signature-route-commit-final-tests.log`, `work/signature-catalog-and-modules.log`). Scoped analysis was clean (`work/signature-route-commit-analyze.log`). These are host tests, separate from root-owned native/web runtime validation.
 
 Final focused follow-up: **38 tests passed** in `work/signature-domain-final-tests.log` (24 module cases, ten mandatory-policy cases, and four delayed-workspace navigation regressions). This run includes native `compute` dispatch and inactive selection masking. Scoped analysis was clean in `work/signature-domain-final-analyze.log`. It is host validation; device/web observations remain separately reported.
+
+## UI handoff implementation
+
+The updated Official Routes screen uses the shared Wingman page/status components, explicit purpose and region filters, and inspectable identity cards. Purpose grouping is a presentation mapping over the authored record IDs; it is not classification or eligibility evidence. There is still no live launch or active approval badge. Related guides remain separate and are rechecked before opening.
+
+`RequestReviewScreen` starts with empty fields. It accepts a manually entered ASCII domain of at most 253 characters and an optional single-line reason of at most 500 characters / 2,000 UTF-8 bytes. It rejects URL paths, credentials, ports, numeric/IP forms, reserved local suffixes, IDNs/punycode, hidden direction controls and address/email-like reason text. These syntax checks do not establish ownership, registration or safety and cannot detect every personal detail.
+
+The exact local draft is previewed before an explicit clipboard copy. No draft is persisted, no endpoint is contacted, and no request is marked submitted. Private drafts remain in memory; clipboard export is explicitly disclosed as leaving the private view, including possible access by other apps or clipboard sync services. Editing, route coverage and backgrounding invalidate the preview. A pending copy may already have reached the OS, so interrupted completion cannot promise that the clipboard remained unchanged; it is recorded as interrupted and no late success appears.
+
+The journal stores only request-prepared/exported activity, outcome and destination category. It receives no domain or reason. New UI validation is recorded separately in the UI milestone QA rather than rewriting the earlier 0.5 test evidence above.
+
+The UI handoff adds shared page/status components, purpose and region filters, and an adaptive evidence sheet. [O/C UI evidence](ui/OFFICIAL_COMMIT_QA.md) records the real Flutter light/dark captures and eight-width, 200%-text checks. These tests retain the disabled live action; they do not validate live browsing or OS clipboard behavior.
