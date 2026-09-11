@@ -81,7 +81,7 @@ class SignatureServices extends ChangeNotifier {
         historyRecording: PrivacySetting.disabled,
         sync: PrivacySetting.disabled,
         cloudAi: PrivacySetting.disabled,
-        liveWebContent: MandatorySafetyPolicy.liveContentSupported
+        liveWebContent: policy.liveAvailable(isPrivate: isPrivate)
             ? PrivacySetting.enabled
             : PrivacySetting.disabled,
         policyVersion: MandatorySafetyPolicy.version,

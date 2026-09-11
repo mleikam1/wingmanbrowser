@@ -2,29 +2,36 @@ import 'package:flutter/foundation.dart';
 import '../../policy/policy_models.dart';
 import '../../signature/storage/document_store.dart';
 
+/// Packaged artwork only. Values never contain paths or remote addresses.
+enum HomeArtwork { none, earthrise, forest, creative }
+
 @immutable
 class UiPreferences {
   UiPreferences({
     this.showOfficial = true,
     this.showTask = true,
     this.showSpaces = true,
+    this.homeArtwork = HomeArtwork.none,
     Iterable<String> shortcutIds = const [],
     Iterable<String> moduleOrder = modules,
   }) : shortcutIds = List.unmodifiable(shortcutIds),
        moduleOrder = List.unmodifiable(moduleOrder);
   static const modules = ['shortcuts', 'official', 'task', 'spaces'];
   final bool showOfficial, showTask, showSpaces;
+  final HomeArtwork homeArtwork;
   final List<String> shortcutIds, moduleOrder;
   UiPreferences copyWith({
     bool? showOfficial,
     bool? showTask,
     bool? showSpaces,
+    HomeArtwork? homeArtwork,
     Iterable<String>? shortcutIds,
     Iterable<String>? moduleOrder,
   }) => UiPreferences(
     showOfficial: showOfficial ?? this.showOfficial,
     showTask: showTask ?? this.showTask,
     showSpaces: showSpaces ?? this.showSpaces,
+    homeArtwork: homeArtwork ?? this.homeArtwork,
     shortcutIds: shortcutIds ?? this.shortcutIds,
     moduleOrder: moduleOrder ?? this.moduleOrder,
   );
@@ -33,11 +40,12 @@ class UiPreferences {
     'showOfficial': showOfficial,
     'showTask': showTask,
     'showSpaces': showSpaces,
+    'homeArtwork': homeArtwork.name,
     'shortcutIds': shortcutIds,
     'moduleOrder': moduleOrder,
   };
   factory UiPreferences.fromJson(Map<String, Object?> row) {
-    const keys = {
+    const requiredKeys = {
       'version',
       'showOfficial',
       'showTask',
@@ -45,14 +53,18 @@ class UiPreferences {
       'shortcutIds',
       'moduleOrder',
     };
+    const keys = {...requiredKeys, 'homeArtwork'};
     if (row.keys.toSet().difference(keys).isNotEmpty ||
-        row.length != keys.length ||
+        !row.keys.toSet().containsAll(requiredKeys) ||
         row['version'] != 1 ||
         row['showOfficial'] is! bool ||
         row['showTask'] is! bool ||
         row['showSpaces'] is! bool ||
         row['shortcutIds'] is! List ||
-        row['moduleOrder'] is! List) {
+        row['moduleOrder'] is! List ||
+        (row.containsKey('homeArtwork') &&
+            (row['homeArtwork'] is! String ||
+                (row['homeArtwork'] as String).length > 32))) {
       throw const FormatException('Invalid Home preferences.');
     }
     final ids = row['shortcutIds'] as List, order = row['moduleOrder'] as List;
@@ -68,6 +80,12 @@ class UiPreferences {
       showOfficial: row['showOfficial'] as bool,
       showTask: row['showTask'] as bool,
       showSpaces: row['showSpaces'] as bool,
+      // Older records omit this field. Unknown future names safely show plain
+      // Home while retaining all independent layout choices.
+      homeArtwork: HomeArtwork.values.firstWhere(
+        (value) => value.name == row['homeArtwork'],
+        orElse: () => HomeArtwork.none,
+      ),
       shortcutIds: ids.cast<String>(),
       moduleOrder: order.cast<String>(),
     );

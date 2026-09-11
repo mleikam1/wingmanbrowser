@@ -1,7 +1,7 @@
 name: wingman_browser
 description: "Wingman Browser. We've got your back, not your data."
 publish_to: none
-version: 0.7.0+7
+version: 0.8.0+8
 
 environment:
   sdk: ^3.12.2
@@ -34,6 +34,9 @@ flutter:
     - assets/policy/catalog.json
     - assets/policy/public_keys.json
     - assets/policy/articles/
+    - assets/policy/live_sites.json
+    - assets/policy/live_privacy_license.txt
+    - assets/discovery/
     - assets/fonts/Roboto_LICENSE.txt
     - assets/fonts/NotoSansSymbols_OFL.txt
   # Flutter's default family name prevents its default remote Roboto download.

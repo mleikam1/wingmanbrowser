@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'browser/browser_engine.dart';
+import 'browser/protected_web_surface.dart';
 import 'config/product_edition.dart';
 import 'data/sqlite_browser_repository.dart';
 import 'policy/policy_runtime.dart';
@@ -38,6 +39,18 @@ Future<void> main() async {
     final policy = await PolicyRuntime.initialize();
     handoff.attachPolicy(policy);
     await NativeBrowserService().quarantineLegacyContent();
+    try {
+      final reviewed = await LiveBrowsingPolicy.load();
+      final capabilities = await ProtectedWebBridge.capabilities();
+      policy.configureLiveBrowsing(
+        reviewed,
+        nativeAvailable: capabilities.supported,
+        privateAvailable: capabilities.privateAvailable,
+      );
+    } catch (_) {
+      // A missing/invalid live pack cannot break the existing offline library
+      // or turn an unreviewed destination into an allowed website.
+    }
     runApp(
       SignatureApplicationRoot(
         policy: policy,
@@ -91,6 +104,7 @@ class _SignatureApplicationRootState extends State<SignatureApplicationRoot> {
             )
             .isAllowed,
         resourceLookup: widget.policy.resource,
+        websiteAvailable: () => widget.policy.liveAvailable(),
         evaluateWebsite: (uri) => widget.policy.policy.evaluate(
           PolicyRequest.navigation(
             uri,

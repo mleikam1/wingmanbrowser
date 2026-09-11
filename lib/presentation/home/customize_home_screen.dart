@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../policy/policy_runtime.dart';
 import '../components/wingman_components.dart';
 import '../design_system/ui_preferences.dart';
+import '../discovery/discovery_photos.dart';
 
 class CustomizeHomeScreen extends StatefulWidget {
   const CustomizeHomeScreen({
@@ -36,7 +37,7 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
         title: const Text('Restore default Home?'),
         scrollable: true,
         content: const Text(
-          'This restores Home section visibility and order. Your Launchpad, Spaces, tasks, saved findings and library stay.',
+          'This restores Home section visibility, order and artwork. Your Launchpad, Spaces, tasks, saved findings and library stay.',
         ),
         actions: [
           TextButton(
@@ -76,7 +77,12 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
       _error = null;
     });
     try {
-      await widget.controller.update(change);
+      await widget.controller.update((preferences) {
+        if (!mounted || !widget.canContinue()) {
+          throw StateError('This Home session has ended.');
+        }
+        return change(preferences);
+      });
     } catch (_) {
       if (mounted) {
         setState(
@@ -102,7 +108,7 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
             Text(
               widget.isPrivate
                   ? 'These choices last only for this private session.'
-                  : 'Choose your shortcuts and the sections that appear on Home.',
+                  : 'Choose your shortcuts, artwork and the sections that appear on Home.',
             ),
             if (_error ?? widget.controller.storageError
                 case final String error) ...[
@@ -113,6 +119,34 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
                 tone: WingmanTone.caution,
               ),
             ],
+            const WingmanSection(title: 'Home artwork'),
+            const Text(
+              'A small photo panel, with text kept on its own clear surface. Every photograph is stored with the app.',
+            ),
+            const SizedBox(height: 12),
+            for (final artwork in HomeArtwork.values)
+              _ArtworkChoice(
+                artwork: artwork,
+                selected: prefs.homeArtwork == artwork,
+                onSelected: _busy
+                    ? null
+                    : () => _update((p) => p.copyWith(homeArtwork: artwork)),
+              ),
+            TextButton.icon(
+              style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
+              onPressed: _busy
+                  ? null
+                  : () {
+                      if (!widget.canContinue()) return;
+                      Navigator.of(context).push<void>(
+                        MaterialPageRoute(
+                          builder: (_) => const PhotoCreditsScreen(),
+                        ),
+                      );
+                    },
+              icon: const Icon(Icons.photo_library_outlined),
+              label: const Text('Photo credits'),
+            ),
             const SizedBox(height: 24),
             const WingmanSection(title: 'Home sections'),
             SwitchListTile(
@@ -211,4 +245,50 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
       );
     },
   );
+}
+
+class _ArtworkChoice extends StatelessWidget {
+  const _ArtworkChoice({
+    required this.artwork,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  final HomeArtwork artwork;
+  final bool selected;
+  final VoidCallback? onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final photo = DiscoveryPhoto.forArtwork(artwork);
+    return Semantics(
+      selected: selected,
+      child: ListTile(
+        key: ValueKey('home-artwork-${artwork.name}'),
+        contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+        minTileHeight: 64,
+        selected: selected,
+        leading: ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: SizedBox(
+            width: 56,
+            height: 48,
+            child: photo == null
+                ? ColoredBox(
+                    color: WingmanTokens.of(context).raised,
+                    child: const Icon(Icons.crop_landscape),
+                  )
+                : DiscoveryPhotoView(photo: photo, decorative: true),
+          ),
+        ),
+        title: Text(photo?.title ?? 'Plain Home'),
+        subtitle: Text(photo?.credit ?? 'No photo panel'),
+        trailing: Icon(
+          selected ? Icons.check_circle : Icons.radio_button_unchecked,
+          semanticLabel: selected ? 'Selected' : null,
+        ),
+        onTap: onSelected,
+      ),
+    );
+  }
 }

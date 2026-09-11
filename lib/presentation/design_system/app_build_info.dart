@@ -2,5 +2,5 @@
 class AppBuildInfo {
   const AppBuildInfo({required this.version, required this.build});
   final String version, build;
-  static const current = AppBuildInfo(version: '0.7.0', build: '7');
+  static const current = AppBuildInfo(version: '0.8.0', build: '8');
 }

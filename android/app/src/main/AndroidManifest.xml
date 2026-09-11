@@ -1,11 +1,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
-    <!-- Production is local-only. Debug/profile manifests grant INTERNET only
-         for Flutter developer tooling; they are not distribution builds. -->
-    <uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
+    <!-- Reviewed visual pages are fetched directly; cleartext and raw renderer channels remain blocked. -->
+    <uses-permission android:name="android.permission.INTERNET" />
     <application
         android:label="Wingman Browser"
         android:allowBackup="false"
+        android:usesCleartextTraffic="false"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

@@ -4,6 +4,7 @@ import '../../policy/policy_runtime.dart';
 import '../../signature/workspaces/workspace_models.dart';
 import '../components/wingman_components.dart';
 import '../design_system/ui_preferences.dart';
+import '../discovery/discovery_photos.dart';
 
 /// Home composes real session data. Reference artwork never supplies records.
 class HomeScreen extends StatelessWidget {
@@ -24,6 +25,7 @@ class HomeScreen extends StatelessWidget {
     required this.spaceCards,
     this.launchpad,
     this.contentCollections,
+    this.websiteDiscovery,
     this.task,
     this.isPrivate = false,
     this.notice,
@@ -44,7 +46,7 @@ class HomeScreen extends StatelessWidget {
   final ValueChanged<String> onOpen, onTask;
   final List<Widget> spaceCards;
   final FinishWorkspace? task;
-  final Widget? launchpad, contentCollections;
+  final Widget? launchpad, contentCollections, websiteDiscovery;
   final bool isPrivate, policyUsable;
   final String? notice, storageError;
   final ScrollController? controller;
@@ -66,6 +68,10 @@ class HomeScreen extends StatelessWidget {
           if (contentCollections != null) ...[
             const SizedBox(height: 20),
             contentCollections!,
+          ],
+          if (websiteDiscovery != null) ...[
+            const SizedBox(height: 24),
+            websiteDiscovery!,
           ],
         ],
       ),
@@ -357,6 +363,10 @@ class HomeScreen extends StatelessWidget {
                     message: storageError!,
                     tone: WingmanTone.caution,
                   ),
+                ],
+                if (preferences.homeArtwork != HomeArtwork.none) ...[
+                  const SizedBox(height: 20),
+                  HomeArtworkPanel(artwork: preferences.homeArtwork),
                 ],
                 for (final key in preferences.moduleOrder)
                   if (modules[key] != null) ...[

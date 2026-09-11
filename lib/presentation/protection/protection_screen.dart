@@ -81,7 +81,7 @@ class ProtectionScreen extends StatelessWidget {
           WingmanStatus(
             title: 'Coverage is limited',
             message: policy.status.usable
-                ? '${policy.status.resourceCount} reviewed offline articles. Live websites and embedded content remain unavailable.'
+                ? '${policy.status.resourceCount} reviewed offline articles. ${policy.liveAvailable(isPrivate: isPrivate) ? 'Reviewed website paths can display images and styles. Live content can change; there is no per-image or automatic text classifier.' : 'Live website support is unavailable in this session.'}'
                 : 'No usable catalog is available. A polished interface is not evidence of live-site coverage.',
             tone: WingmanTone.caution,
           ),
@@ -128,11 +128,12 @@ class ProtectionScreen extends StatelessWidget {
               ),
             ),
           ),
-          const WingmanSettingsRow(
+          WingmanSettingsRow(
             icon: Icons.security,
-            title: 'Live threat and tracking controls',
-            subtitle:
-                'No live browser engine or tracker requests are active; no threat-count dashboard is claimed',
+            title: 'Website request controls',
+            subtitle: policy.liveAvailable(isPrivate: isPrivate)
+                ? 'Reviewed page and asset addresses plus local tracker rules limit native requests. Scripts, sign-in and embedded media stay disabled.'
+                : 'Live website support is unavailable in this session.',
           ),
           WingmanSettingsRow(
             icon: Icons.receipt_long_outlined,
@@ -196,19 +197,34 @@ class AlwaysOnProtectionsScreen extends StatelessWidget {
           const SizedBox(height: 24),
           const WingmanSection(title: 'Policy & review data'),
           Text('Core policy version ${MandatorySafetyPolicy.version}'),
-          Text('Catalog version: ${policy.status.version ?? 'Unavailable'}'),
           Text(
-            'Catalog sequence: ${policy.status.sequence?.toString() ?? 'Unavailable'}',
+            'Offline catalog version: ${policy.status.version ?? 'Unavailable'}',
           ),
           Text(
-            'Review expires: ${policy.status.expiresAt?.toUtc().toIso8601String().split('T').first ?? 'Unavailable'}',
+            'Offline catalog sequence: ${policy.status.sequence?.toString() ?? 'Unavailable'}',
+          ),
+          Text(
+            'Offline article review expires: ${_reviewExpiry(policy.status.expiresAt)}',
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Website scope expires: ${_reviewExpiry(policy.policy.livePolicy?.expiresAt)}',
           ),
           const SizedBox(height: 16),
           const Text(
-            'Only exact reviewed plaintext bodies are eligible. Unknown or unsupported destinations stay closed. Educational and support material is available only where its individual review is current. There is no automatic online filter-update service in this build.',
+            'Installed text uses exact-content approval. The native website pilot permits separately reviewed page and asset addresses. Unknown or unsupported destinations stay closed. Website content can change; no per-image or automatic text classifier checks every response. iOS cannot inspect every image response before display. Expired website scope closes live access until a reviewed app update; there is no automatic online filter-update service.',
           ),
         ],
       ),
     ),
   );
+}
+
+String _reviewExpiry(DateTime? expiry) {
+  if (expiry == null) return 'Unavailable';
+  final utc = expiry.toUtc();
+  final date = utc.toIso8601String().split('T').first;
+  final hour = utc.hour.toString().padLeft(2, '0');
+  final minute = utc.minute.toString().padLeft(2, '0');
+  return '$date at $hour:$minute UTC';
 }

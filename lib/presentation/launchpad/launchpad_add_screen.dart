@@ -92,15 +92,14 @@ class _LaunchpadAddScreenState extends State<LaunchpadAddScreen>
             WingmanSettingsRow(
               icon: Icons.grid_view,
               title: 'Suggested sites',
-              subtitle:
-                  'Reviewed offline resources, local tools and clearly labeled website candidates',
+              subtitle: 'Reviewed resources, local tools and website scopes',
               onTap: () => _select(_AddMethod.suggested),
             ),
             WingmanSettingsRow(
               icon: Icons.link,
               title: 'Enter an address',
               subtitle:
-                  'Preview a local shortcut; live websites remain inactive',
+                  'Preview a local shortcut and check current website support',
               onTap: () {
                 if (current) {
                   actions.push(
@@ -256,7 +255,7 @@ class _LaunchpadAddScreenState extends State<LaunchpadAddScreen>
         const WingmanStatus(
           title: 'Ready resources first',
           message:
-              'Local tools and reviewed offline articles work here. Website candidates below are inactive; a familiar brand is not content approval.',
+              'Tools, installed articles and supported native website scopes can open. Other website candidates stay inactive; a familiar brand does not grant access.',
         ),
         CheckboxListTile(
           contentPadding: EdgeInsets.zero,

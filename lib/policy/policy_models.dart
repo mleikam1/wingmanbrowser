@@ -4,7 +4,8 @@ import 'dart:collection';
 abstract final class MandatorySafetyPolicy {
   static const version = 1;
   static const minimumCatalogSequence = 1;
-  static const liveContentSupported = false;
+  // Native availability and current reviewed scope are checked at runtime.
+  static const supportsReviewedLiveScopes = true;
   static const categories = MandatoryCategory.values;
 }
 

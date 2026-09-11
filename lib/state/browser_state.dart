@@ -182,7 +182,8 @@ class BrowserState extends ChangeNotifier {
     String? title,
     bool completed = false,
   }) {
-    // No live content is permitted by this milestone, including stale callbacks.
+    // Retired raw-engine callbacks cannot update protected session metadata.
+    // Reviewed live tabs use the separately guarded DiscoverySession trail.
     return;
   }
 

@@ -1,4 +1,5 @@
 import '../../policy/policy_models.dart';
+import '../../policy/live_browsing_policy.dart';
 import 'launchpad_models.dart';
 
 /// Editorial provenance is inspectable metadata, never navigation authority.
@@ -41,36 +42,66 @@ class StarterCatalogEntry {
 }
 
 class LaunchpadCatalog {
-  LaunchpadCatalog({Iterable<ApprovedResource> resources = const []})
-    : entries = List.unmodifiable([
-        ...tools,
-        ...resources
-            .take(100)
-            .map(
-              (r) => StarterCatalogEntry(
-                id: 'resource-${r.id}',
-                displayName: r.title,
-                description: r.summary,
-                category: switch (r.collection) {
-                  'sports' => 'Sports',
-                  'home-projects' ||
-                  'digital-life' ||
-                  'support' => 'Useful tools',
-                  _ => 'Learning',
-                },
-                target: LaunchpadTarget.resource(r.id),
-                localIconKey: 'book',
-                region: 'Installed library',
-                reviewedAt: r.reviewedAt,
-                reviewExpiresAt: r.expiresAt,
-                provenanceUrls: const [],
-                scope: 'Exact installed reviewed original text.',
-                limitation:
-                    'Current content policy is checked before saving and opening.',
-              ),
-            ),
-        ...websites,
-      ]);
+  LaunchpadCatalog({
+    Iterable<ApprovedResource> resources = const [],
+    Iterable<LiveSiteRecord> reviewedSites = const [],
+  }) : entries = List.unmodifiable([
+         ...tools,
+         ...reviewedSites
+             .where((site) => site.enabled)
+             .map(
+               (site) => StarterCatalogEntry(
+                 id: 'live-${site.id}',
+                 displayName: site.title,
+                 description: site.description,
+                 category: switch (site.collection) {
+                   'sports' => 'Sports',
+                   'shopping' => 'Shopping',
+                   _ => 'Learning',
+                 },
+                 target: LaunchpadTarget.website(site.entryUrl),
+                 localIconKey: switch (site.collection) {
+                   'sports' => 'sports',
+                   'shopping' => 'shopping',
+                   _ => 'science',
+                 },
+                 region: 'Reviewed website scope',
+                 reviewedAt: site.reviewedAt,
+                 reviewExpiresAt: site.expiresAt,
+                 provenanceUrls: [site.entryUrl],
+                 scope:
+                     'Only the listed reviewed pages and passive image/style resources.',
+                 limitation:
+                     'Native Android/iOS support is checked when opening. Scripts, accounts and downloads remain unavailable.',
+               ),
+             ),
+         ...resources
+             .take(100)
+             .map(
+               (r) => StarterCatalogEntry(
+                 id: 'resource-${r.id}',
+                 displayName: r.title,
+                 description: r.summary,
+                 category: switch (r.collection) {
+                   'sports' => 'Sports',
+                   'home-projects' ||
+                   'digital-life' ||
+                   'support' => 'Useful tools',
+                   _ => 'Learning',
+                 },
+                 target: LaunchpadTarget.resource(r.id),
+                 localIconKey: 'book',
+                 region: 'Installed library',
+                 reviewedAt: r.reviewedAt,
+                 reviewExpiresAt: r.expiresAt,
+                 provenanceUrls: const [],
+                 scope: 'Exact installed reviewed original text.',
+                 limitation:
+                     'Current content policy is checked before saving and opening.',
+               ),
+             ),
+         ...websites,
+       ]);
   final List<StarterCatalogEntry> entries;
   StarterCatalogEntry? byId(String id) =>
       entries.where((e) => e.id == id).firstOrNull;

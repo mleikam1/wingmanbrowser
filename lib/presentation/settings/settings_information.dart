@@ -14,9 +14,9 @@ class PermissionsScreen extends StatelessWidget {
       children: [
         const WingmanEmptyState(
           icon: Icons.lock_outline,
-          title: 'No live website grants',
+          title: 'Website permissions stay restricted',
           message:
-              'This build renders reviewed local text. It does not create live website views or request camera, microphone, location, upload or notification permissions for sites.',
+              'Reviewed native pages can display HTML, styles and listed images. Camera, microphone, location, uploads, notifications and account sign-in remain unavailable for websites.',
         ),
         const SizedBox(height: 24),
         for (final name in [
@@ -82,7 +82,7 @@ class AboutScreen extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           const Text(
-            'Unavailable: live websites, external search, site permissions, remote Reader, new downloads, cloud sync and report submission. Default-browser dispatch is not enabled. Web is a local-tools companion and does not control other browser tabs.',
+            'Eligible Android and iOS 18.4+ builds include a limited reviewed website pilot with images and styles. Scripts, external search, account sign-in, site permissions, remote Reader, downloads, cloud sync and report submission remain unavailable. Web is a local-tools companion and does not control other browser tabs.',
           ),
           const SizedBox(height: 20),
           WingmanSettingsRow(

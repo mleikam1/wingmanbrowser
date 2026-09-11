@@ -12,7 +12,6 @@ import android.view.WindowManager
 import android.webkit.CookieManager
 import android.webkit.GeolocationPermissions
 import android.webkit.WebStorage
-import androidx.webkit.ProfileStore
 import androidx.webkit.WebStorageCompat
 import androidx.webkit.WebViewFeature
 import io.flutter.embedding.android.FlutterActivity
@@ -20,9 +19,10 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 
-/** Bundled-content boundary. No WebView plugin, renderer, download or external opener. */
+/** Legacy channel stays closed; reviewed visual browsing has a separate narrow bridge. */
 class MainActivity : FlutterActivity() {
     private lateinit var channel: MethodChannel
+    private lateinit var protectedBrowser: ProtectedWebBridge
     private var pendingLink: String? = null
     private var initialized = false
     private var discardingHandoffLinks = false
@@ -38,6 +38,8 @@ class MainActivity : FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
         channel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "wingman/browser")
         channel.setMethodCallHandler(::handle)
+        protectedBrowser = ProtectedWebBridge(this, MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "wingman/protected-browser"))
+        flutterEngine.platformViewsController.registry.registerViewFactory(ProtectedWebBridge.VIEW_TYPE, protectedBrowser.factory)
         // Flutter's embedding otherwise exposes third-party PROCESS_TEXT
         // activities independently of url_launcher. No external text processor
         // is part of the reviewed local renderer, including in debug builds.
@@ -49,6 +51,21 @@ class MainActivity : FlutterActivity() {
         pendingLink = validWebUrl(intent?.dataString)
         // Do not initialize a content engine, restore a profile or allocate a
         // WebView. Explicit legacy cleanup uses only website-store APIs.
+    }
+
+    override fun onPause() {
+        if (::protectedBrowser.isInitialized) protectedBrowser.pauseAll()
+        super.onPause()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::protectedBrowser.isInitialized) protectedBrowser.resume()
+    }
+
+    override fun onDestroy() {
+        if (::protectedBrowser.isInitialized) protectedBrowser.closeAll()
+        super.onDestroy()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -77,6 +94,7 @@ class MainActivity : FlutterActivity() {
                 "discardHandoffIncoming" -> {
                     // Deny-only: guest addresses must never be replayed into the
                     // owner shell after authentication or process replacement.
+                    protectedBrowser.hideAll()
                     pendingLink = null
                     initialized = false
                     discardingHandoffLinks = true
@@ -85,6 +103,7 @@ class MainActivity : FlutterActivity() {
                 "initialize" -> {
                     if (discardingHandoffLinks) pendingLink = null
                     discardingHandoffLinks = false
+                    protectedBrowser.restoreOwner()
                     initialized = true
                     result.success(pendingLink)
                     pendingLink = null
@@ -105,13 +124,17 @@ class MainActivity : FlutterActivity() {
                 "privateAvailable", "defaultBrowser" -> result.success(false)
                 "normalizeHost" -> result.success(NativeGuardPolicy.normalizeHost(call.argument<String>("host") ?: ""))
                 "quarantineLegacyContent" -> {
+                    protectedBrowser.closeAll()
                     cancelUnfinishedDownloads()
-                    clearLegacyData(storage = true, cookies = true, cache = true, result = result)
+                    clearLegacyData(storage = true, cookies = true, cache = true, quarantine = true, result = result)
                 }
-                "clearData" -> clearLegacyData(
+                "clearData" -> {
+                    protectedBrowser.closeAll()
+                    clearLegacyData(
                     storage = call.argument<Boolean>("storage") == true,
                     cookies = call.argument<Boolean>("cookies") == true,
                     cache = call.argument<Boolean>("cache") == true, result = result)
+                }
                 "stop", "pause", "hideForGuard", "close" -> result.success(null) // No retained views.
                 "closedViewReleased" -> result.success(true)
                 // There is deliberately no setter, config flag, debug escape,
@@ -119,7 +142,7 @@ class MainActivity : FlutterActivity() {
                 else -> result.error("bundled_content_only", "This capability is unavailable in the bundled library.", null)
             }
         } catch (_: Exception) {
-            clearing = false
+            // An unrelated malformed call cannot release an in-flight cleanup.
             result.error("local_cleanup_unavailable", "Local browser cleanup could not be completed.", null)
         }
     }
@@ -137,18 +160,21 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    private fun clearLegacyData(storage: Boolean, cookies: Boolean, cache: Boolean, result: MethodChannel.Result) {
+    private fun clearLegacyData(storage: Boolean, cookies: Boolean, cache: Boolean, quarantine: Boolean = false, result: MethodChannel.Result) {
         if (clearing) { result.error("cleanup_pending", "Legacy site-data cleanup is still pending.", null); return }
-        if (!storage && !cookies && !cache) { result.success(null); return }
+        protectedBrowser.cleanupStarted()
+        if (!storage && !cookies && !cache) { protectedBrowser.cleanupFinished(); result.success(null); return }
         clearing = true
-        fun finish() { clearing = false; result.success(null) }
+        fun finish() { clearing = false; protectedBrowser.cleanupFinished(); if (quarantine) protectedBrowser.quarantineCompleted(); result.success(null) }
         fun fail() {
             clearing = false
+            protectedBrowser.cleanupFinished()
             result.error("cleanup_unavailable", "Legacy site data could not be removed.", null)
         }
+        try {
         if (!storage && !cache) {
             CookieManager.getInstance().removeAllCookies {
-                try { CookieManager.getInstance().flush(); finish() }
+                try { CookieManager.getInstance().flush(); protectedBrowser.purgeRetiredProfiles { success -> if (success) finish() else fail() } }
                 catch (_: Exception) { fail() }
             }
             return
@@ -157,6 +183,7 @@ class MainActivity : FlutterActivity() {
         // unsupported complete deletion reports failure instead of partial success.
         if (!WebViewFeature.isFeatureSupported(WebViewFeature.DELETE_BROWSING_DATA)) {
             clearing = false
+            protectedBrowser.cleanupFinished()
             result.error("cleanup_unsupported", "Update Android System WebView to finish removing legacy site data.", null)
             return
         }
@@ -165,17 +192,9 @@ class MainActivity : FlutterActivity() {
             try {
                 // This API clears the default store, including cookies and cache.
                 if (!WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)) { finish(); return@deleteBrowsingData }
-                val store = ProfileStore.getInstance()
-                val names = store.allProfileNames.filter { it.startsWith("wingman_private_") }
-                // Loading a profile with getProfile would prevent its deletion
-                // in this process. These abandoned profiles have no live views:
-                // unregister them by name without restoring any site context.
-                names.forEach { store.deleteProfile(it) }
-                check(store.allProfileNames.none { it.startsWith("wingman_private_") })
-                // Android may finish physical profile-file removal async; the
-                // profiles are already unusable and no renderer can restore them.
-                finish()
+                protectedBrowser.purgeRetiredProfiles { success -> if (success) finish() else fail() }
             } catch (_: Exception) { fail() }
         }
+        } catch (_: Exception) { fail() }
     }
 }

@@ -97,7 +97,7 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
           const WingmanStatus(
             title: 'Address-bar position',
             message:
-                'A live website address bar is unavailable in this offline-library build. This setting cannot enable live browsing.',
+                'The native address control stays above the bottom browser dock. Tap it to enter another address; each destination passes the current website policy.',
             tone: WingmanTone.info,
           ),
           if (_busy)

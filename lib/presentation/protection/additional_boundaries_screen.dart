@@ -76,15 +76,33 @@ class _AdditionalBoundariesScreenState
                     .isAllowed,
           )
           .toList();
-      final collections = resources.map((r) => r.collection).toSet().toList()
-        ..sort();
+      final sites = widget.policy.liveSites
+          .where(
+            (site) =>
+                site.collection != 'support' &&
+                widget.policy.policy.livePolicy
+                        ?.assessNavigation(
+                          Uri.parse(site.entryUrl),
+                          context: productEdition == ProductEdition.consumer
+                              ? ContentContext.general
+                              : ContentContext.student,
+                          now: widget.policy.clock.now(),
+                        )
+                        .isAllowed ==
+                    true,
+          )
+          .toList();
+      final collections = {
+        ...resources.map((r) => r.collection),
+        ...sites.map((s) => s.collection),
+      }.toList()..sort();
       return WingmanPage(
         title: 'Additional boundaries',
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Choose less of the reviewed library. Removing an additional boundary never approves prohibited, expired, unsupported or unreviewed content.',
+              'Choose less of the reviewed library and supported websites. Removing an additional boundary never approves prohibited, expired, unsupported or unreviewed content.',
             ),
             if (widget.isPrivate)
               const WingmanStatus(
@@ -120,9 +138,23 @@ class _AdditionalBoundariesScreenState
               const Text(
                 'The catalog is unavailable. Previously saved boundaries remain in place.',
               ),
+            if (sites.isNotEmpty) ...[
+              const SizedBox(height: 20),
+              const WingmanSection(title: 'Reviewed website scopes'),
+              for (final site in sites)
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text('Hide ${site.title}'),
+                  subtitle: Text(Uri.parse(site.entryUrl).host),
+                  value: restrictions.blockedResourceIds.contains(site.id),
+                  onChanged: _busy || widget.isPrivate
+                      ? null
+                      : (v) => _change(resourceId: site.id, hidden: v),
+                ),
+            ],
             const SizedBox(height: 16),
             const Text(
-              'Schedules, site-level rules and authenticated managed settings are unavailable in this offline-library build. Reviewed support stays available while its policy is valid.',
+              'Schedules and authenticated managed settings are unavailable. Hiding a website closes its entire reviewed scope. Reviewed support stays available while its policy is valid.',
             ),
             if (_busy) const LinearProgressIndicator(),
             if (_error != null)

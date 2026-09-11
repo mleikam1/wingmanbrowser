@@ -30,17 +30,19 @@ import LocalAuthentication
   }
 }
 
-/// This bridge has no renderer, script evaluator, auth delegate, downloader or
-/// external opener. Bundled text is rendered by Flutter after catalog approval.
+/// The retired channel has no content loader, script evaluator or external opener.
+/// Reviewed visual content uses a separate factory and immutable native policy.
 final class BrowserNativeBridge {
   let channel: FlutterMethodChannel
   var initialized = false
   var discardingHandoffLinks = false
+  let protectedBrowser: ProtectedWebBridge
   private var clearing = false
   private var quarantineCompletedInProcess = false
   private var quarantinePurgeCount = 0
 
   init(registrar: FlutterPluginRegistrar) {
+    protectedBrowser = ProtectedWebBridge(registrar: registrar)
     channel = FlutterMethodChannel(name: "wingman/browser", binaryMessenger: registrar.messenger())
     channel.setMethodCallHandler { [weak self] call, result in self?.handle(call, result: result) }
   }
@@ -59,6 +61,7 @@ final class BrowserNativeBridge {
     switch call.method {
     case "discardHandoffIncoming":
       // Deny-only; no guest link can be replayed into the restored owner shell.
+      protectedBrowser.hideAll()
       AppDelegate.pendingURL = nil
       initialized = false
       discardingHandoffLinks = true
@@ -66,6 +69,7 @@ final class BrowserNativeBridge {
     case "initialize":
       if discardingHandoffLinks { AppDelegate.pendingURL = nil }
       discardingHandoffLinks = false
+      protectedBrowser.restoreOwner()
       initialized = true
       result(AppDelegate.pendingURL)
       AppDelegate.pendingURL = nil
@@ -103,13 +107,15 @@ final class BrowserNativeBridge {
         result(FlutterError(code: "local_storage_unavailable", message: "Local storage could not be opened.", details: nil))
       }
     case "quarantineLegacyContent":
-      // This process has no renderer, authentication, SDK web view or other
-      // website-store writer. A completed upgrade purge therefore stays valid
-      // for a second Flutter root in this process. Never persist this receipt:
+      protectedBrowser.closeAll()
+      // New visual views use nonpersistent stores and cannot write the legacy
+      // persistent default store. A completed upgrade purge therefore remains
+      // valid for a second Flutter root in this process. Never persist this receipt:
       // the first request in every native process must await actual removal.
-      if quarantineCompletedInProcess { result(nil); return }
+      if quarantineCompletedInProcess { protectedBrowser.quarantineCompleted { result(nil) }; return }
       clearData(types: WKWebsiteDataStore.allWebsiteDataTypes(), quarantine: true, result: result)
     case "clearData":
+      protectedBrowser.closeAll()
       var types = Set<String>()
       if args["cookies"] as? Bool == true { types.insert(WKWebsiteDataTypeCookies) }
       if args["cache"] as? Bool == true {
@@ -137,16 +143,23 @@ final class BrowserNativeBridge {
     }
     guard !types.isEmpty else { result(nil); return }
     clearing = true
+    protectedBrowser.cleanupStarted()
     if quarantine { quarantinePurgeCount += 1 }
-    // No WKWebView is constructed. Nonpersistent stores from the previous
-    // process cannot be restored; remove the prior persistent default store.
+    // The current visual views are already released and use nonpersistent stores.
+    // Remove only the prior persistent default store; this constructs no view.
     WKWebsiteDataStore.default().removeData(ofTypes: types, modifiedSince: .distantPast) {
       // Only WebKit's completion acknowledges the purge. Pending, rejected or
       // timed-out Dart waits cannot set this flag; explicit clearData requests
       // always perform their requested deletion and never consult this receipt.
-      if quarantine { self.quarantineCompletedInProcess = true }
-      self.clearing = false
-      result(nil)
+      func finish() {
+        self.clearing = false
+        self.protectedBrowser.cleanupFinished()
+        result(nil)
+      }
+      if quarantine {
+        self.quarantineCompletedInProcess = true
+        self.protectedBrowser.quarantineCompleted(completion: finish)
+      } else { finish() }
     }
   }
 }

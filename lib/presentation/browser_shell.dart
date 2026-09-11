@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../config/product_edition.dart';
 import '../browser/browser_engine.dart';
+import '../browser/protected_web_surface.dart';
 import '../policy/policy_runtime.dart';
 import '../state/browser_state.dart';
 import '../signature/signature_services.dart';
@@ -26,6 +27,7 @@ import 'components/browser_chrome.dart';
 import 'components/wingman_route.dart';
 import 'app_route_observer.dart';
 import 'home/home_screen.dart';
+import 'discovery/visual_discovery_section.dart';
 import 'home/focused_search_screen.dart';
 import 'home/customize_home_screen.dart';
 import 'design_system/ui_preferences.dart';
@@ -46,10 +48,11 @@ const _collections = <String, String>{
   'support': 'Support',
   'home-projects': 'Home projects',
   'sports': 'Sports',
+  'shopping': 'Shopping',
 };
 
-/// Production content accepts only verified IDs. No HTML, linkifier, live
-/// controller, or external launcher is reachable from this surface.
+/// Offline resources and reviewed native websites share the same tab owner and
+/// authoritative policy. Native websites additionally enforce resource scope.
 class BrowserShell extends StatefulWidget {
   const BrowserShell({
     super.key,
@@ -88,6 +91,8 @@ class _BrowserShellState extends State<BrowserShell>
   CompatibilityProfileRegistry? _compatibility;
   bool _covered = false;
   late final Listenable _launchpadChanges;
+  final Map<String, ProtectedWebStatus> _webStatuses = {};
+  final Map<String, int> _webRevisions = {};
   final Map<String, ScrollController> _scrolls = {};
   ScrollController _scrollFor(String page) {
     final owner = _tab, key = '${_tab.id}:$page';
@@ -139,6 +144,7 @@ class _BrowserShellState extends State<BrowserShell>
         launchpadEligibility: LaunchpadEligibilityService(
           resourceEligible: (id) => _eligibleId(id, private: true),
           resourceLookup: widget.policy.resource,
+          websiteAvailable: () => widget.policy.liveAvailable(isPrivate: true),
           evaluateWebsite: (uri) => widget.policy.policy.evaluate(
             PolicyRequest.navigation(uri, context: _context, isPrivate: true),
             additional: _additional,
@@ -261,7 +267,9 @@ class _BrowserShellState extends State<BrowserShell>
         diagnostics: CompatibilityDiagnostics(
           appVersion: AppBuildInfo.current.version,
           policyVersion: MandatorySafetyPolicy.version,
-          capability: CompatibilityCapability.bundledReader,
+          capability: widget.policy.liveAvailable(isPrivate: _tab.isPrivate)
+              ? CompatibilityCapability.reviewedScriptlessWeb
+              : CompatibilityCapability.bundledReader,
         ),
         canContinue: () =>
             mounted &&
@@ -618,12 +626,14 @@ class _BrowserShellState extends State<BrowserShell>
   Future<void> _bindIncoming() async {
     try {
       await _native.initialize(
-        onIncomingUri: (_) {
-          if (mounted && !(widget.handoff?.blocksOwner ?? false)) _deny();
+        onIncomingUri: (uri) {
+          if (mounted && !(widget.handoff?.blocksOwner ?? false)) {
+            _navigateWebsite(uri);
+          }
         },
       );
     } catch (_) {
-      // No incoming-link support can grant content. Keep the offline shell.
+      // An incoming-link failure cannot grant content or discard local data.
     }
   }
 
@@ -633,6 +643,8 @@ class _BrowserShellState extends State<BrowserShell>
 
   void _pruneScrolls() {
     final validTabs = _tabs.map((t) => t.id).toSet();
+    _webStatuses.removeWhere((id, _) => !validTabs.contains(id));
+    _webRevisions.removeWhere((id, _) => !validTabs.contains(id));
     for (final key
         in _scrolls.keys
             .where((k) => !validTabs.contains(k.split(':').first))
@@ -697,6 +709,82 @@ class _BrowserShellState extends State<BrowserShell>
     _recordTaskNavigation();
   }
 
+  PolicyDecision _websiteDecision(Uri uri, {bool? isPrivate}) =>
+      widget.policy.policy.evaluate(
+        PolicyRequest.navigation(
+          uri,
+          context: _context,
+          isPrivate: isPrivate ?? _tab.isPrivate,
+        ),
+        additional: _additional,
+      );
+
+  void _navigateWebsite(Uri uri, {bool newTab = false}) {
+    if (!_validOrigin(_tab)) return;
+    final decision = _websiteDecision(uri);
+    if (!decision.isAllowed) {
+      _deny(decision);
+      return;
+    }
+    if (newTab && _tabs.length >= 12) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('The 12-tab limit is reached. Close a tab first.'),
+        ),
+      );
+      return;
+    }
+    FocusScope.of(context).unfocus();
+    Navigator.of(context).popUntil((route) => route.isFirst);
+    setState(() {
+      if (newTab) {
+        _tabs.add(DiscoveryTab(isPrivate: _tab.isPrivate));
+        _activeTab = _tabs.length - 1;
+      }
+      _tab.visitWebsite(uri);
+      _webStatuses.remove(_tab.id);
+      _webRevisions[_tab.id] = (_webRevisions[_tab.id] ?? 0) + 1;
+      _destination = 0;
+      _query = '';
+      _collection = null;
+      _queryController.clear();
+      _notice = null;
+    });
+    _recordTaskNavigation();
+  }
+
+  Widget _websiteView(Uri uri) {
+    final owner = _tab;
+    if (!_websiteDecision(uri).isAllowed) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Text(
+            'This page is outside the current supported scope. Use Home or enter another address.',
+          ),
+        ),
+      );
+    }
+    return ProtectedWebSurface(
+      key: ValueKey('live-${owner.id}'),
+      tabId: owner.id,
+      url: uri,
+      isPrivate: owner.isPrivate,
+      revision: _webRevisions[owner.id] ?? 0,
+      policyChanges: _launchpadChanges,
+      canOpen: (target) =>
+          _validOrigin(owner) &&
+          _websiteDecision(target, isPrivate: owner.isPrivate).isAllowed,
+      onNavigation: (target) {
+        if (_validOrigin(owner)) _navigateWebsite(target);
+      },
+      onStatus: (status) {
+        if (!_validOrigin(owner)) return;
+        setState(() => _webStatuses[owner.id] = status);
+      },
+    );
+  }
+
   void _deny([PolicyDecision? rejected]) {
     FocusScope.of(context).unfocus();
     setState(() {
@@ -705,7 +793,7 @@ class _BrowserShellState extends State<BrowserShell>
       _collection = null;
       _queryController.clear();
       _notice =
-          'This destination is not approved. Live websites, downloads, and external apps are unavailable in this version. Explore the reviewed library below.';
+          'This destination is outside the supported scope. Choose a reviewed website or explore the installed library. Downloads and external apps remain unavailable.';
     });
     final decision =
         rejected ??
@@ -743,7 +831,11 @@ class _BrowserShellState extends State<BrowserShell>
       r'(^[a-z][a-z0-9+.-]*:)|([a-z0-9-]+\.[a-z]{2,}([/\s:]|$))|(%[0-9a-f]{2})',
       caseSensitive: false,
     ).hasMatch(value)) {
-      _deny();
+      try {
+        _navigateWebsite(Uri.parse(normalizeLaunchpadWebsite(value)));
+      } catch (_) {
+        _deny();
+      }
       return;
     }
     FocusScope.of(context).unfocus();
@@ -775,7 +867,7 @@ class _BrowserShellState extends State<BrowserShell>
           contentContext: _context,
           isPrivate: origin.isPrivate,
           localSuggestions: widget.state.settings.localSuggestions,
-          initialQuery: _query,
+          initialQuery: _tab.website?.toString() ?? _query,
         ),
       ),
     );
@@ -794,6 +886,9 @@ class _BrowserShellState extends State<BrowserShell>
   @override
   Widget build(BuildContext context) {
     final resource = _current();
+    final website = _tab.website;
+    final websiteAllowed =
+        website != null && _websiteDecision(website).isAllowed;
     final wide =
         kIsWeb &&
         MediaQuery.sizeOf(context).width >= WingmanTokens.compact &&
@@ -810,7 +905,9 @@ class _BrowserShellState extends State<BrowserShell>
                       : 'Student experience · No account required',
                 ),
               Expanded(
-                child: _destination == 0 && resource != null
+                child: _destination == 0 && website != null && _query.isEmpty
+                    ? _websiteView(website)
+                    : _destination == 0 && resource != null
                     ? _article(resource)
                     : _destination != 0 ||
                           _query.isNotEmpty ||
@@ -879,9 +976,15 @@ class _BrowserShellState extends State<BrowserShell>
               onSpaces: () => _workspaces(),
               tabCount: _tabs.length,
               isPrivate: _tab.isPrivate,
-              resourceTitle: resource == null
+              resourceTitle: website != null
+                  ? websiteAllowed
+                        ? website.host
+                        : 'Unavailable website'
+                  : resource == null
                   ? null
                   : 'Reviewed offline article',
+              isLive: website != null,
+              onReload: websiteAllowed ? () => _navigateWebsite(website) : null,
               onAddress: _focusedSearch,
               onPageInfo: () => _pageInfo(resource),
               onBack: _tab.position > 0
@@ -938,6 +1041,9 @@ class _BrowserShellState extends State<BrowserShell>
               isPrivate: _ephemeral,
             )
           : null,
+      websiteDiscovery: VisualDiscoverySection(
+        destinations: _homeInspiration(),
+      ),
       preferences: (_features?.ui.snapshot ?? UiPreferences()).copyWith(
         showSpaces:
             (_features?.ui.snapshot.showSpaces ?? true) &&
@@ -1004,7 +1110,85 @@ class _BrowserShellState extends State<BrowserShell>
     );
   }
 
+  List<LiveSiteRecord> _discoverableWebsites({String query = ''}) {
+    final terms = query
+        .trim()
+        .toLowerCase()
+        .split(RegExp(r'\s+'))
+        .where((s) => s.isNotEmpty);
+    return widget.policy.liveSites.where((site) {
+      // Even a disabled card must not disclose a restricted collection.
+      final decision = widget.policy.policy.livePolicy?.assessNavigation(
+        Uri.parse(site.entryUrl),
+        context: _context,
+        additional: _additional,
+        now: widget.policy.clock.now(),
+      );
+      final text =
+          '${site.title} ${site.description} ${site.collection} ${site.entryUrl}'
+              .toLowerCase();
+      return site.enabled &&
+          decision?.isAllowed == true &&
+          (_collection == null || site.collection == _collection) &&
+          terms.every(text.contains);
+    }).toList();
+  }
+
+  VisualDiscoveryDestination _websiteCard(LiveSiteRecord site) {
+    final origin = _tab;
+    final uri = Uri.parse(site.entryUrl);
+    final allowed = _websiteDecision(uri).isAllowed;
+    return VisualDiscoveryDestination(
+      id: site.id,
+      title: site.title,
+      description: site.description,
+      kindLabel: 'Live website · ${Uri.parse(site.entryUrl).host}',
+      artwork: site.id == 'nasa-moon'
+          ? HomeArtwork.earthrise
+          : HomeArtwork.none,
+      unavailableReason:
+          'Use the supported Android or iOS app to open this reviewed website.',
+      onOpen: allowed
+          ? () {
+              if (_validOrigin(origin)) _navigateWebsite(uri);
+            }
+          : null,
+    );
+  }
+
+  List<VisualDiscoveryDestination> _homeInspiration() {
+    final origin = _tab;
+    final destinations = <VisualDiscoveryDestination>[
+      if (widget.policy.liveAvailable(isPrivate: origin.isPrivate))
+        for (final site in _discoverableWebsites()) _websiteCard(site),
+    ];
+    for (final entry in const {
+      'notice-nature': HomeArtwork.forest,
+      'drawing-with-shapes': HomeArtwork.creative,
+      'moon-phases': HomeArtwork.earthrise,
+    }.entries) {
+      if (destinations.length >= 5) break;
+      final resource = widget.policy.resource(entry.key);
+      if (resource == null || !_eligible(resource)) continue;
+      destinations.add(
+        VisualDiscoveryDestination(
+          id: resource.id,
+          title: resource.title,
+          description: resource.summary,
+          kindLabel:
+              'Offline article · ${_collections[resource.collection] ?? 'Explore'}',
+          artwork: entry.value,
+          onOpen: () {
+            if (_validOrigin(origin)) _open(resource);
+          },
+        ),
+      );
+    }
+    return destinations;
+  }
+
   Widget _results() {
+    final websites = _discoverableWebsites(query: _query);
     final resources = widget.policy
         .search(_query, additional: _additional, context: _context)
         .where(_eligible)
@@ -1047,7 +1231,7 @@ class _BrowserShellState extends State<BrowserShell>
                 const SizedBox(height: 16),
                 Text(
                   _query.isEmpty
-                      ? 'Installed articles, checked against the current policy.'
+                      ? 'Reviewed website scopes and installed articles. Search stays on this device.'
                       : 'Matches for “$_query” · On this device',
                 ),
                 const SizedBox(height: 16),
@@ -1071,7 +1255,42 @@ class _BrowserShellState extends State<BrowserShell>
                   ],
                 ),
                 const SizedBox(height: 24),
-                if (resources.isEmpty)
+                if (websites.isNotEmpty) ...[
+                  Text(
+                    'Reviewed websites',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Real pages and images in the native app. Scripts, forms and sign-in are unavailable in this pilot.',
+                  ),
+                  const SizedBox(height: 12),
+                  for (final site in websites)
+                    Card(
+                      child: ListTile(
+                        contentPadding: const EdgeInsets.all(16),
+                        title: Text(site.title),
+                        subtitle: Text(
+                          '${site.description}\n${Uri.parse(site.entryUrl).host}',
+                        ),
+                        trailing: Icon(
+                          _websiteDecision(Uri.parse(site.entryUrl)).isAllowed
+                              ? Icons.open_in_browser
+                              : Icons.lock_outline,
+                        ),
+                        onTap: () => _navigateWebsite(Uri.parse(site.entryUrl)),
+                      ),
+                    ),
+                  const SizedBox(height: 24),
+                ],
+                if (resources.isNotEmpty) ...[
+                  Text(
+                    'Offline articles',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                if (resources.isEmpty && websites.isEmpty)
                   WingmanEmptyState(
                     icon: Icons.search_off,
                     title: 'No approved matches',
@@ -1303,7 +1522,7 @@ class _BrowserShellState extends State<BrowserShell>
                   const WingmanStatus(
                     title: 'Private sessions stay separate',
                     message:
-                        'No normal saved activity or page previews appear here. Closing private tabs destroys their transient tools. This is offline reading, not a private live WebView.',
+                        'No normal saved activity or page previews appear here. Closing private tabs removes their temporary tools and closes their website views. Supported native pages use disposable website data; websites can still see your IP address.',
                   ),
                 const SizedBox(height: 16),
                 LayoutBuilder(
@@ -1567,6 +1786,12 @@ class _BrowserShellState extends State<BrowserShell>
   }
 
   String _safeTabTitle(DiscoveryTab tab) {
+    final website = tab.website;
+    if (website != null) {
+      return _websiteDecision(website, isPrivate: tab.isPrivate).isAllowed
+          ? website.host
+          : 'Unavailable website';
+    }
     final r = tab.resourceId == null
         ? null
         : widget.policy.resource(tab.resourceId!);
@@ -1596,23 +1821,17 @@ class _BrowserShellState extends State<BrowserShell>
     return LaunchpadActions(
       canContinue: current,
       changes: _launchpadChanges,
-      catalog: LaunchpadCatalog(resources: widget.policy.catalog),
+      catalog: LaunchpadCatalog(
+        resources: widget.policy.catalog,
+        reviewedSites: widget.policy.liveSites,
+      ),
       push: (page) async {
         if (current()) await _pushFeature(page);
       },
       onOpen: (target, {bool newTab = false}) async {
         if (!current() || service == null) return;
         if (target.kind == LaunchpadKind.website) {
-          _deny(
-            widget.policy.policy.evaluate(
-              PolicyRequest.navigation(
-                Uri.parse(target.value),
-                context: _context,
-                isPrivate: origin.isPrivate,
-              ),
-              additional: _additional,
-            ),
-          );
+          _navigateWebsite(Uri.parse(target.value), newTab: newTab);
           return;
         }
         if (target.kind == LaunchpadKind.resource) {
@@ -1811,6 +2030,43 @@ class _BrowserShellState extends State<BrowserShell>
           localIconKey: 'book',
           fromBookmark: fromBookmark,
           fromCurrentPage: committedPage,
+        ),
+      ),
+    );
+  }
+
+  void _pinCurrentWebsite(
+    DiscoveryTab owner,
+    ProtectedWebStatus status,
+    int revision,
+  ) {
+    final uri = owner.website;
+    if (!_validOrigin(owner) ||
+        (_webRevisions[owner.id] ?? 0) != revision ||
+        !_toolsReady ||
+        _ephemeral ||
+        uri == null ||
+        !status.committed ||
+        status.url != uri ||
+        !_websiteDecision(uri).isAllowed) {
+      return;
+    }
+    final site = widget.policy.policy.livePolicy?.siteForUri(uri);
+    _pushFeature(
+      LaunchpadEditorScreen(
+        controller: _features!.launchpad,
+        actions: _launchpadActions(
+          stillMatchesPage: () =>
+              owner.website == uri &&
+              (_webRevisions[owner.id] ?? 0) == revision &&
+              _websiteDecision(uri, isPrivate: false).isAllowed,
+        ),
+        isPrivate: false,
+        initialDraft: LaunchpadPinDraft(
+          title: site?.title ?? uri.host,
+          target: LaunchpadTarget.website(uri.toString()),
+          localIconKey: 'globe',
+          fromCurrentPage: true,
         ),
       ),
     );
@@ -2138,7 +2394,10 @@ class _BrowserShellState extends State<BrowserShell>
   void _pageInfo(ApprovedResource? resource) {
     final origin = _tab;
     _sheet('Page information', () {
-      if (!_validOrigin(origin) || (resource != null && !_eligible(resource))) {
+      if (!_validOrigin(origin) ||
+          (resource != null && !_eligible(resource)) ||
+          (origin.website != null &&
+              !_websiteDecision(origin.website!).isAllowed)) {
         return const [
           WingmanStatus(
             title: 'Page information unavailable',
@@ -2148,18 +2407,33 @@ class _BrowserShellState extends State<BrowserShell>
         ];
       }
       return [
-        Text(
-          resource == null ? 'Wingman Home' : resource.title,
-          style: Theme.of(context).textTheme.titleLarge,
-        ),
-        const SizedBox(height: 16),
-        const Text(
-          'Installed original text. No live connection, website permission or external authentication is involved.',
-        ),
-        if (resource != null)
-          Text(
-            'Reviewed ${_date(resource.reviewedAt)} · Expires ${_date(resource.expiresAt)}',
+        if (origin.website case final uri?) ...[
+          Text(uri.toString(), style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 16),
+          const Text(
+            'Reviewed live website scope. HTML, styles and listed images load directly from the website. Scripts, accounts, forms, embedded frames and downloads are disabled in this pilot.',
           ),
+          const SizedBox(height: 12),
+          const Text(
+            'Page requests reveal connection information to the requested website. Wingman does not upload your address, page contents or browsing history. Website content can change; this is not a guarantee about every image or word.',
+          ),
+          if (widget.policy.policy.livePolicy?.siteForUri(uri) case final site?)
+            Text('Scope review expires ${_date(site.expiresAt)}'),
+          const SizedBox(height: 12),
+        ] else ...[
+          Text(
+            resource == null ? 'Wingman Home' : resource.title,
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'Installed original text. No live connection, website permission or external authentication is involved.',
+          ),
+          if (resource != null)
+            Text(
+              'Reviewed ${_date(resource.reviewedAt)} · Expires ${_date(resource.expiresAt)}',
+            ),
+        ],
         const SizedBox(height: 16),
         const Text(
           'Content eligibility, official identity, connection security and compatibility are separate checks.',
@@ -2171,6 +2445,11 @@ class _BrowserShellState extends State<BrowserShell>
   void _menu() {
     final origin = _tab;
     final resource = _current();
+    final live = origin.website;
+    // The menu covers and destroys the native view. Keep its verified snapshot
+    // for this explicit action; opening another page invalidates the revision.
+    final committed = _webStatuses[origin.id];
+    final liveRevision = _webRevisions[origin.id] ?? 0;
     final groups = <String, List<MenuAction>>{
       'Page': [
         MenuAction(
@@ -2181,11 +2460,21 @@ class _BrowserShellState extends State<BrowserShell>
         MenuAction(
           'Add to Launchpad',
           Icons.add_to_home_screen,
-          resource == null || _ephemeral || !_toolsReady
+          _ephemeral ||
+                  !_toolsReady ||
+                  (resource == null &&
+                      (live == null ||
+                          committed?.committed != true ||
+                          committed?.url != live ||
+                          !_websiteDecision(live).isAllowed))
               ? null
-              : () => _pinToLaunchpad(resource.id, committedPage: true),
+              : live != null
+              ? () => _pinCurrentWebsite(origin, committed!, liveRevision)
+              : () => _pinToLaunchpad(resource!.id, committedPage: true),
           subtitle: _ephemeral
               ? 'Unavailable for private or temporary pages'
+              : live != null
+              ? 'Pin this committed reviewed page to Home'
               : resource == null
               ? 'Open an eligible article first'
               : 'Pin this installed article to Home',
@@ -2232,14 +2521,15 @@ class _BrowserShellState extends State<BrowserShell>
           'Desktop site',
           Icons.desktop_windows_outlined,
           null,
-          subtitle: 'Installed text has no live website or desktop variant',
+          subtitle:
+              'Changing website rendering modes is unavailable in this pilot',
         ),
         const MenuAction(
           'Copy or share page address',
           Icons.share_outlined,
           null,
           subtitle:
-              'This offline article has no live page address. Findings and receipts offer reviewed exports in their tools.',
+              'Page-address export is unavailable here. Findings and receipts offer reviewed exports in their tools.',
         ),
       ],
       'Wingman tools': [

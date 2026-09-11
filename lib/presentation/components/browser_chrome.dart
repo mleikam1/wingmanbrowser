@@ -19,12 +19,16 @@ class BrowserDock extends StatelessWidget {
     this.onAddress,
     this.onPageInfo,
     this.isPrivate = false,
+    this.isLive = false,
+    this.onReload,
   });
   final VoidCallback onHome, onTabs, onMenu, onLibrary, onSpaces;
   final VoidCallback? onBack, onForward, onAddress, onPageInfo;
   final int tabCount;
   final String? resourceTitle;
   final bool isPrivate;
+  final bool isLive;
+  final VoidCallback? onReload;
   @override
   Widget build(BuildContext context) => Material(
     color: WingmanTokens.of(context).surface,
@@ -50,10 +54,17 @@ class BrowserDock extends StatelessWidget {
                       child: Text(resourceTitle!, textAlign: TextAlign.start),
                     ),
                   ),
-                  const Tooltip(
-                    message: 'Installed text · no live page to reload',
-                    child: Icon(Icons.offline_pin_outlined),
-                  ),
+                  if (isLive)
+                    IconButton(
+                      tooltip: 'Reload protected page',
+                      onPressed: onReload,
+                      icon: const Icon(Icons.refresh),
+                    )
+                  else
+                    const Tooltip(
+                      message: 'Installed text · no live page to reload',
+                      child: Icon(Icons.offline_pin_outlined),
+                    ),
                 ],
               ),
             ),

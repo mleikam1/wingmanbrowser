@@ -20,11 +20,13 @@ class LaunchpadEligibilityService {
     this.evaluateWebsite,
     this.toolAvailable,
     this.resourceLookup,
+    this.websiteAvailable,
   });
   final bool Function(String) resourceEligible;
   final PolicyDecision Function(Uri)? evaluateWebsite;
   final bool Function(LaunchpadTool)? toolAvailable;
   final ApprovedResource? Function(String)? resourceLookup;
+  final bool Function()? websiteAvailable;
   LaunchpadEligibility assess(LaunchpadTarget target) {
     try {
       LaunchpadTarget.fromJson(target.toJson());
@@ -57,8 +59,10 @@ class LaunchpadEligibilityService {
               const PolicyDecision(
                 PolicyDecisionCode.blockUnsupportedCapability,
               );
-          // Even an incorrect/injected caller result cannot add a renderer.
-          final code = MandatorySafetyPolicy.liveContentSupported
+          // A decision alone cannot add a renderer. Current native capability
+          // and immutable live scope are supplied by the application policy.
+          final capable = websiteAvailable?.call() ?? false;
+          final code = capable
               ? decision.code
               : decision.isAllowed
               ? PolicyDecisionCode.blockUnsupportedCapability
@@ -69,11 +73,13 @@ class LaunchpadEligibilityService {
             PolicyDecisionCode.blockPolicyUnavailable,
           }.contains(code);
           return LaunchpadEligibility(
-            canOpen: false,
+            canOpen: capable && decision.isAllowed,
             canRetainInactive: retained,
             policyCode: code,
-            message: retained
-                ? 'Inactive local review record. Live website navigation is unavailable; nothing is submitted.'
+            message: capable && decision.isAllowed
+                ? 'Reviewed live page · Images and page layout supported'
+                : retained
+                ? 'Inactive local review record. This destination is outside the supported website scope for this session; nothing is submitted.'
                 : 'This destination cannot be saved as an active shortcut.',
           );
       }

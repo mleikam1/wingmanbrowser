@@ -45,9 +45,9 @@ class PolicyStateView extends StatelessWidget {
             PolicyDecisionCode.blockSecurityThreat =>
               'The policy identified a security threat. The destination was not opened; there is no proceed-anyway action.',
             PolicyDecisionCode.blockUnsupportedCapability =>
-              'Live websites, new downloads and external apps cannot be opened in this offline-library build. No request was made by this action.',
+              'This page or operation is outside the supported scope for this session. Only reviewed native website scopes and installed articles can open. This action did not dispatch a website request.',
             _ =>
-              'Identity, a familiar domain or a review request does not establish approval. Explore the signed library for available material.',
+              'Identity, a familiar domain or a review request does not establish approval. Explore reviewed website scopes and offline articles for available material.',
           },
           tone: decision.code == PolicyDecisionCode.blockSecurityThreat
               ? WingmanTone.danger
@@ -92,8 +92,8 @@ enum ConnectionFailureKind {
   unsupported,
 }
 
-/// Live error variants exist for explicit capability/state inspection. Current
-/// production has no live transport and must not fabricate a TLS diagnosis.
+/// Specific connection diagnoses require an observed native failure; generic
+/// scope/load errors must not fabricate a TLS or security diagnosis.
 class ConnectionErrorScreen extends StatelessWidget {
   const ConnectionErrorScreen({
     super.key,
@@ -130,7 +130,7 @@ class ConnectionErrorScreen extends StatelessWidget {
             message: security
                 ? 'The connection stays blocked. Wingman does not offer a proceed-anyway control.'
                 : kind == ConnectionFailureKind.unsupported
-                ? 'Use reviewed offline resources. This build has no live website engine.'
+                ? 'This connection is outside the supported scope. Reviewed offline resources remain available.'
                 : 'An ordinary connection failure does not establish that a destination is malicious. Retry is available only when the underlying capability supports it.',
             tone: security ? WingmanTone.danger : WingmanTone.caution,
           ),

@@ -7,7 +7,12 @@ enum CompatibilityIssue {
   other,
 }
 
-enum CompatibilityCapability { bundledReader, unsupported, unknown }
+enum CompatibilityCapability {
+  bundledReader,
+  reviewedScriptlessWeb,
+  unsupported,
+  unknown,
+}
 
 extension CompatibilityIssueLabel on CompatibilityIssue {
   String get label => switch (this) {
@@ -102,7 +107,7 @@ class CompatibilityReport {
     '',
     'No full address, query, page text, screenshot, cookies, credentials, device identifier or network trace is included.',
     'A compatibility report does not approve content or relax protection.',
-    'Live website, sign-in, media and upload/download support is unavailable in this bundled-reader version.',
+    'Native website support is limited to reviewed document/image/style scopes. Scripts, sign-in, embedded media and uploads/downloads remain unavailable; this report grants no access.',
   ].join('\n');
 
   static DateTime _hour(DateTime date) {

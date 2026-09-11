@@ -30,16 +30,19 @@ class SceneDelegate: FlutterSceneDelegate {
 
   override func sceneWillResignActive(_ scene: UIScene) {
     cover(scene)
+    AppDelegate.browserBridge?.protectedBrowser.pauseAll()
     super.sceneWillResignActive(scene)
   }
 
   override func sceneDidEnterBackground(_ scene: UIScene) {
     cover(scene)
+    AppDelegate.browserBridge?.protectedBrowser.pauseAll()
     super.sceneDidEnterBackground(scene)
   }
 
   override func sceneDidBecomeActive(_ scene: UIScene) {
     super.sceneDidBecomeActive(scene)
+    AppDelegate.browserBridge?.protectedBrowser.resume()
     privacyWindow?.isHidden = true
     privacyWindow = nil
   }

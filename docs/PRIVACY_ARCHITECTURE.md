@@ -1,5 +1,7 @@
 # Privacy architecture
 
+> **Earlier milestone record (0.5–0.7).** Version 0.8 adds a separate protected native website pilot. This document's no-browsing-network, no-renderer, Android INTERNET and renderer-free cleanup assumptions do not describe that pilot. Use [Live browsing status](LIVE_BROWSING_STATUS.md), [Live browsing policy](LIVE_BROWSING_POLICY.md) and [Cloud cost plan](CLOUD_COST_PLAN.md) for current scope, platform differences and remaining validation. The historical observations below are preserved for their recorded builds; they are not v0.8 test results.
+
 **We've got your back, not your data.** The 0.5 signature-feature milestone builds on the permanent-protection foundation. [The previous architecture](history/PRIVACY_ARCHITECTURE_PHASE3A.md) is historical and does not describe current runtime behavior. Final implementation/platform status is recorded in [Signature features](SIGNATURE_FEATURES_STATUS.md).
 
 ## Data boundaries

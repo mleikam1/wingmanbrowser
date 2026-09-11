@@ -13,9 +13,15 @@ class DiscoveryTab {
   String? taskId;
   // Bounded, memory-only positions; owner session survives isolated handoff UI.
   final Map<String, double> scrollOffsets = {};
-  String? get resourceId => trail[position];
+  String? get currentEntry => trail[position];
+  String? get resourceId =>
+      currentEntry?.startsWith('web:') == true ? null : currentEntry;
+  Uri? get website => currentEntry?.startsWith('web:') == true
+      ? Uri.tryParse(currentEntry!.substring(4))
+      : null;
+  void visitWebsite(Uri uri) => visit('web:$uri');
   void visit(String? id) {
-    if (id == resourceId) return;
+    if (id == currentEntry) return;
     trail.removeRange(position + 1, trail.length);
     trail.add(id);
     position = trail.length - 1;

@@ -379,7 +379,8 @@ class _LaunchpadManageScreenState extends State<LaunchpadManageScreen>
                       },
                 child: const Text('Open'),
               ),
-              if (shortcut?.target.kind == LaunchpadKind.resource)
+              if (shortcut?.target.kind == LaunchpadKind.resource ||
+                  shortcut?.target.kind == LaunchpadKind.website)
                 TextButton(
                   onPressed: busy || !allowed
                       ? null

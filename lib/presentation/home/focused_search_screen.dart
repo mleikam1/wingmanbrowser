@@ -124,7 +124,7 @@ class _FocusedSearchScreenState extends State<FocusedSearchScreen> {
             ),
             const SizedBox(height: 20),
             const Text(
-              'Search runs on this device. Addresses are checked against the current capability and policy; this build does not open live websites.',
+              'Search runs on this device. Entering an address opens only a reviewed scope supported by this native app. Page requests go directly to the website after you submit; typing makes no network request.',
             ),
             if (widget.isPrivate) ...[
               const SizedBox(height: 12),

@@ -4,19 +4,24 @@
 
 **Built for discovery. Designed with boundaries.**
 
-Version 0.7 adds **Your Launchpad**: locally saved, editable shortcuts and single-level folders, a searchable starter catalog, and optional Sports, Shopping and Learning source collections. It extends the consumer UI and seven connected local experiences: Official Routes, Before You Commit, Your Spaces, Finish Mode, Hand It Over, Trust Receipt, and Compatibility Repair. The offline library contains 18 original reviewed articles; the separate Official Routes catalog contains 18 reviewed organizational destinations. Local search, session tabs, bookmarks, reading lists, themes and text sizing remain available. There is no advertising SDK or account requirement.
+Version **0.8** adds a protected visual-browsing pilot on Android and iOS, plus local photography and Home customization. Eligible native builds can display a small set of live documents with their permitted images, styles and fonts. Launchpad, local search, 18 original reviewed articles, Spaces, reading tools, themes and private sessions remain available. There is no account requirement, advertising SDK or new Wingman cloud service.
 
-**Live websites and external navigation are disabled.** The previous native engines could not establish positive eligibility for every response and resource before rendering. Their plugins and launch paths have been removed. This useful bounded milestone is not a production whole-web classifier, managed-school deployment, or store release.
+**This is a bounded pilot, not a general-purpose Firefox replacement or a guarantee that every live image and sentence meets every content rule.** There is no per-image or automatic six-category text classifier. Reviewed URLs can serve changed content. The current request controls, platform differences, privacy boundaries and validation status are recorded in [Live browsing status](docs/LIVE_BROWSING_STATUS.md).
 
-Core restrictions have no switches, exceptions, PIN bypasses, or private-mode exemptions. Unknown, expired, corrupted, or unsupported content stays closed. Additional restrictions can hide optional collections; they cannot approve new content. A source citation never grants website access.
+Core restrictions have no switches, exceptions, PIN bypasses or private-mode exemptions. Unsupported addresses and operations stay closed; saving a shortcut cannot approve a website. Additional restrictions can remove access but cannot grant new access. Live eligibility also requires current policy, intact build-pinned assets and an available native capability. The live scope expires at **00:00 UTC on October 11, 2026**; there is no automatic updater or unrestricted fallback.
 
-Previous tabs, history, bookmarks, and reading-list metadata are quarantined before UI startup. Raw titles, addresses, previews, and external-search suggestions are hidden; original records remain in local storage. Reviewed saves use separate resource IDs. Normal reviewed saves persist, private activity does not, and the student/unknown editions keep reviewed-session saves in memory. Reset semantics and external-file limits are explained in Settings.
+## Current live scope
 
-## UI handoff review
+| Destination | Supported scope |
+| --- | --- |
+| NASA | Moon facts, Moon overview, Moon exploration and Earth facts: four exact documents with listed passive assets |
+| Wikipedia | The Chicago Bulls history article and its listed passive assets |
+| Adafruit | The half-size breadboard product 64 page and its listed passive assets; information and photographs only |
+| ESPN and Walmart | Disabled candidates; mixed betting, retail, advertising or recommendation content has not met the review boundary |
 
-See the [complete screen registry](docs/ui/SCREEN_REGISTRY.md), [design system](docs/ui/DESIGN_SYSTEM.md), [navigation boundaries](docs/ui/NAVIGATION.md) and [UI handoff QA](docs/ui/QA_REPORT.md). That handoff was merged before this milestone. The HTML in `Wingman_UI_Design_Handoff/` is reference material, while `lib/main.dart` is the application. The separate debug gallery uses synthetic memory fixtures.
+No whole domain is approved. Scripts, forms, sign-in, checkout, general web search, uploads, downloads, video and interactive embeds are unsupported. Unreviewed links and changing resource URLs may leave a page incomplete. Web and desktop builds provide the local companion experience; they do not render protected live websites or filter their host browser. See the exact scope, sources and licensing in [Live browsing policy](docs/LIVE_BROWSING_POLICY.md).
 
-The current Launchpad work is on the local `launchpad/implementation` branch. Read its [specification](docs/ui/LAUNCHPAD_SPEC.md), [implementation status](docs/ui/LAUNCHPAD_STATUS.md), [site compatibility review](docs/ui/LAUNCHPAD_SITE_COMPATIBILITY.md), and [test results, screenshots and preview instructions](docs/ui/LAUNCHPAD_QA.md).
+Android uses an independently gated WebView with mediated HTTPS requests. The iOS 18.4+ pilot uses WKWebView with compiled resource rules and nonpersistent website storage; older iOS retains the offline app. Their guarantees differ: iOS does **not** provide Android's per-subresource response MIME/body inspection or streamed byte limits. Neither mechanism classifies future page content. The retired unrestricted engine APIs remain closed; the pilot uses a separate protected bridge.
 
 ## Preview
 
@@ -24,77 +29,54 @@ From this repository, with Flutter installed:
 
 ```sh
 flutter pub get
-flutter run -d emulator-5556
+flutter devices
+flutter run -d <android-or-ios-device-id>
 ```
 
-Use `flutter devices` for the actual device ID. The inspected iOS simulator is:
+For the student packaging choice, which retains the same mandatory policy:
 
 ```sh
-flutter run -d C157677F-A33F-45B2-BFFB-F3DED552D4F4
+flutter run -d <device-id> --dart-define=WINGMAN_EDITION=student
 ```
 
-For the ad-free student packaging choice (same mandatory policy, no runtime edition switch):
-
-```sh
-flutter run -d emulator-5556 --dart-define=WINGMAN_EDITION=student
-```
-
-For a local web preview:
+For the local web companion:
 
 ```sh
 flutter build web --no-web-resources-cdn --no-tree-shake-icons
 python3 -m http.server 8791 --bind 127.0.0.1 --directory build/web
 ```
 
-Open [the local preview](http://127.0.0.1:8791/). The web build is a catalog application, not a browser extension or a filter for the host browser. Browser-owned menus and other applications are outside its boundary. Stop an existing preview on that port before starting another.
+Open [the local preview](http://127.0.0.1:8791/). Use a native target to try eligible live pages. Native code and bundled-policy changes require stopping and rebuilding; Flutter hot reload alone cannot activate them. The HTML in `Wingman_UI_Design_Handoff/` is reference material; `lib/main.dart` is the application.
 
-## Use the new experiences
+## Make Home yours
 
-Home has one search entry, Your Launchpad, optional chosen content, an optional current task and your selected Spaces. Use **Add** for suggested resources/tools, an address or a bookmark; **Edit** and tile long-press/context actions open organization controls. Reordering saves immediately; **Organize** opens a stable item panel for consecutive keyboard moves. Choose multiple suggestions or skip; nothing is inferred from history. The Home settings control manages shortcut density, visibility, collections and other Home sections.
+Use **Add** and **Edit** in Your Launchpad to save and organize local tools, articles and website records. Eligibility is checked again when opening a website. A saved unavailable candidate stays unavailable; its name, folder or category is never an exception. Optional Sports, Shopping and Learning collections follow your choices, with no interests inferred from browsing.
 
-The starter catalog contains 8 local tools, 18 reviewed original articles and 8 researched website candidates. ESPN, Walmart, Target, Best Buy, Home Depot, Wikipedia, NASA and Khan Academy are explicitly **inactive** website records in this build. Saving one requires acknowledgment, stores only a local record and submits nothing. No website is made navigable by its name, icon, folder or category. Exact blockers and the ESPN/Walmart research journeys are recorded in the compatibility review.
+Home customization saves section order, density, collections and an optional Earthrise, Forest or Creative desk photograph. Plain Home remains the default. Artwork and discovery previews are bundled locally, with readable captions and a **Photo credits** screen; no remote favicon, preview, recommendation or image-generation service is used. Image licenses and provenance are in [Photo credits](assets/discovery/LICENSES.md).
 
-For an eligible open article, **Menu → Add to Launchpad** previews a separate shortcut; Library offers the same explicit action for saved articles. Removing a shortcut does not delete its bookmark. Optional collection cards can save an eligible resource into a selected Space. Private customization stays in its temporary session; private pages cannot be pinned into normal Home. All artwork is local, with no favicon, title or preview fetch.
+Normal consumer preferences persist locally. Private customization uses separate temporary feature state and cannot pin private activity into normal Home. Student/unknown editions keep reviewed-session saves in memory. These application-state boundaries are separate from native website storage: Android disposable profiles can use temporary disk files; iOS uses a nonpersistent data store. Private mode does not hide your IP address from a requested website or erase device backups and external files.
 
-The focused search has an explicit Official choice. Use **Menu → Wingman tools** for Before You Commit, Spaces & Finish Mode, and Hand It Over. **Menu → Protection & settings** contains Trust Receipt and compatibility reporting. Settings, Reader and feature pages return to their originating session.
+**Menu → Wingman tools** opens Before You Commit, Spaces & Finish Mode, and Hand It Over. **Menu → Protection & settings** contains the protection explanation, Trust Receipt and a local compatibility report. Reports and clipboard exports are previewed; nothing is automatically submitted. Hand It Over remains a static public-text handoff without a website renderer or owner credentials. See [Handoff security](docs/HANDOFF_SECURITY.md).
 
-Create Home Projects, Learning and Sports yourself; nothing is inferred. Spaces contain notes/checklists and reviewed resources. Home Projects includes unit conversion; Sports uses your choices and reviewed official-source evidence, without a live score feed. Finish Mode owns only explicitly associated companion tabs. Finishing previews save/close choices and offers safe undo for normal task closure; private closure never restores destroyed data.
+## Privacy and operating cost
 
-Before You Commit accepts bounded pasted English text and the current signed article. Its clearly labeled practice example uses invented terms. Evidence is transient until an explicit local save; private analyses cannot be saved. Clipboard exports show their exact contents before copying and say that nothing was submitted.
+Opening an eligible page contacts that website and its permitted asset hosts directly. Wingman does not upload the browsing URL or page content to a Wingman server, Firebase, an analytics SDK or an AI classifier. Websites and network providers still observe ordinary connection metadata; native platform security services are not a promise of anonymous traffic.
 
-Native Hand It Over shares only a previewed static public text collection. Set and confirm a fresh owner-return code; remember it before starting. Handoff uses no website renderer or owner credentials. Web shows the feature as unavailable. See [handoff security](docs/HANDOFF_SECURITY.md) for supported boundaries and interrupted-return semantics.
+Policy decisions, the supported EasyPrivacy subset, artwork and application preferences are local. No Firebase/GCP project, paid API, deployment or recurring Browser service was added. Read-only cloud inventory found an existing Wingman-named project serving unrelated applications; it was left unchanged. This does not establish that the user's existing cloud bill is zero. See [Cloud cost plan](docs/CLOUD_COST_PLAN.md) for the verified inventory and a future static-update proposal with explicit cost limits and privacy tradeoffs.
 
-## Hot reload and rebuilds
+## Validation and maintenance
 
-`flutter run` works from a terminal, Codex, Android Studio or Xcode's Flutter workflow; VS Code is optional. While a debug run is attached, press `r` for hot reload, `R` for a full Dart restart and `q` to stop. Stateful initializers or schema changes may need a restart. Changes to Kotlin/Swift, native channels, plugins, entitlements, manifests, build settings or bundled assets require stopping and rebuilding. Rebuild the compiled web output and reload the preview after changes. Native release/AOT builds are tracked separately from debug validation.
-
-For web hot reload with a supported installed Chrome target:
-
-```sh
-flutter run -d chrome --web-port=8792
-```
-
-## Verification and scope
+The host suite passed **528 tests with two optional skips**. Native live journeys and the actual-app pin/revocation flow passed on dedicated Android and iOS simulators. See [Protected visual browsing QA](docs/PROTECTED_VISUAL_BROWSING_QA.md) for commands, observations and limits. Fresh native visual sign-off remains open because the Mac was locked during final capture attempts. A production store release, physical-device security audit and complete whole-web classification are not delivered by this pilot.
 
 ```sh
 flutter analyze --no-pub
 flutter test --no-pub
-flutter test integration_test/launchpad_app_test.dart --no-uninstall -d emulator-5556
-flutter test integration_test/launchpad_native_test.dart --no-uninstall -d emulator-5556
-flutter test integration_test/protected_app_test.dart --no-uninstall -d emulator-5556
-flutter test integration_test/signature_app_test.dart --no-uninstall -d emulator-5556
-flutter test integration_test/browser_engine_test.dart --no-uninstall -d emulator-5556
-flutter test integration_test/guard_engine_test.dart --no-uninstall -d emulator-5556
+flutter test integration_test/protected_live_native_test.dart --no-uninstall -d <device-id>
+flutter test integration_test/protected_live_app_test.dart --no-uninstall -d <device-id>
 ```
 
-Native test commands use `--no-uninstall` to preserve the installation; handoff restart testing requires it. The signature test creates clearly synthetic local records and deletes only its own records on success.
+The bridge fixture exercises independent request denials, supported public journeys and renderer cleanup. The actual-app fixture covers address entry, a completed-page Launchpad pin, reopening in a new tab and additional-restriction revocation. See [Protected visual browsing QA](docs/PROTECTED_VISUAL_BROWSING_QA.md) for measured results. Public sites and network conditions can change; an enabled manifest entry alone is not proof of a passed device run. `--no-uninstall` preserves the installation. Native integration tests also require the installed target/toolchain; consult individual fixtures before running them against personal state.
 
-The catalog expires on March 10, 2027. It uses a development signing key whose private seed is outside Git. A production review/signing/distribution operation is not delivered. Re-signing instructions are in [content policy](docs/CONTENT_POLICY.md).
+The signed offline article catalog separately expires on March 10, 2027 and uses a development signing key whose private seed is outside Git. The live network scope is pinned into the reviewed application build; it is not a remotely signed production publisher. Renewal requires review and a rebuilt app. See [Content policy](docs/CONTENT_POLICY.md) and [Live browsing policy](docs/LIVE_BROWSING_POLICY.md).
 
-See [signature feature status](docs/SIGNATURE_FEATURES_STATUS.md), [acceptance journeys](docs/FEATURE_ACCEPTANCE_TESTS.md), and [platform capabilities](docs/PLATFORM_CAPABILITIES.md) for honest per-feature coverage and remaining release blockers.
-
-Review [actual screenshots](docs/SIGNATURE_SCREENSHOTS.md). The example Spaces and terms in those captures were created for review.
-
-Read [migration](docs/PERMANENT_PROTECTION_MIGRATION.md), [coverage](docs/FILTER_COVERAGE_AND_LIMITATIONS.md), [search](docs/SEARCH_ENFORCEMENT.md), [privacy](docs/PRIVACY_ARCHITECTURE.md), [school deployment](docs/SCHOOL_DEPLOYMENT.md), [monetization](docs/MONETIZATION_POLICY.md), and [release readiness](docs/RELEASE_READINESS.md). The [security matrix](docs/SECURITY_TEST_MATRIX.md) separates actual native observations from compilation and deferred capabilities.
-
-Phase 1–3A documents and [the earlier README](docs/history/README_PHASE3A.md) are historical. Their optional Guard, allowed live-page, ad, Reader, external search, and import/export behavior is superseded by 0.4. Earlier tests that required those capabilities were retired; they are not counted as passes for this milestone.
+The [screen registry](docs/ui/SCREEN_REGISTRY.md), [design system](docs/ui/DESIGN_SYSTEM.md) and [Launchpad specification](docs/ui/LAUNCHPAD_SPEC.md) explain the existing product. Previous [Launchpad QA](docs/ui/LAUNCHPAD_QA.md), [signature status](docs/SIGNATURE_FEATURES_STATUS.md), [privacy architecture](docs/PRIVACY_ARCHITECTURE.md), [platform capabilities](docs/PLATFORM_CAPABILITIES.md) and [release readiness](docs/RELEASE_READINESS.md) record earlier milestones; their blanket no-live-network/no-renderer statements and test totals are superseded for v0.8 by the live status and policy documents. They are not new pilot acceptance evidence. Phase 1–3A documents and [the earlier README](docs/history/README_PHASE3A.md) remain historical.

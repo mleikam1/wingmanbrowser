@@ -4,19 +4,44 @@ import '../config/product_edition.dart';
 import 'policy_checkpoint_store.dart';
 import 'policy_models.dart';
 import 'signed_policy_repository.dart';
+import 'live_browsing_policy.dart';
 
 export 'policy_models.dart';
 export 'signed_policy_repository.dart';
 export 'policy_checkpoint_store.dart';
+export 'live_browsing_policy.dart';
 
 class ContentEligibilityService {
   ContentEligibilityService(this.repository);
   final SignedPolicyRepository repository;
+  LiveBrowsingPolicy? livePolicy;
+  bool nativeLiveAvailable = false, privateLiveAvailable = false;
   PolicyDecision evaluate(
     PolicyRequest request, {
     AdditionalRestrictions? additional,
   }) {
-    // Capability is compiled, not granted by a role, JSON field or signed host.
+    if (request.operation == PolicyOperation.navigate && request.uri != null) {
+      if (!nativeLiveAvailable ||
+          (request.isPrivate && !privateLiveAvailable) ||
+          livePolicy == null) {
+        return const PolicyDecision(
+          PolicyDecisionCode.blockUnsupportedCapability,
+        );
+      }
+      if (!repository.status.usable) {
+        return const PolicyDecision(PolicyDecisionCode.blockPolicyUnavailable);
+      }
+      return livePolicy!.assessNavigation(
+        request.uri!,
+        context: productEdition == ProductEdition.consumer
+            ? request.context
+            : ContentContext.student,
+        additional: additional,
+        now: repository.clock.now(),
+      );
+    }
+    // Other capabilities remain unavailable; live navigation has its separate
+    // immutable reviewed scope plus independent native resource enforcement.
     if (request.operation != PolicyOperation.renderBundled ||
         request.uri != null) {
       return const PolicyDecision(
@@ -70,6 +95,27 @@ class PolicyRuntime extends ChangeNotifier {
   List<ApprovedResource> get catalog => repository.resources;
   PolicyStatus get status => repository.status;
   PolicyClock get clock => repository.clock;
+  List<LiveSiteRecord> get liveSites => policy.livePolicy?.sites ?? const [];
+  bool liveAvailable({bool isPrivate = false}) =>
+      status.usable &&
+      policy.nativeLiveAvailable &&
+      (!isPrivate || policy.privateLiveAvailable) &&
+      (policy.livePolicy?.isUsable(now: clock.now()) ?? false);
+
+  /// Native capability is observed after startup quarantine; it is never loaded
+  /// from preferences, a Launchpad record, user role or remote allow flag.
+  void configureLiveBrowsing(
+    LiveBrowsingPolicy reviewed, {
+    required bool nativeAvailable,
+    required bool privateAvailable,
+  }) {
+    policy.livePolicy = reviewed;
+    policy.nativeLiveAvailable = nativeAvailable;
+    policy.privateLiveAvailable = privateAvailable;
+    _schedule();
+    if (!_disposed) notifyListeners();
+  }
+
   ApprovedResource? resource(String id) =>
       catalog.where((r) => r.id == id).firstOrNull;
 
@@ -160,7 +206,14 @@ class PolicyRuntime extends ChangeNotifier {
     _timer?.cancel();
     if (!status.usable || catalog.isEmpty) return;
     var wait = const Duration(minutes: 1);
-    final expires = repository.nextExpiry;
+    final now = clock.now();
+    final expiries = [
+      ?repository.nextExpiry,
+      ?policy.livePolicy?.expiresAt,
+      for (final site in liveSites.where((site) => site.enabled))
+        site.expiresAt,
+    ].where((expiry) => expiry.isAfter(now)).toList()..sort();
+    final expires = expiries.firstOrNull;
     if (expires != null) {
       final remaining = expires.difference(clock.now());
       if (remaining.isNegative || remaining == Duration.zero) {

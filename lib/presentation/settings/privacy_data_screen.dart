@@ -198,7 +198,11 @@ class _PrivacyDataScreenState extends State<PrivacyDataScreen>
                 Text(
                   widget.isPrivate
                       ? 'Private tools and activity stay in this session. Normal library data and quarantine counts are hidden here.'
-                      : 'Reviewed bookmarks, reading state and Launchpad choices stay in local storage. Launchpad includes saved addresses, folder names and selected collection sources; they are not sent to a service or added to the Trust Receipt. Notes, tasks and saved findings are deleted within their tools. The Trust Receipt retains up to 200 typed events for 14 days; closed apps cannot run retention cleanup.',
+                      : 'Reviewed bookmarks, reading state and Launchpad choices stay in local storage. Saving addresses, folder names and selected sources does not upload them or add them to the Trust Receipt. Opening an eligible website contacts that website and its permitted asset hosts. Notes, tasks and saved findings are deleted within their tools. The Trust Receipt retains up to 200 typed events for 14 days; closed apps cannot run retention cleanup.',
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Live websites and network providers can observe connection information such as your IP address, including in private mode. No Wingman server receives pages or images for classification.',
                 ),
                 const SizedBox(height: 16),
                 if (!widget.isPrivate) ...[
@@ -268,7 +272,7 @@ class _PrivacyDataScreenState extends State<PrivacyDataScreen>
                   ),
                 const SizedBox(height: 24),
                 const Text(
-                  'Live website storage, new downloads and browsing history are not created by this offline-library build. Completed legacy download files are preserved. Exported receipts and reports are outside Wingman’s deletion boundary.',
+                  'Website views use disposable data: Android profiles can use temporary disk files; iOS uses a nonpersistent website store. This pilot does not save website browsing history or create downloads. Explicit Launchpad pins remain local until removed. Closing a view does not erase device backups or copies held elsewhere. Completed legacy downloads, exported receipts and reports are outside Wingman’s deletion boundary.',
                 ),
                 TextButton(
                   onPressed: () {
