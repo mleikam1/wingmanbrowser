@@ -51,7 +51,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         const WingmanStatus(
           title: 'Protection is part of Wingman',
           message:
-              'Core boundaries apply in every session. This version opens a small signed library of reviewed offline text. Live websites and downloads are unavailable.',
+              'Explore the reviewed offline library. Supported Android and iOS apps also open a limited set of reviewed websites and text-only DuckDuckGo searches with required Strict adult filtering. Search previews are not classified against all Wingman content rules. Downloads remain unavailable.',
         ),
         const SizedBox(height: 20),
         const Text(

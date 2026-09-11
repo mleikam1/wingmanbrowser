@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../presentation/app_route_observer.dart';
+import '../policy/strict_search_policy.dart';
 
 /// A separate, restricted bridge. Retired browser commands remain retired.
 /// Native code independently checks its build-pinned website/resource manifest.
@@ -24,6 +25,10 @@ abstract final class ProtectedWebBridge {
             result?['supported'] == true &&
             result?['mode'] == 'reviewedScriptlessWeb',
         privateAvailable: result?['privateAvailable'] == true,
+        strictSearchAvailable:
+            result?['supported'] == true &&
+            result?['mode'] == 'reviewedScriptlessWeb' &&
+            result?['strictSearchAvailable'] == true,
       );
     } catch (_) {
       return const ProtectedWebCapabilities();
@@ -51,8 +56,9 @@ class ProtectedWebCapabilities {
   const ProtectedWebCapabilities({
     this.supported = false,
     this.privateAvailable = false,
+    this.strictSearchAvailable = false,
   });
-  final bool supported, privateAvailable;
+  final bool supported, privateAvailable, strictSearchAvailable;
 }
 
 class ProtectedWebStatus {
@@ -126,11 +132,16 @@ class ProtectedWebController extends ChangeNotifier {
         await stopping;
         return;
       }
-      await ProtectedWebBridge.channel.invokeMethod<void>('open', {
-        'viewId': id,
-        'url': uri.toString(),
-        'requestId': request,
-      });
+      final search = const StrictSearchPolicy().acceptsCanonical(uri);
+      await ProtectedWebBridge.channel
+          .invokeMethod<void>(search ? 'openSearch' : 'open', {
+            'viewId': id,
+            if (search)
+              'query': uri.queryParameters['q']
+            else
+              'url': uri.toString(),
+            'requestId': request,
+          });
     } catch (_) {
       if (!_disposed && request == _requestId) {
         _failure('This page could not open with the required protections.');

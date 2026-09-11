@@ -107,7 +107,7 @@ class CompatibilityReport {
     '',
     'No full address, query, page text, screenshot, cookies, credentials, device identifier or network trace is included.',
     'A compatibility report does not approve content or relax protection.',
-    'Native website support is limited to reviewed document/image/style scopes. Scripts, sign-in, embedded media and uploads/downloads remain unavailable; this report grants no access.',
+    'Native destination browsing is limited to reviewed document/image/style scopes. Supported native sessions offer separate provider-Strict text search whose previews are not fully classified by Wingman. Scripts, sign-in, embedded media and uploads/downloads remain unavailable; this report grants no access.',
   ].join('\n');
 
   static DateTime _hour(DateTime date) {

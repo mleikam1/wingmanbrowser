@@ -20,6 +20,8 @@ final class ProtectedWebBridge: NSObject, FlutterPlatformViewFactory {
   private var handoffBlocked = false
   private var cleanupPending = false
   private var compiled: [String: WKContentRuleList] = [:]
+  private var searchRules: WKContentRuleList?
+  private var searchRuleCompilationCount = 0
   private var preparing = false
   private var ruleCompilationCount = 0
   private var preparationWaiters: [() -> Void] = []
@@ -61,8 +63,22 @@ final class ProtectedWebBridge: NSObject, FlutterPlatformViewFactory {
         }
       }
     }
+    // This fixed rule list contains no query, so private searches leave no
+    // query-dependent entry in WebKit's persistent compiled-rule store.
+    var preparedSearch: WKContentRuleList?
+    if let rules = strictSearchContentRuleJSON() {
+      group.enter()
+      searchRuleCompilationCount += 1
+      WKContentRuleListStore.default().compileContentRuleList(forIdentifier: "wingman-strict-search-v1-lr48ddfe4eadf6a534e93f", encodedContentRuleList: rules) { list, error in
+        DispatchQueue.main.async {
+          if error == nil { preparedSearch = list }
+          group.leave()
+        }
+      }
+    }
     group.notify(queue: .main) {
       self.compiled = prepared
+      self.searchRules = preparedSearch
       self.ready = !failed && self.catalog.valid && prepared.count == self.catalog.reviewedSites.count
       self.preparing = false
       let waiters = self.preparationWaiters
@@ -80,16 +96,21 @@ final class ProtectedWebBridge: NSObject, FlutterPlatformViewFactory {
   fileprivate func remove(_ id: Int64) { views.removeValue(forKey: id) }
   fileprivate var mayOpen: Bool { platformSupported && ready && foreground && !handoffBlocked && !cleanupPending && catalog.valid }
   fileprivate func approved(_ url: String) -> ProtectedSite? { mayOpen ? catalog.document(protectedCanonical(url) ?? "") : nil }
+  fileprivate func permits(_ url: String, site: ProtectedSite?) -> Bool {
+    guard mayOpen, let site = site, Date() < site.expires else { return false }
+    if site.search { return searchRules != nil && site.documents[url] != nil }
+    return approved(url) != nil
+  }
   fileprivate func emit(_ event: String, _ data: [String: Any]) { channel.invokeMethod(event, arguments: data) }
   private func error(_ result: FlutterResult) { result(FlutterError(code: "protected_navigation_denied", message: "This page is outside the current reviewed website scope.", details: nil)) }
   private func handle(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
     let args = call.arguments as? [String: Any] ?? [:]
     if call.method == "capabilities" {
       let supported = platformSupported && ready && !cleanupPending && catalog.valid
-      result(["supported": supported, "privateAvailable": supported, "mode": "reviewedScriptlessWeb", "reason": supported ? NSNull() as Any : (!platformSupported ? "Protected visual browsing requires iOS 18.4 or later." : "Reviewed website protection is unavailable.") as Any ]); return
+      result(["supported": supported, "privateAvailable": supported, "strictSearchAvailable": mayOpen && searchRules != nil, "mode": "reviewedScriptlessWeb", "reason": supported ? NSNull() as Any : (!platformSupported ? "Protected visual browsing requires iOS 18.4 or later." : "Reviewed website protection is unavailable.") as Any ]); return
     }
     if call.method == "state", args["viewId"] == nil {
-      result(["views": retainedViews.filter { $0.hasRenderer }.count, "ready": ready, "foreground": foreground, "handoffBlocked": handoffBlocked, "cleanupPending": cleanupPending, "catalogValid": catalog.valid, "preparedRuleSets": compiled.count, "ruleCompilationCount": ruleCompilationCount]); return
+      result(["views": retainedViews.filter { $0.hasRenderer }.count, "ready": ready, "foreground": foreground, "handoffBlocked": handoffBlocked, "cleanupPending": cleanupPending, "catalogValid": catalog.valid, "preparedRuleSets": compiled.count, "ruleCompilationCount": ruleCompilationCount, "searchRulesPrepared": searchRules != nil, "searchRuleCompilationCount": searchRuleCompilationCount]); return
     }
     guard let id = (args["viewId"] as? NSNumber)?.int64Value, let view = views[id]?.value else { error(result); return }
     switch call.method {
@@ -101,7 +122,16 @@ final class ProtectedWebBridge: NSObject, FlutterPlatformViewFactory {
       view.begin(url: raw, request: request, site: site)
       guard let list = compiled[site.id] else { view.fail(); error(result); return }
       view.open(list: list); result(nil)
-
+    case "openSearch":
+      guard mayOpen, let list = searchRules, let query = args["query"] as? String,
+        let raw = strictSearchURL(query), let request = (args["requestId"] as? NSNumber)?.int64Value,
+        request > view.requestId else { error(result); return }
+      let site = ProtectedSite(id: "strict-search", title: "DuckDuckGo Strict search", expires: catalog.expiry,
+        documents: [raw: ProtectedEntry(url: raw, type: "document", mimeTypes: ["text/html"], maxBytes: 1024 * 1024)],
+        resources: [strictSearchCSS: ProtectedEntry(url: strictSearchCSS, type: "styleSheet", mimeTypes: ["text/css"], maxBytes: 64 * 1024)], search: true)
+      view.release()
+      view.begin(url: raw, request: request, site: site)
+      view.open(list: list); result(nil)
     case "close": view.release(); views.removeValue(forKey: id); result(nil)
     case "stop": view.release(); result(nil)
     case "setActive":
@@ -137,7 +167,7 @@ private final class ProtectedWebView: NSObject, FlutterPlatformView, WKNavigatio
   private var errorText: String?
   private var approvedInitialRequest = false
   var hasRenderer: Bool { web != nil }
-  var state: [String: Any] { ["viewId": id, "requestId": requestId, "url": currentURL, "title": site?.title ?? "", "progress": progress, "isLoading": loading, "error": errorText ?? NSNull() as Any, "blockedResources": NSNull(), "loadedResources": NSNull(), "bytesReceived": NSNull(), "hasRenderer": hasRenderer, "private": privateMode, "javascript": web?.configuration.defaultWebpagePreferences.allowsContentJavaScript ?? false, "resourceRulesInstalled": hasRenderer] }
+  var state: [String: Any] { ["viewId": id, "requestId": requestId, "url": currentURL, "title": site?.title ?? "", "progress": progress, "isLoading": loading, "error": errorText ?? NSNull() as Any, "blockedResources": NSNull(), "loadedResources": NSNull(), "bytesReceived": NSNull(), "hasRenderer": hasRenderer, "private": privateMode, "javascript": web?.configuration.defaultWebpagePreferences.allowsContentJavaScript ?? false, "resourceRulesInstalled": hasRenderer, "strictSearch": site?.search == true] }
   init(frame: CGRect, id: Int64, tabId: String, privateMode: Bool, bridge: ProtectedWebBridge) {
     self.id = id; self.tabId = tabId; self.privateMode = privateMode; self.bridge = bridge
     container = UIView(frame: frame)
@@ -151,10 +181,11 @@ private final class ProtectedWebView: NSObject, FlutterPlatformView, WKNavigatio
     guard let view = web else { result(state); return }
     let generation = requestId
     // A fixed read-only expression returns counts, never text, URLs or page data.
-    view.evaluateJavaScript("({externalStyleSheets:Array.from(document.styleSheets).filter(function(s){return !!s.href}).length,imagesTotal:document.images.length,imagesComplete:Array.from(document.images).filter(function(i){return i.complete&&i.naturalWidth>0&&i.naturalHeight>0}).length})") { [weak self, weak view] value, error in
+    view.evaluateJavaScript("({searchResultLinks:document.querySelectorAll('a.result-link').length,externalStyleSheets:Array.from(document.styleSheets).filter(function(s){return !!s.href}).length,imagesTotal:document.images.length,imagesComplete:Array.from(document.images).filter(function(i){return i.complete&&i.naturalWidth>0&&i.naturalHeight>0}).length})") { [weak self, weak view] value, error in
       guard let self = self else { result([:]); return }
       var data = self.state
       if view === self.web, generation == self.requestId, error == nil, let counts = value as? [String: Any] {
+        data["searchResultLinks"] = self.site?.search == true ? counts["searchResultLinks"] as? Int ?? NSNull() as Any : NSNull() as Any
         data["externalStyleSheets"] = counts["externalStyleSheets"] as? Int ?? NSNull() as Any
         data["imagesTotal"] = counts["imagesTotal"] as? Int ?? NSNull() as Any
         data["imagesComplete"] = counts["imagesComplete"] as? Int ?? NSNull() as Any
@@ -168,7 +199,7 @@ private final class ProtectedWebView: NSObject, FlutterPlatformView, WKNavigatio
     emit()
   }
   func open(list: WKContentRuleList) {
-    guard pending, let bridge = bridge, bridge.mayOpen, bridge.approved(currentURL) != nil,
+    guard pending, let bridge = bridge, bridge.permits(currentURL, site: site),
       !tabId.isEmpty, tabId.count <= 100, let url = URL(string: currentURL), let site = site else { fail(); return }
     let configuration = WKWebViewConfiguration()
     configuration.websiteDataStore = .nonPersistent()
@@ -208,16 +239,17 @@ private final class ProtectedWebView: NSObject, FlutterPlatformView, WKNavigatio
     web?.stopLoading(); web?.isHidden = true; web?.navigationDelegate = nil; web?.uiDelegate = nil
     web?.removeFromSuperview(); web = nil
   }
-  func fail() { release(); errorText = "This page could not load within its reviewed website scope."; emit() }
+  func fail() { release(); errorText = site?.search == true ? "Strict search is unavailable. Wingman did not open another search endpoint." : "This page could not load within its reviewed website scope."; emit() }
   func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
-    guard webView === web, pending, bridge?.mayOpen == true, action.targetFrame?.isMainFrame == true,
-      action.request.httpMethod == "GET", let raw = action.request.url?.absoluteString,
+    guard webView === web, pending, bridge?.mayOpen == true, let raw = action.request.url?.absoluteString,
       let url = protectedCanonical(raw) else { decisionHandler(.cancel); return }
-    if approvedInitialRequest && action.navigationType == .other && url == protectedCanonical(currentURL) && bridge?.approved(url) != nil {
+    if protectedAllowsInitialNavigation(isMainFrame: action.targetFrame?.isMainFrame == true,
+      method: action.request.httpMethod, requestedURL: url, currentURL: protectedCanonical(currentURL) ?? "",
+      initial: approvedInitialRequest && action.navigationType == .other, scopePermitted: bridge?.permits(url, site: site) == true) {
       approvedInitialRequest = false; decisionHandler(.allow); return
     }
     decisionHandler(.cancel)
-    if action.navigationType == .linkActivated {
+    if action.targetFrame?.isMainFrame == true && action.request.httpMethod == "GET" && action.navigationType == .linkActivated {
       bridge?.emit("navigationRequested", ["viewId": id, "requestId": requestId, "url": raw])
     }
   }
@@ -238,7 +270,7 @@ private final class ProtectedWebView: NSObject, FlutterPlatformView, WKNavigatio
   }
   func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
     guard webView === web else { return }
-    guard pending, bridge?.approved(currentURL) != nil else { fail(); return }
+    guard pending, bridge?.permits(currentURL, site: site) == true else { fail(); return }
     loading = false; progress = 100; emit()
   }
   func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) { if webView === web { fail() } }
@@ -267,12 +299,14 @@ private struct ProtectedSite {
   let expires: Date
   let documents: [String: ProtectedEntry]
   let resources: [String: ProtectedEntry]
+  var search = false
 }
 private final class ProtectedCatalog {
   private var sites: [ProtectedSite] = []
   private var expires = Date.distantPast
   private var privacyDomains = Set<String>()
   var valid: Bool { Date() < expires && sites.contains { Date() < $0.expires } }
+  var expiry: Date { expires }
   var reviewedSites: [ProtectedSite] { sites.sorted { $0.id < $1.id } }
   init(path: String?) {
     do {
@@ -346,4 +380,77 @@ private func protectedCanonical(_ raw: String) -> String? {
   components.fragment = nil
   if components.path.isEmpty { components.path = "/" }
   return components.string
+}
+
+private let strictSearchCSS = "https://safe.duckduckgo.com/dist/lr.48ddfe4eadf6a534e93f.css"
+
+/// No page/query-derived rules are written to WebKit's persistent rule store.
+func strictSearchContentRuleJSON(documentOrigin: String = "https://safe.duckduckgo.com", styleURL: String = "https://safe.duckduckgo.com/dist/lr.48ddfe4eadf6a534e93f.css") -> String? {
+  let rules: [[String: Any]] = [
+    ["trigger": ["url-filter": ".*"], "action": ["type": "block"]],
+    ["trigger": ["url-filter": "^" + NSRegularExpression.escapedPattern(for: documentOrigin) + "/lite/\\?q=[A-Za-z0-9._~%\\-]+&kp=1$", "url-filter-is-case-sensitive": true, "resource-type": ["document"]], "action": ["type": "ignore-previous-rules"]],
+    ["trigger": ["url-filter": "^" + NSRegularExpression.escapedPattern(for: styleURL) + "$", "url-filter-is-case-sensitive": true, "resource-type": ["style-sheet"]], "action": ["type": "ignore-previous-rules"]],
+    ["trigger": ["url-filter": ".*"], "action": ["type": "block-cookies"]],
+    ["trigger": ["url-filter": ".*"], "action": ["type": "css-display-none", "selector": "input,textarea,select,[contenteditable]"]],
+  ]
+  guard let bytes = try? JSONSerialization.data(withJSONObject: rules) else { return nil }
+  return String(data: bytes, encoding: .utf8)
+}
+
+/// Shared with the owned WebKit fixture. Resource rules alone do not grant
+/// navigation: only the explicitly opened, current top-level GET may proceed.
+func protectedAllowsInitialNavigation(isMainFrame: Bool, method: String?, requestedURL: String, currentURL: String, initial: Bool, scopePermitted: Bool) -> Bool {
+  isMainFrame && method == "GET" && initial && scopePermitted && requestedURL == currentURL
+}
+
+/// Independent native serialization; no settings URL or caller policy is accepted.
+func strictSearchURL(_ input: String) -> String? {
+  guard input.utf16.count <= 8192 else { return nil }
+  func control(_ value: UInt32) -> Bool {
+    value <= 0x1f || (0x7f...0x9f).contains(value) || value == 0x061c || value == 0x200e || value == 0x200f || (0x2028...0x202e).contains(value) || (0x2066...0x2069).contains(value)
+  }
+  func trimSpace(_ value: UInt32) -> Bool {
+    value == 0x20 || value == 0xa0 || value == 0x1680 || (0x2000...0x200a).contains(value) || value == 0x202f || value == 0x205f || value == 0x3000 || value == 0xfeff
+  }
+  let scalars = Array(input.unicodeScalars)
+  guard !scalars.contains(where: { control($0.value) }) else { return nil }
+  var start = 0
+  var end = scalars.count
+  while start < end && trimSpace(scalars[start].value) { start += 1 }
+  while end > start && trimSpace(scalars[end - 1].value) { end -= 1 }
+  guard (1...512).contains(end - start) else { return nil }
+  let value = String(String.UnicodeScalarView(scalars[start..<end]))
+  let bytes = Array(value.utf8)
+  guard bytes.count <= 1024, let encodedRun = try? NSRegularExpression(pattern: "(?:%[0-9a-fA-F]{2})+") else { return nil }
+  var probe = value
+  for round in 0...8 {
+    probe = String(String.UnicodeScalarView(probe.unicodeScalars.map { scalar in
+      let code = scalar.value
+      return UnicodeScalar((0xff01...0xff5e).contains(code) ? code - 0xfee0 : code == 0xfe57 ? 0x21 : code == 0xfe68 ? 0x5c : code)!
+    }))
+    guard !probe.unicodeScalars.contains(where: { control($0.value) || $0.value == 0x21 || $0.value == 0x5c }) else { return nil }
+    let matches = encodedRun.matches(in: probe, range: NSRange(probe.startIndex..., in: probe))
+    if matches.isEmpty {
+      let hex = Array("0123456789ABCDEF".utf8)
+      var encoded = [UInt8]()
+      for byte in bytes {
+        if (0x41...0x5a).contains(byte) || (0x61...0x7a).contains(byte) || (0x30...0x39).contains(byte) || [0x2d, 0x2e, 0x5f, 0x7e].contains(byte) { encoded.append(byte) }
+        else { encoded += [0x25, hex[Int(byte >> 4)], hex[Int(byte & 15)]] }
+      }
+      return "https://safe.duckduckgo.com/lite/?q=" + String(decoding: encoded, as: UTF8.self) + "&kp=1"
+    }
+    guard round < 8 else { return nil }
+    for match in matches.reversed() {
+      guard let range = Range(match.range, in: probe) else { return nil }
+      let encoded = Array(probe[range].utf8)
+      var decoded = [UInt8]()
+      for index in stride(from: 0, to: encoded.count, by: 3) {
+        guard let byte = UInt8(String(decoding: encoded[(index + 1)...(index + 2)], as: UTF8.self), radix: 16) else { return nil }
+        decoded.append(byte)
+      }
+      guard let replacement = String(bytes: decoded, encoding: .utf8) else { return nil }
+      probe.replaceSubrange(range, with: replacement)
+    }
+  }
+  return nil
 }

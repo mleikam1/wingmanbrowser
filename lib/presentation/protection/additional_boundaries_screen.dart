@@ -95,14 +95,14 @@ class _AdditionalBoundariesScreenState
       final collections = {
         ...resources.map((r) => r.collection),
         ...sites.map((s) => s.collection),
-      }.toList()..sort();
+      }.where((collection) => collection != 'web-search').toList()..sort();
       return WingmanPage(
         title: 'Additional boundaries',
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Choose less of the reviewed library and supported websites. Removing an additional boundary never approves prohibited, expired, unsupported or unreviewed content.',
+              'Choose less of the reviewed library and supported websites, or disable web search. Removing an additional boundary never lowers the fixed search filter or approves an unreviewed destination.',
             ),
             if (widget.isPrivate)
               const WingmanStatus(
@@ -111,6 +111,23 @@ class _AdditionalBoundariesScreenState
                     'Your existing additional boundaries apply here. Change them from a normal session; private controls cannot alter the owner’s preferences.',
                 tone: WingmanTone.info,
               ),
+            const SizedBox(height: 20),
+            const WingmanSection(title: 'Web search'),
+            SwitchListTile(
+              key: const ValueKey('disable-web-search'),
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Disable web search'),
+              subtitle: const Text(
+                'Keep search on this device’s reviewed library. This saved boundary also applies to private tabs and cannot change DuckDuckGo’s fixed Strict adult filter.',
+              ),
+              value: restrictions.blockedCollections.contains('web-search'),
+              onChanged: _busy || widget.isPrivate
+                  ? null
+                  : (v) => _change(collection: 'web-search', hidden: v),
+            ),
+            const Text(
+              'When available, live search sends submitted queries directly to DuckDuckGo and shows its first, text-only results page. Results and ads are not classified against all six Wingman rules. Only reviewed destination pages can open.',
+            ),
             const SizedBox(height: 20),
             const WingmanSection(title: 'Collections'),
             for (final collection in collections)

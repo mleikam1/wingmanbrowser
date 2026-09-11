@@ -1,0 +1,832 @@
+{
+  "schemaVersion": 1,
+  "providerId": "duckduckgo-strict",
+  "canonicalPrefix": "https://safe.duckduckgo.com/lite/?q=",
+  "canonicalSuffix": "&kp=1",
+  "maxUnicodeScalars": 512,
+  "maxUtf8Bytes": 1024,
+  "notes": [
+    "Inputs are synthetic public test strings; no network is required.",
+    "Only buildQuery and acceptsCanonical are native renderer gate operations; rewrite/unwrap are local routing helpers.",
+    "A valid search URL or extracted target grants no renderer or destination permission.",
+    "Query encoding is RFC3986 unreserved with uppercase percent bytes; whitespace trim uses explicit portable scalar set in implementation."
+  ],
+  "cases": [
+    {
+      "operation": "buildQuery",
+      "name": "ordinary terms",
+      "input": "moon phases",
+      "expected": "https://safe.duckduckgo.com/lite/?q=moon%20phases&kp=1"
+    },
+    {
+      "operation": "buildQuery",
+      "name": "trim ASCII spaces",
+      "input": "  moon phases  ",
+      "expected": "https://safe.duckduckgo.com/lite/?q=moon%20phases&kp=1"
+    },
+    {
+      "operation": "buildQuery",
+      "name": "UTF8 accented query",
+      "input": "café",
+      "expected": "https://safe.duckduckgo.com/lite/?q=caf%C3%A9&kp=1"
+    },
+    {
+      "operation": "buildQuery",
+      "name": "literal plus",
+      "input": "C++",
+      "expected": "https://safe.duckduckgo.com/lite/?q=C%2B%2B&kp=1"
+    },
+    {
+      "operation": "buildQuery",
+      "name": "ordinary percent",
+      "input": "50% discount",
+      "expected": "https://safe.duckduckgo.com/lite/?q=50%25%20discount&kp=1"
+    },
+    {
+      "operation": "buildQuery",
+      "name": "quotes punctuation",
+      "input": "\"moon\" (facts)",
+      "expected": "https://safe.duckduckgo.com/lite/?q=%22moon%22%20%28facts%29&kp=1"
+    },
+    {
+      "operation": "buildQuery",
+      "name": "site syntax is not permission",
+      "input": "moon site:nasa.gov",
+      "expected": "https://safe.duckduckgo.com/lite/?q=moon%20site%3Anasa.gov&kp=1"
+    },
+    {
+      "operation": "buildQuery",
+      "name": "health education is not a banned keyword",
+      "input": "breast cancer education",
+      "expected": "https://safe.duckduckgo.com/lite/?q=breast%20cancer%20education&kp=1"
+    },
+    {
+      "operation": "buildQuery",
+      "name": "non-Latin query",
+      "input": "月の満ち欠け",
+      "expected": "https://safe.duckduckgo.com/lite/?q=%E6%9C%88%E3%81%AE%E6%BA%80%E3%81%A1%E6%AC%A0%E3%81%91&kp=1"
+    },
+    {
+      "operation": "buildQuery",
+      "name": "astral scalar",
+      "input": "moon 🌙",
+      "expected": "https://safe.duckduckgo.com/lite/?q=moon%20%F0%9F%8C%99&kp=1"
+    },
+    {
+      "operation": "buildQuery",
+      "name": "portable Unicode trim",
+      "input": "     　﻿moon﻿　",
+      "expected": "https://safe.duckduckgo.com/lite/?q=moon&kp=1"
+    },
+    {
+      "operation": "buildQuery",
+      "name": "preserve harmless literal encoded text",
+      "input": "%20moon%20",
+      "expected": "https://safe.duckduckgo.com/lite/?q=%2520moon%2520&kp=1"
+    },
+    {
+      "operation": "buildQuery",
+      "name": "maximum ASCII characters",
+      "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected": "https://safe.duckduckgo.com/lite/?q=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&kp=1"
+    },
+    {
+      "operation": "buildQuery",
+      "name": "maximum two-byte UTF8",
+      "input": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé",
+      "expected": "https://safe.duckduckgo.com/lite/?q=%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9&kp=1"
+    },
+    {
+      "operation": "buildQuery",
+      "name": "maximum astral bytes",
+      "input": "🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙",
+      "expected": "https://safe.duckduckgo.com/lite/?q=%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99&kp=1"
+    },
+    {
+      "operation": "buildQuery",
+      "name": "empty",
+      "input": "",
+      "throwsFormatException": true
+    },
+    {
+      "operation": "buildQuery",
+      "name": "only spaces",
+      "input": "   ",
+      "throwsFormatException": true
+    },
+    {
+      "operation": "buildQuery",
+      "name": "leading newline",
+      "input": "\nmoon",
+      "throwsFormatException": true
+    },
+    {
+      "operation": "buildQuery",
+      "name": "trailing tab",
+      "input": "moon\t",
+      "throwsFormatException": true
+    },
+    {
+      "operation": "buildQuery",
+      "name": "NUL",
+      "input": "moon\u0000",
+      "throwsFormatException": true
+    },
+    {
+      "operation": "buildQuery",
+      "name": "C1 control",
+      "input": "moon",
+      "throwsFormatException": true
+    },
+    {
+      "operation": "buildQuery",
+      "name": "bidi override",
+      "input": "moon‮",
+      "throwsFormatException": true
+    },
+    {
+      "operation": "buildQuery",
+      "name": "Arabic letter mark",
+      "input": "؜moon",
+      "throwsFormatException": true
+    },
+    {
+      "operation": "buildQuery",
+      "name": "line separator",
+      "input": "moon ",
+      "throwsFormatException": true
+    },
+    {
+      "operation": "buildQuery",
+      "name": "isolate",
+      "input": "moon⁧",
+      "throwsFormatException": true
+    },
+    {
+      "operation": "buildQuery",
+      "name": "bang provider",
+      "input": "!g moon",
+      "throwsFormatException": true
+    },
+    {
+      "operation": "buildQuery",
+      "name": "bang suffix",
+      "input": "moon !safeoff",
+      "throwsFormatException": true
+    },
+    {
+      "operation": "buildQuery",
+      "name": "quoted bang",
+      "input": "\"!safeoff\"",
+      "throwsFormatException": true
+    },
+    {
+      "operation": "buildQuery",
+      "name": "direct result",
+      "input": "\\moon",
+      "throwsFormatException": true
+    },
+    {
+      "operation": "buildQuery",
+      "name": "fullwidth bang",
+      "input": "！safeoff",
+      "throwsFormatException": true
+    },
+    {
+      "operation": "buildQuery",
+      "name": "small bang",
+      "input": "﹗safeoff",
+      "throwsFormatException": true
+    },
+    {
+      "operation": "buildQuery",
+      "name": "fullwidth backslash",
+      "input": "＼moon",
+      "throwsFormatException": true
+    },
+    {
+      "operation": "buildQuery",
+      "name": "small backslash",
+      "input": "﹨moon",
+      "throwsFormatException": true
+    },
+    {
+      "operation": "buildQuery",
+      "name": "encoded bang",
+      "input": "%21safeoff",
+      "throwsFormatException": true
+    },
+    {
+      "operation": "buildQuery",
+      "name": "double encoded bang",
+      "input": "%2521safeoff",
+      "throwsFormatException": true
+    },
+    {
+      "operation": "buildQuery",
+      "name": "encoded fullwidth bang",
+      "input": "%EF%BC%81safeoff",
+      "throwsFormatException": true
+    },
+    {
+      "operation": "buildQuery",
+      "name": "fullwidth encoded bang",
+      "input": "％２１safeoff",
+      "throwsFormatException": true
+    },
+    {
+      "operation": "buildQuery",
+      "name": "mixed literal percent and bang",
+      "input": "50% off %21safeoff",
+      "throwsFormatException": true
+    },
+    {
+      "operation": "buildQuery",
+      "name": "encoded backslash",
+      "input": "%5cmoon",
+      "throwsFormatException": true
+    },
+    {
+      "operation": "buildQuery",
+      "name": "encoded control",
+      "input": "moon%0A",
+      "throwsFormatException": true
+    },
+    {
+      "operation": "buildQuery",
+      "name": "invalid UTF8 encoded text",
+      "input": "%FF",
+      "throwsFormatException": true
+    },
+    {
+      "operation": "buildQuery",
+      "name": "excess nesting",
+      "input": "%252525252525252525252520",
+      "throwsFormatException": true
+    },
+    {
+      "operation": "buildQuery",
+      "name": "ASCII character overflow",
+      "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "throwsFormatException": true
+    },
+    {
+      "operation": "buildQuery",
+      "name": "UTF8 byte overflow",
+      "input": "🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙",
+      "throwsFormatException": true
+    },
+    {
+      "operation": "rewriteProviderInput",
+      "name": "root strict rebuild",
+      "input": "https://duckduckgo.com/?q=moon&kp=-2",
+      "expected": "https://safe.duckduckgo.com/lite/?q=moon&kp=1"
+    },
+    {
+      "operation": "rewriteProviderInput",
+      "name": "www root HTTP upgrade",
+      "input": "http://www.duckduckgo.com/?q=moon",
+      "expected": "https://safe.duckduckgo.com/lite/?q=moon&kp=1"
+    },
+    {
+      "operation": "rewriteProviderInput",
+      "name": "safe root",
+      "input": "https://safe.duckduckgo.com/?q=moon",
+      "expected": "https://safe.duckduckgo.com/lite/?q=moon&kp=1"
+    },
+    {
+      "operation": "rewriteProviderInput",
+      "name": "safe lite",
+      "input": "https://safe.duckduckgo.com/lite/?q=moon&kp=1",
+      "expected": "https://safe.duckduckgo.com/lite/?q=moon&kp=1"
+    },
+    {
+      "operation": "rewriteProviderInput",
+      "name": "safe html",
+      "input": "https://safe.duckduckgo.com/html/?q=moon",
+      "expected": "https://safe.duckduckgo.com/lite/?q=moon&kp=1"
+    },
+    {
+      "operation": "rewriteProviderInput",
+      "name": "html exact path",
+      "input": "https://html.duckduckgo.com/html?q=moon",
+      "expected": "https://safe.duckduckgo.com/lite/?q=moon&kp=1"
+    },
+    {
+      "operation": "rewriteProviderInput",
+      "name": "lite exact path",
+      "input": "https://lite.duckduckgo.com/lite/?q=moon",
+      "expected": "https://safe.duckduckgo.com/lite/?q=moon&kp=1"
+    },
+    {
+      "operation": "rewriteProviderInput",
+      "name": "uppercase authority",
+      "input": "https://SAFE.DUCKDUCKGO.COM/lite/?q=moon",
+      "expected": "https://safe.duckduckgo.com/lite/?q=moon&kp=1"
+    },
+    {
+      "operation": "rewriteProviderInput",
+      "name": "explicit standard port",
+      "input": "https://safe.duckduckgo.com:443/?q=moon",
+      "expected": "https://safe.duckduckgo.com/lite/?q=moon&kp=1"
+    },
+    {
+      "operation": "rewriteProviderInput",
+      "name": "encoded keys",
+      "input": "https://duckduckgo.com/?%71=moon&%6bp=-2",
+      "expected": "https://safe.duckduckgo.com/lite/?q=moon&kp=1"
+    },
+    {
+      "operation": "rewriteProviderInput",
+      "name": "drop settings and fragment",
+      "input": "https://duckduckgo.com/?q=moon&k1=-1&ko=-2&key=abc&ia=images#kp=-2",
+      "expected": "https://safe.duckduckgo.com/lite/?q=moon&kp=1"
+    },
+    {
+      "operation": "rewriteProviderInput",
+      "name": "drop harmless unrelated field",
+      "input": "https://duckduckgo.com/?q=moon&kl=us-en",
+      "expected": "https://safe.duckduckgo.com/lite/?q=moon&kp=1"
+    },
+    {
+      "operation": "rewriteProviderInput",
+      "name": "literal parameter-looking query",
+      "input": "https://duckduckgo.com/?q=moon%26kp%3D-2",
+      "expected": "https://safe.duckduckgo.com/lite/?q=moon%26kp%3D-2&kp=1"
+    },
+    {
+      "operation": "rewriteProviderInput",
+      "name": "plus is form space",
+      "input": "https://duckduckgo.com/?q=moon+phases",
+      "expected": "https://safe.duckduckgo.com/lite/?q=moon%20phases&kp=1"
+    },
+    {
+      "operation": "rewriteProviderInput",
+      "name": "ordinary destination",
+      "input": "https://science.nasa.gov/moon/facts/",
+      "expected": null
+    },
+    {
+      "operation": "rewriteProviderInput",
+      "name": "other search provider",
+      "input": "https://www.google.com/search?q=moon",
+      "expected": null
+    },
+    {
+      "operation": "rewriteProviderInput",
+      "name": "lookalike suffix",
+      "input": "https://safe.duckduckgo.com.evil.test/?q=moon",
+      "expected": null
+    },
+    {
+      "operation": "rewriteProviderInput",
+      "name": "lookalike prefix",
+      "input": "https://evilduckduckgo.com/?q=moon",
+      "expected": null
+    },
+    {
+      "operation": "rewriteProviderInput",
+      "name": "bare query",
+      "input": "moon phases",
+      "expected": null
+    },
+    {
+      "operation": "rewriteProviderInput",
+      "name": "bare host",
+      "input": "duckduckgo.com/?q=moon",
+      "expected": null
+    },
+    {
+      "operation": "rewriteProviderInput",
+      "name": "missing query",
+      "input": "https://duckduckgo.com/",
+      "throwsFormatException": true
+    },
+    {
+      "operation": "rewriteProviderInput",
+      "name": "empty query",
+      "input": "https://duckduckgo.com/?q=",
+      "throwsFormatException": true
+    },
+    {
+      "operation": "rewriteProviderInput",
+      "name": "duplicate queries",
+      "input": "https://duckduckgo.com/?q=moon&q=sun",
+      "throwsFormatException": true
+    },
+    {
+      "operation": "rewriteProviderInput",
+      "name": "duplicate encoded key",
+      "input": "https://duckduckgo.com/?q=moon&kp=1&k%70=-2",
+      "throwsFormatException": true
+    },
+    {
+      "operation": "rewriteProviderInput",
+      "name": "case-fold duplicate",
+      "input": "https://duckduckgo.com/?q=moon&Q=sun",
+      "throwsFormatException": true
+    },
+    {
+      "operation": "rewriteProviderInput",
+      "name": "double-encoded key",
+      "input": "https://duckduckgo.com/?%2571=moon",
+      "throwsFormatException": true
+    },
+    {
+      "operation": "rewriteProviderInput",
+      "name": "query key case",
+      "input": "https://duckduckgo.com/?Q=moon",
+      "throwsFormatException": true
+    },
+    {
+      "operation": "rewriteProviderInput",
+      "name": "empty parameter",
+      "input": "https://duckduckgo.com/?q=moon&&kp=1",
+      "throwsFormatException": true
+    },
+    {
+      "operation": "rewriteProviderInput",
+      "name": "bare parameter",
+      "input": "https://duckduckgo.com/?q=moon&safeoff",
+      "throwsFormatException": true
+    },
+    {
+      "operation": "rewriteProviderInput",
+      "name": "invalid percent",
+      "input": "https://duckduckgo.com/?q=%GG",
+      "throwsFormatException": true
+    },
+    {
+      "operation": "rewriteProviderInput",
+      "name": "incomplete percent",
+      "input": "https://duckduckgo.com/?q=moon%",
+      "throwsFormatException": true
+    },
+    {
+      "operation": "rewriteProviderInput",
+      "name": "invalid UTF8",
+      "input": "https://duckduckgo.com/?q=%FF",
+      "throwsFormatException": true
+    },
+    {
+      "operation": "rewriteProviderInput",
+      "name": "encoded control",
+      "input": "https://duckduckgo.com/?q=moon%0a",
+      "throwsFormatException": true
+    },
+    {
+      "operation": "rewriteProviderInput",
+      "name": "encoded bang query",
+      "input": "https://duckduckgo.com/?q=%21safeoff",
+      "throwsFormatException": true
+    },
+    {
+      "operation": "rewriteProviderInput",
+      "name": "nested encoded bang query",
+      "input": "https://duckduckgo.com/?q=%2521safeoff",
+      "throwsFormatException": true
+    },
+    {
+      "operation": "rewriteProviderInput",
+      "name": "encoded query backslash",
+      "input": "https://duckduckgo.com/?q=%5cmoon",
+      "throwsFormatException": true
+    },
+    {
+      "operation": "rewriteProviderInput",
+      "name": "trailing dot host",
+      "input": "https://safe.duckduckgo.com./?q=moon",
+      "throwsFormatException": true
+    },
+    {
+      "operation": "rewriteProviderInput",
+      "name": "encoded host",
+      "input": "https://%73afe.duckduckgo.com/?q=moon",
+      "throwsFormatException": true
+    },
+    {
+      "operation": "rewriteProviderInput",
+      "name": "credentials",
+      "input": "https://user:pass@duckduckgo.com/?q=moon",
+      "throwsFormatException": true
+    },
+    {
+      "operation": "rewriteProviderInput",
+      "name": "nonstandard port",
+      "input": "https://duckduckgo.com:8443/?q=moon",
+      "throwsFormatException": true
+    },
+    {
+      "operation": "rewriteProviderInput",
+      "name": "HTTP wrong port",
+      "input": "http://duckduckgo.com:443/?q=moon",
+      "throwsFormatException": true
+    },
+    {
+      "operation": "rewriteProviderInput",
+      "name": "wrong scheme",
+      "input": "ftp://duckduckgo.com/?q=moon",
+      "throwsFormatException": true
+    },
+    {
+      "operation": "rewriteProviderInput",
+      "name": "unsupported provider subdomain",
+      "input": "https://noai.duckduckgo.com/?q=moon",
+      "throwsFormatException": true
+    },
+    {
+      "operation": "rewriteProviderInput",
+      "name": "short domain unsupported",
+      "input": "https://duck.com/?q=moon",
+      "throwsFormatException": true
+    },
+    {
+      "operation": "rewriteProviderInput",
+      "name": "settings route",
+      "input": "https://duckduckgo.com/settings?q=moon",
+      "throwsFormatException": true
+    },
+    {
+      "operation": "rewriteProviderInput",
+      "name": "redirect route",
+      "input": "https://duckduckgo.com/l/?q=moon",
+      "throwsFormatException": true
+    },
+    {
+      "operation": "rewriteProviderInput",
+      "name": "challenge route",
+      "input": "https://duckduckgo.com/anomaly.js?q=moon",
+      "throwsFormatException": true
+    },
+    {
+      "operation": "rewriteProviderInput",
+      "name": "vertical route",
+      "input": "https://duckduckgo.com/i.js?q=moon",
+      "throwsFormatException": true
+    },
+    {
+      "operation": "rewriteProviderInput",
+      "name": "wrong html host route",
+      "input": "https://html.duckduckgo.com/?q=moon",
+      "throwsFormatException": true
+    },
+    {
+      "operation": "rewriteProviderInput",
+      "name": "wrong lite host route",
+      "input": "https://lite.duckduckgo.com/html/?q=moon",
+      "throwsFormatException": true
+    },
+    {
+      "operation": "rewriteProviderInput",
+      "name": "literal dot segments",
+      "input": "https://duckduckgo.com/html/../?q=moon",
+      "throwsFormatException": true
+    },
+    {
+      "operation": "rewriteProviderInput",
+      "name": "encoded path",
+      "input": "https://duckduckgo.com/%6cite/?q=moon",
+      "throwsFormatException": true
+    },
+    {
+      "operation": "rewriteProviderInput",
+      "name": "encoded slash",
+      "input": "https://duckduckgo.com/lite%2f?q=moon",
+      "throwsFormatException": true
+    },
+    {
+      "operation": "rewriteProviderInput",
+      "name": "URL backslash",
+      "input": "https://duckduckgo.com\\@evil.test/?q=moon",
+      "throwsFormatException": true
+    },
+    {
+      "operation": "acceptsCanonical",
+      "name": "canonical query",
+      "input": "https://safe.duckduckgo.com/lite/?q=moon&kp=1",
+      "expected": true
+    },
+    {
+      "operation": "acceptsCanonical",
+      "name": "canonical punctuation",
+      "input": "https://safe.duckduckgo.com/lite/?q=C%2B%2B%20%22facts%22&kp=1",
+      "expected": true
+    },
+    {
+      "operation": "acceptsCanonical",
+      "name": "canonical Unicode",
+      "input": "https://safe.duckduckgo.com/lite/?q=caf%C3%A9%20%F0%9F%8C%99&kp=1",
+      "expected": true
+    },
+    {
+      "operation": "acceptsCanonical",
+      "name": "wrong setting",
+      "input": "https://safe.duckduckgo.com/lite/?q=moon&kp=-2",
+      "expected": false
+    },
+    {
+      "operation": "acceptsCanonical",
+      "name": "missing setting",
+      "input": "https://safe.duckduckgo.com/lite/?q=moon",
+      "expected": false
+    },
+    {
+      "operation": "acceptsCanonical",
+      "name": "wrong order",
+      "input": "https://safe.duckduckgo.com/lite/?kp=1&q=moon",
+      "expected": false
+    },
+    {
+      "operation": "acceptsCanonical",
+      "name": "extra setting",
+      "input": "https://safe.duckduckgo.com/lite/?q=moon&kp=1&k1=-1",
+      "expected": false
+    },
+    {
+      "operation": "acceptsCanonical",
+      "name": "duplicate setting",
+      "input": "https://safe.duckduckgo.com/lite/?q=moon&kp=1&kp=1",
+      "expected": false
+    },
+    {
+      "operation": "acceptsCanonical",
+      "name": "form plus encoding",
+      "input": "https://safe.duckduckgo.com/lite/?q=moon+phases&kp=1",
+      "expected": false
+    },
+    {
+      "operation": "acceptsCanonical",
+      "name": "query trim needed",
+      "input": "https://safe.duckduckgo.com/lite/?q=%20moon%20&kp=1",
+      "expected": false
+    },
+    {
+      "operation": "acceptsCanonical",
+      "name": "fragment",
+      "input": "https://safe.duckduckgo.com/lite/?q=moon&kp=1#results",
+      "expected": false
+    },
+    {
+      "operation": "acceptsCanonical",
+      "name": "empty fragment",
+      "input": "https://safe.duckduckgo.com/lite/?q=moon&kp=1#",
+      "expected": false
+    },
+    {
+      "operation": "acceptsCanonical",
+      "name": "alternate host",
+      "input": "https://duckduckgo.com/lite/?q=moon&kp=1",
+      "expected": false
+    },
+    {
+      "operation": "acceptsCanonical",
+      "name": "alternate route",
+      "input": "https://safe.duckduckgo.com/?q=moon&kp=1",
+      "expected": false
+    },
+    {
+      "operation": "acceptsCanonical",
+      "name": "bang syntax",
+      "input": "https://safe.duckduckgo.com/lite/?q=%21safeoff&kp=1",
+      "expected": false
+    },
+    {
+      "operation": "unwrapResultLink",
+      "name": "ordinary result",
+      "input": "https://duckduckgo.com/l/?uddg=https%3A%2F%2Fscience.nasa.gov%2Fmoon%2Ffacts%2F",
+      "expected": "https://science.nasa.gov/moon/facts/"
+    },
+    {
+      "operation": "unwrapResultLink",
+      "name": "safe-host wrapper and rut",
+      "input": "https://safe.duckduckgo.com/l/?uddg=https%3A%2F%2Fscience.nasa.gov%2Fmoon%2Ffacts%2F&rut=abc_123",
+      "expected": "https://science.nasa.gov/moon/facts/"
+    },
+    {
+      "operation": "unwrapResultLink",
+      "name": "target anchor",
+      "input": "https://duckduckgo.com/l/?uddg=https%3A%2F%2Fscience.nasa.gov%2Fmoon%2Ffacts%2F%23facts",
+      "expected": "https://science.nasa.gov/moon/facts/#facts"
+    },
+    {
+      "operation": "unwrapResultLink",
+      "name": "no destination approval implied",
+      "input": "https://duckduckgo.com/l/?uddg=https%3A%2F%2Funreviewed.example%2Fpath",
+      "expected": "https://unreviewed.example/path"
+    },
+    {
+      "operation": "unwrapResultLink",
+      "name": "ordinary direct destination",
+      "input": "https://science.nasa.gov/moon/facts/",
+      "expected": null
+    },
+    {
+      "operation": "unwrapResultLink",
+      "name": "lookalike wrapper",
+      "input": "https://duckduckgo.com.evil.test/l/?uddg=https%3A%2F%2Fscience.nasa.gov%2Fmoon%2Ffacts%2F",
+      "expected": null
+    },
+    {
+      "operation": "unwrapResultLink",
+      "name": "unknown wrapper field",
+      "input": "https://duckduckgo.com/l/?uddg=https%3A%2F%2Fscience.nasa.gov%2Fmoon%2Ffacts%2F&next=x",
+      "expected": null
+    },
+    {
+      "operation": "unwrapResultLink",
+      "name": "duplicate target",
+      "input": "https://duckduckgo.com/l/?uddg=https%3A%2F%2Fscience.nasa.gov%2Fmoon%2Ffacts%2F&uddg=https%3A%2F%2Fscience.nasa.gov%2Fmoon%2Ffacts%2F",
+      "expected": null
+    },
+    {
+      "operation": "unwrapResultLink",
+      "name": "duplicate encoded target",
+      "input": "https://duckduckgo.com/l/?uddg=https%3A%2F%2Fscience.nasa.gov%2Fmoon%2Ffacts%2F&%75ddg=https%3A%2F%2Fscience.nasa.gov%2Fmoon%2Ffacts%2F",
+      "expected": null
+    },
+    {
+      "operation": "unwrapResultLink",
+      "name": "duplicate rut",
+      "input": "https://duckduckgo.com/l/?uddg=https%3A%2F%2Fscience.nasa.gov%2Fmoon%2Ffacts%2F&rut=a&rut=b",
+      "expected": null
+    },
+    {
+      "operation": "unwrapResultLink",
+      "name": "oversized rut",
+      "input": "https://duckduckgo.com/l/?uddg=https%3A%2F%2Fscience.nasa.gov%2Fmoon%2Ffacts%2F&rut=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected": null
+    },
+    {
+      "operation": "unwrapResultLink",
+      "name": "empty rut",
+      "input": "https://duckduckgo.com/l/?uddg=https%3A%2F%2Fscience.nasa.gov%2Fmoon%2Ffacts%2F&rut=",
+      "expected": null
+    },
+    {
+      "operation": "unwrapResultLink",
+      "name": "unsafe target scheme",
+      "input": "https://duckduckgo.com/l/?uddg=javascript%3Aalert%281%29",
+      "expected": null
+    },
+    {
+      "operation": "unwrapResultLink",
+      "name": "insecure target",
+      "input": "https://duckduckgo.com/l/?uddg=http%3A%2F%2Fexample.com%2F",
+      "expected": null
+    },
+    {
+      "operation": "unwrapResultLink",
+      "name": "credential target",
+      "input": "https://duckduckgo.com/l/?uddg=https%3A%2F%2Fuser%3Apass%40example.com%2F",
+      "expected": null
+    },
+    {
+      "operation": "unwrapResultLink",
+      "name": "nonstandard target port",
+      "input": "https://duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.com%3A8443%2F",
+      "expected": null
+    },
+    {
+      "operation": "unwrapResultLink",
+      "name": "encoded target host",
+      "input": "https://duckduckgo.com/l/?uddg=https%3A%2F%2F%2565xample.com%2F",
+      "expected": null
+    },
+    {
+      "operation": "unwrapResultLink",
+      "name": "double-encoded whole target",
+      "input": "https://duckduckgo.com/l/?uddg=https%253A%252F%252Fscience.nasa.gov%252Fmoon%252Ffacts%252F",
+      "expected": null
+    },
+    {
+      "operation": "unwrapResultLink",
+      "name": "nested result wrapper",
+      "input": "https://duckduckgo.com/l/?uddg=https%3A%2F%2Fduckduckgo.com%2Fl%2F%3Fuddg%3Dhttps%253A%252F%252Fscience.nasa.gov%252Fmoon%252Ffacts%252F",
+      "expected": null
+    },
+    {
+      "operation": "unwrapResultLink",
+      "name": "wrapper fragment",
+      "input": "https://duckduckgo.com/l/?uddg=https%3A%2F%2Fscience.nasa.gov%2Fmoon%2Ffacts%2F#x",
+      "expected": null
+    },
+    {
+      "operation": "unwrapResultLink",
+      "name": "wrapper wrong path",
+      "input": "https://duckduckgo.com/l?uddg=https%3A%2F%2Fscience.nasa.gov%2Fmoon%2Ffacts%2F",
+      "expected": null
+    },
+    {
+      "operation": "unwrapResultLink",
+      "name": "oversized target",
+      "input": "https://duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.com%2Faaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected": null
+    },
+    {
+      "operation": "unwrapResultLink",
+      "name": "encoded target control",
+      "input": "https://duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.com%2F%2500",
+      "expected": null
+    }
+  ]
+}

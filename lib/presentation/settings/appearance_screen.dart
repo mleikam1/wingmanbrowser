@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import '../../policy/policy_runtime.dart';
 import '../../state/browser_state.dart';
 import '../components/wingman_components.dart';
+import '../protection/additional_boundaries_screen.dart';
 
 class AppearanceScreen extends StatefulWidget {
   const AppearanceScreen({
@@ -122,9 +124,13 @@ class SearchSettingsScreen extends StatefulWidget {
     super.key,
     required this.state,
     required this.canContinue,
+    this.policy,
+    this.isPrivate = false,
   });
   final BrowserState state;
   final bool Function() canContinue;
+  final PolicyRuntime? policy;
+  final bool isPrivate;
   @override
   State<SearchSettingsScreen> createState() => _SearchSettingsScreenState();
 }
@@ -133,7 +139,7 @@ class _SearchSettingsScreenState extends State<SearchSettingsScreen> {
   bool _busy = false;
   String? _error;
   Future<void> _change(bool enabled) async {
-    if (_busy || !widget.canContinue()) return;
+    if (_busy || widget.isPrivate || !widget.canContinue()) return;
     setState(() {
       _busy = true;
       _error = null;
@@ -154,45 +160,109 @@ class _SearchSettingsScreenState extends State<SearchSettingsScreen> {
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
-    listenable: widget.state,
-    builder: (context, _) => WingmanPage(
-      title: 'Search',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const WingmanSettingsRow(
-            icon: Icons.search,
-            title: 'Approved resources',
-            subtitle: 'Local signed library · No external recipient',
-          ),
-          const SizedBox(height: 16),
-          const Text(
-            'Queries are matched on this device. Official Routes searches its local identity catalog; identity evidence never grants live access.',
-          ),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('Local approved-resource suggestions'),
-            subtitle: const Text(
-              'No history, clipboard or keystroke upload. Personal suggestions stay unavailable in private and shared views.',
+    listenable: Listenable.merge([widget.state, widget.policy]),
+    builder: (context, _) {
+      final additional = widget.state.protectedPreferences.additional;
+      final blocked =
+          additional.blockedCollections.contains('web-search') ||
+          additional.blockedResourceIds.contains('web-search');
+      final available =
+          widget.policy?.searchAvailable(
+            isPrivate: widget.isPrivate,
+            additional: additional,
+          ) ??
+          false;
+      return WingmanPage(
+        title: 'Search',
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const WingmanSection(title: 'Web search'),
+            const WingmanSettingsRow(
+              icon: Icons.lock_outline,
+              title: 'DuckDuckGo · Adult filtering: Strict',
+              subtitle: 'Publisher-fixed. There is no Moderate or Off setting.',
             ),
-            value: widget.state.settings.localSuggestions,
-            onChanged: _busy ? null : _change,
-          ),
-          const WingmanStatus(
-            title: 'External providers unavailable',
-            message:
-                'Live web search and custom provider endpoints are not supported by the current content policy.',
-            tone: WingmanTone.info,
-          ),
-          if (_busy) const LinearProgressIndicator(),
-          if (_error != null)
             WingmanStatus(
-              title: 'Saving not confirmed',
-              message: _error!,
+              title: blocked
+                  ? 'Web search disabled'
+                  : available
+                  ? 'Web search available in this session'
+                  : 'Web search unavailable in this session',
+              message: blocked
+                  ? 'Your additional boundary disables web search. Private tabs inherit this choice. Local library search remains available.'
+                  : available
+                  ? 'Search opens the first, text-only DuckDuckGo results page. Image search, pagination and page forms are unavailable. Website access remains limited to reviewed destination pages.'
+                  : 'Web search requires a supported Android or iOS native session and a current policy. The web companion has local tools only; native desktop apps are not available.',
+              tone: WingmanTone.info,
+            ),
+            const WingmanStatus(
+              title: 'Search previews have limited coverage',
+              message:
+                  'DuckDuckGo filters adult results. Wingman does not classify every result snippet or advertisement against all six content rules. Strict filtering can miss content; a result is not permission to open its destination.',
               tone: WingmanTone.caution,
             ),
-        ],
-      ),
-    ),
+            const Text(
+              'Web search requests send your submitted query to DuckDuckGo, which also receives your connection’s IP address. Wingman sends no remote suggestions while you type. Search uses the provider’s ordinary website without a paid search service.',
+            ),
+            if (widget.policy != null)
+              WingmanSettingsRow(
+                icon: Icons.tune,
+                title: 'Additional search boundary',
+                subtitle: widget.isPrivate
+                    ? 'View the inherited Disable web search setting'
+                    : 'Disable web search without weakening the fixed baseline',
+                onTap: () {
+                  if (!widget.canContinue()) return;
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => AdditionalBoundariesScreen(
+                        state: widget.state,
+                        policy: widget.policy!,
+                        isPrivate: widget.isPrivate,
+                        canContinue: widget.canContinue,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            const SizedBox(height: 24),
+            const WingmanSection(title: 'On-device search'),
+            const WingmanSettingsRow(
+              icon: Icons.search,
+              title: 'Approved resources',
+              subtitle: 'Local signed library · No external recipient',
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Queries are matched on this device. Official Routes searches its local identity catalog; identity evidence never grants live access.',
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Local approved-resource suggestions'),
+              subtitle: const Text(
+                'No history, clipboard or keystroke upload. Personal suggestions stay unavailable in private and shared views.',
+              ),
+              value: widget.state.settings.localSuggestions,
+              onChanged: _busy || widget.isPrivate ? null : _change,
+            ),
+            if (widget.isPrivate)
+              const WingmanStatus(
+                title: 'Preferences are read-only in private',
+                message:
+                    'Private tabs inherit saved restrictions. Change owner preferences from a normal session.',
+                tone: WingmanTone.info,
+              ),
+            if (_busy) const LinearProgressIndicator(),
+            if (_error != null)
+              WingmanStatus(
+                title: 'Saving not confirmed',
+                message: _error!,
+                tone: WingmanTone.caution,
+              ),
+          ],
+        ),
+      );
+    },
   );
 }

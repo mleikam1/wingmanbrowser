@@ -156,7 +156,7 @@ class _OfficialRoutesScreenState extends State<OfficialRoutesScreen>
                     child: Text('Live opening unavailable'),
                   ),
                   const Text(
-                    'Live websites are unavailable under the current policy. No website or external browser will be opened.',
+                    'This identity catalog does not open live websites. Website access is checked separately when you enter an address in Wingman.',
                   ),
                   const Divider(height: 32),
                   const WingmanSection(title: 'Verification evidence'),
@@ -286,7 +286,7 @@ class _OfficialRoutesScreenState extends State<OfficialRoutesScreen>
             const WingmanStatus(
               title: 'Identity review, limited scope',
               message:
-                  'This local catalog records organizational identities. Live websites remain unavailable. An identity review does not grant permission to open a site.',
+                  'This local catalog records organizational identities and does not open websites. An identity review does not grant permission to browse a site or approve its search results.',
             ),
             const SizedBox(height: 20),
             TextField(

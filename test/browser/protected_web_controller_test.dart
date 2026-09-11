@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wingman_browser/browser/protected_web_surface.dart';
+import 'package:wingman_browser/policy/strict_search_policy.dart';
 import 'package:wingman_browser/signature/workspaces/discovery_session.dart';
 
 void main() {
@@ -46,6 +47,57 @@ void main() {
     expect(controller.status.error, isNotNull);
     controller.dispose();
   });
+
+  test(
+    'canonical search sends a query through its separate native capability',
+    () async {
+      final uri = const StrictSearchPolicy().buildQuery('moon + facts');
+      final controller = ProtectedWebController(
+        canOpen: (candidate) => candidate == uri,
+        onNavigation: (_) {},
+      )..attach(81);
+      await controller.open(uri);
+      expect(calls.where((c) => c.method == 'open'), isEmpty);
+      final sent =
+          calls.singleWhere((c) => c.method == 'openSearch').arguments as Map;
+      expect(sent['query'], 'moon + facts');
+      expect(sent.containsKey('url'), isFalse);
+      expect(sent.keys.toSet(), {'viewId', 'requestId', 'query'});
+      controller.dispose();
+    },
+  );
+
+  test(
+    'revocation during activation prevents search from reaching native',
+    () async {
+      var allowed = true;
+      final activation = Completer<void>();
+      messenger.setMockMethodCallHandler(ProtectedWebBridge.channel, (
+        call,
+      ) async {
+        calls.add(call);
+        if (call.method == 'setActive' &&
+            (call.arguments as Map)['active'] == true) {
+          await activation.future;
+        }
+        return null;
+      });
+      final controller = ProtectedWebController(
+        canOpen: (_) => allowed,
+        onNavigation: (_) {},
+      )..attach(82);
+      final pending = controller.open(
+        const StrictSearchPolicy().buildQuery('moon'),
+      );
+      await Future<void>.delayed(Duration.zero);
+      allowed = false;
+      activation.complete();
+      await pending;
+      expect(calls.where((c) => c.method == 'openSearch'), isEmpty);
+      expect(controller.status.url, isNull);
+      controller.dispose();
+    },
+  );
 
   test(
     'only current approved native events become committed page metadata',
@@ -227,20 +279,25 @@ void main() {
         'supported': true,
         'privateAvailable': true,
         'mode': 'unrestricted',
+        'strictSearchAvailable': true,
       },
     );
-    expect((await ProtectedWebBridge.capabilities()).supported, isFalse);
+    final unsupported = await ProtectedWebBridge.capabilities();
+    expect(unsupported.supported, isFalse);
+    expect(unsupported.strictSearchAvailable, isFalse);
     messenger.setMockMethodCallHandler(
       ProtectedWebBridge.channel,
       (_) async => {
         'supported': true,
         'privateAvailable': false,
         'mode': 'reviewedScriptlessWeb',
+        'strictSearchAvailable': true,
       },
     );
     final result = await ProtectedWebBridge.capabilities();
     expect(result.supported, isTrue);
     expect(result.privateAvailable, isFalse);
+    expect(result.strictSearchAvailable, isTrue);
   });
 
   test(

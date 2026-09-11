@@ -39,13 +39,13 @@ class PolicyStateView extends StatelessWidget {
             PolicyDecisionCode.blockPolicyUnavailable =>
               'Content stays closed until a valid reviewed policy is available. Settings and local support options remain accessible.',
             PolicyDecisionCode.blockAdditionalRestriction =>
-              'This reviewed item is hidden by an additional boundary. Core protection remains permanent.',
+              'A saved additional boundary blocks this content or feature. Removing it cannot lower the required protections.',
             PolicyDecisionCode.blockMandatoryCategory =>
               'The requested content falls outside Wingman’s mandatory boundaries. No temporary or private exception is available.',
             PolicyDecisionCode.blockSecurityThreat =>
               'The policy identified a security threat. The destination was not opened; there is no proceed-anyway action.',
             PolicyDecisionCode.blockUnsupportedCapability =>
-              'This page or operation is outside the supported scope for this session. Only reviewed native website scopes and installed articles can open. This action did not dispatch a website request.',
+              'This page or operation is outside the supported scope for this session. Destination browsing requires a reviewed website; supported native apps also provide separate Strict adult-filtered search. A search result does not approve its destination. This action did not dispatch a website request.',
             _ =>
               'Identity, a familiar domain or a review request does not establish approval. Explore reviewed website scopes and offline articles for available material.',
           },

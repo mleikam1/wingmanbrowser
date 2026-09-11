@@ -4,13 +4,13 @@
 
 **Built for discovery. Designed with boundaries.**
 
-Version **0.8** adds a protected visual-browsing pilot on Android and iOS, plus local photography and Home customization. Eligible native builds can display a small set of live documents with their permitted images, styles and fonts. Launchpad, local search, 18 original reviewed articles, Spaces, reading tools, themes and private sessions remain available. There is no account requirement, advertising SDK or new Wingman cloud service.
+Version **0.9.0+9** adds direct DuckDuckGo search with publisher-fixed Strict adult filtering on supported Android and iOS builds, without a paid search API. It displays the first, text-only results page; result links still require an independently reviewed destination. The visual-browsing pilot continues to display six exact live documents with permitted images, styles and fonts. Launchpad, local photography, Home customization, local search, 18 original reviewed articles, Spaces, reading tools, themes and private sessions remain available. There is no account requirement, advertising SDK or new Wingman cloud service.
 
-**This is a bounded pilot, not a general-purpose Firefox replacement or a guarantee that every live image and sentence meets every content rule.** There is no per-image or automatic six-category text classifier. Reviewed URLs can serve changed content. The current request controls, platform differences, privacy boundaries and validation status are recorded in [Live browsing status](docs/LIVE_BROWSING_STATUS.md).
+**General-purpose browsing across desktop, iOS and Android remains unfinished.** This release is not a completed Firefox replacement or a guarantee that every live image and sentence meets every content rule. DuckDuckGo's adult filter is separate from Wingman's six-category policy: search snippets and advertisements are not fully classified against those rules, and provider filtering can miss content. Reviewed URLs can also serve changed content; there is no per-image or automatic six-category text classifier. See [Strict search](docs/STRICT_SEARCH.md) for v0.9 search behavior and [Live browsing status](docs/LIVE_BROWSING_STATUS.md) for the existing destination pilot.
 
-Core restrictions have no switches, exceptions, PIN bypasses or private-mode exemptions. Unsupported addresses and operations stay closed; saving a shortcut cannot approve a website. Additional restrictions can remove access but cannot grant new access. Live eligibility also requires current policy, intact build-pinned assets and an available native capability. The live scope expires at **00:00 UTC on October 11, 2026**; there is no automatic updater or unrestricted fallback.
+Reviewed-content restrictions have no switches, exceptions, PIN bypasses or private-mode exemptions. Search has a separate fixed provider filter and clearly disclosed coverage limits. Unsupported destination addresses and operations stay closed; saving a shortcut cannot approve a website. Additional restrictions can remove access but cannot grant new access or lower Strict adult filtering. Live eligibility, including search, also requires current policy, intact build-pinned assets and an available native capability. The live scope expires at **00:00 UTC on October 11, 2026**; there is no automatic updater or unrestricted fallback.
 
-## Current live scope
+## Reviewed website scope
 
 | Destination | Supported scope |
 | --- | --- |
@@ -19,9 +19,17 @@ Core restrictions have no switches, exceptions, PIN bypasses or private-mode exe
 | Adafruit | The half-size breadboard product 64 page and its listed passive assets; information and photographs only |
 | ESPN and Walmart | Disabled candidates; mixed betting, retail, advertising or recommendation content has not met the review boundary |
 
-No whole domain is approved. Scripts, forms, sign-in, checkout, general web search, uploads, downloads, video and interactive embeds are unsupported. Unreviewed links and changing resource URLs may leave a page incomplete. Web and desktop builds provide the local companion experience; they do not render protected live websites or filter their host browser. See the exact scope, sources and licensing in [Live browsing policy](docs/LIVE_BROWSING_POLICY.md).
+No whole destination domain is approved. Scripts, forms, sign-in, checkout, uploads, downloads, video and interactive embeds are unsupported. Unreviewed links and changing resource URLs may leave a page incomplete. Most ordinary search-result destinations remain unavailable under this six-document scope. The web companion runs in desktop browsers without rendering live websites or filtering the host browser. Native desktop builds and engines are not implemented. See the exact scope, sources and licensing in [Live browsing policy](docs/LIVE_BROWSING_POLICY.md).
 
 Android uses an independently gated WebView with mediated HTTPS requests. The iOS 18.4+ pilot uses WKWebView with compiled resource rules and nonpersistent website storage; older iOS retains the offline app. Their guarantees differ: iOS does **not** provide Android's per-subresource response MIME/body inspection or streamed byte limits. Neither mechanism classifies future page content. The retired unrestricted engine APIs remain closed; the pilot uses a separate protected bridge.
+
+## Strict web search
+
+Use the native address/search field, choose **Web**, and submit. Wingman builds `https://safe.duckduckgo.com/lite/?q=<encoded-query>&kp=1` and opens the provider's ordinary page directly. Only the first text results page and one fixed stylesheet are permitted. Search images, pagination, provider forms and scripts are unavailable; enter each new query in Wingman's field. No scraping service, private search API, paid search subscription or custom endpoint is configured.
+
+**Settings → Search** explains the fixed provider filter and current capability. **Protection → Additional boundaries → Disable web search** can remove access while keeping local library search. Private tabs inherit that setting without changing the owner's preferences. There is no Moderate/Off control. Changing the publisher baseline requires code changes, review and an app release; Firebase or an admin setting cannot lower it.
+
+Submitted queries and the connection's IP address reach DuckDuckGo. Typing makes no remote-suggestion request. Wingman does not persist query history or allow search pages to be pinned; search terms remain temporary session state. Reloading, revisiting or resuming a search tab can request that submitted query again. The provider may display advertisements and applies its own privacy policy. Wingman does not add parameters that remove DuckDuckGo branding or advertising. [Strict search documentation](docs/STRICT_SEARCH.md) records the provider sources, privacy limits and enforcement design.
 
 ## Preview
 
@@ -60,17 +68,20 @@ Normal consumer preferences persist locally. Private customization uses separate
 
 ## Privacy and operating cost
 
-Opening an eligible page contacts that website and its permitted asset hosts directly. Wingman does not upload the browsing URL or page content to a Wingman server, Firebase, an analytics SDK or an AI classifier. Websites and network providers still observe ordinary connection metadata; native platform security services are not a promise of anonymous traffic.
+Opening an eligible page contacts that website and its permitted asset hosts directly; submitting web search contacts DuckDuckGo with the query. Wingman does not upload the browsing URL, query or page content to a Wingman server, Firebase, an analytics SDK or an AI classifier. Websites, the search provider and network providers still observe ordinary connection metadata; native platform security services and private mode are not a promise of anonymous traffic.
 
-Policy decisions, the supported EasyPrivacy subset, artwork and application preferences are local. No Firebase/GCP project, paid API, deployment or recurring Browser service was added. Read-only cloud inventory found an existing Wingman-named project serving unrelated applications; it was left unchanged. This does not establish that the user's existing cloud bill is zero. See [Cloud cost plan](docs/CLOUD_COST_PLAN.md) for the verified inventory and a future static-update proposal with explicit cost limits and privacy tradeoffs.
+Policy decisions, the supported EasyPrivacy subset, artwork and application preferences are local. No Firebase/GCP project, paid API, deployment or recurring Browser service was added; search introduces no Wingman per-query cloud charge. Read-only cloud inventory found an existing Wingman-named project serving unrelated applications; it was left unchanged. Existing account spending was not audited. App-store distribution, maintenance, policy review, updates and connectivity can still have costs. See [Cloud cost plan](docs/CLOUD_COST_PLAN.md) for the inventory and a future static-update proposal with explicit cost limits and privacy tradeoffs.
 
 ## Validation and maintenance
 
-The host suite passed **528 tests with two optional skips**. Native live journeys and the actual-app pin/revocation flow passed on dedicated Android and iOS simulators. See [Protected visual browsing QA](docs/PROTECTED_VISUAL_BROWSING_QA.md) for commands, observations and limits. Fresh native visual sign-off remains open because the Mac was locked during final capture attempts. A production store release, physical-device security audit and complete whole-web classification are not delivered by this pilot.
+For **v0.9**, the full host suite passed **686 tests with two optional skips**, the analyzer reported no issues, and all three native/Dart live-manifest pins matched. Native search bridge fixtures passed normal/private sessions, and the actual app search flow passed on both platforms. A controlled WKWebView test also passed its resource, iframe and redirect checks; see [Strict search validation](docs/STRICT_SEARCH.md#validation) for the measured scope and remaining release work.
+
+The earlier v0.8 host suite passed **528 tests with two optional skips**, and native reviewed-page journeys plus the actual-app pin/revocation flow passed. See [Protected visual browsing QA](docs/PROTECTED_VISUAL_BROWSING_QA.md) for that milestone's commands, observations and limits. Fresh native visual sign-off remained open because the Mac was locked during capture attempts. A production store release, physical-device security audit, desktop live engine and complete whole-web classification are not delivered by this release.
 
 ```sh
 flutter analyze --no-pub
 flutter test --no-pub
+flutter test integration_test/strict_search_native_test.dart --no-uninstall -d <device-id>
 flutter test integration_test/protected_live_native_test.dart --no-uninstall -d <device-id>
 flutter test integration_test/protected_live_app_test.dart --no-uninstall -d <device-id>
 ```
@@ -79,4 +90,4 @@ The bridge fixture exercises independent request denials, supported public journ
 
 The signed offline article catalog separately expires on March 10, 2027 and uses a development signing key whose private seed is outside Git. The live network scope is pinned into the reviewed application build; it is not a remotely signed production publisher. Renewal requires review and a rebuilt app. See [Content policy](docs/CONTENT_POLICY.md) and [Live browsing policy](docs/LIVE_BROWSING_POLICY.md).
 
-The [screen registry](docs/ui/SCREEN_REGISTRY.md), [design system](docs/ui/DESIGN_SYSTEM.md) and [Launchpad specification](docs/ui/LAUNCHPAD_SPEC.md) explain the existing product. Previous [Launchpad QA](docs/ui/LAUNCHPAD_QA.md), [signature status](docs/SIGNATURE_FEATURES_STATUS.md), [privacy architecture](docs/PRIVACY_ARCHITECTURE.md), [platform capabilities](docs/PLATFORM_CAPABILITIES.md) and [release readiness](docs/RELEASE_READINESS.md) record earlier milestones; their blanket no-live-network/no-renderer statements and test totals are superseded for v0.8 by the live status and policy documents. They are not new pilot acceptance evidence. Phase 1–3A documents and [the earlier README](docs/history/README_PHASE3A.md) remain historical.
+The [screen registry](docs/ui/SCREEN_REGISTRY.md), [design system](docs/ui/DESIGN_SYSTEM.md) and [Launchpad specification](docs/ui/LAUNCHPAD_SPEC.md) explain the existing product. Previous [Launchpad QA](docs/ui/LAUNCHPAD_QA.md), [signature status](docs/SIGNATURE_FEATURES_STATUS.md), [privacy architecture](docs/PRIVACY_ARCHITECTURE.md), [platform capabilities](docs/PLATFORM_CAPABILITIES.md) and [release readiness](docs/RELEASE_READINESS.md) record earlier milestones. Their blanket no-live-network/no-renderer statements were superseded by the v0.8 destination pilot; blanket no-web-search statements, including those in its status report, are superseded by [v0.9 Strict search](docs/STRICT_SEARCH.md). Historical test totals are not current release acceptance evidence. Phase 1–3A documents and [the earlier README](docs/history/README_PHASE3A.md) remain historical.

@@ -4,9 +4,9 @@ import '../browser_shell.dart' show safeTextContextMenu;
 import '../components/wingman_components.dart';
 
 class SearchIntent {
-  const SearchIntent(this.query, {this.official = false});
+  const SearchIntent(this.query, {this.official = false, this.web = false});
   final String query;
-  final bool official;
+  final bool official, web;
 }
 
 class FocusedSearchScreen extends StatefulWidget {
@@ -31,6 +31,10 @@ class FocusedSearchScreen extends StatefulWidget {
 class _FocusedSearchScreenState extends State<FocusedSearchScreen> {
   late final _text = TextEditingController(text: widget.initialQuery);
   bool _official = false;
+  late bool _web = widget.policy.searchAvailable(
+    isPrivate: widget.isPrivate,
+    additional: widget.additional(),
+  );
   @override
   void dispose() {
     _text.dispose();
@@ -39,16 +43,21 @@ class _FocusedSearchScreenState extends State<FocusedSearchScreen> {
 
   void _submit() => Navigator.pop(
     context,
-    SearchIntent(_text.text.trim(), official: _official),
+    SearchIntent(_text.text, official: _official, web: _web),
   );
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: widget.policy,
     builder: (context, _) {
+      final webAvailable = widget.policy.searchAvailable(
+        isPrivate: widget.isPrivate,
+        additional: widget.additional(),
+      );
       final suggestions =
           !widget.localSuggestions ||
               widget.isPrivate ||
               _official ||
+              _web ||
               _text.text.trim().isEmpty
           ? <ApprovedResource>[]
           : widget.policy
@@ -105,14 +114,30 @@ class _FocusedSearchScreenState extends State<FocusedSearchScreen> {
               runSpacing: 8,
               children: [
                 ChoiceChip(
+                  label: const Text('Web'),
+                  selected: _web,
+                  onSelected: webAvailable
+                      ? (_) => setState(() {
+                          _web = true;
+                          _official = false;
+                        })
+                      : null,
+                ),
+                ChoiceChip(
                   label: const Text('Library'),
-                  selected: !_official,
-                  onSelected: (_) => setState(() => _official = false),
+                  selected: !_official && !_web,
+                  onSelected: (_) => setState(() {
+                    _official = false;
+                    _web = false;
+                  }),
                 ),
                 ChoiceChip(
                   label: const Text('Official'),
                   selected: _official,
-                  onSelected: (_) => setState(() => _official = true),
+                  onSelected: (_) => setState(() {
+                    _official = true;
+                    _web = false;
+                  }),
                 ),
               ],
             ),
@@ -123,8 +148,18 @@ class _FocusedSearchScreenState extends State<FocusedSearchScreen> {
               label: const Text('Search'),
             ),
             const SizedBox(height: 20),
-            const Text(
-              'Search runs on this device. Entering an address opens only a reviewed scope supported by this native app. Page requests go directly to the website after you submit; typing makes no network request.',
+            Text(
+              _web
+                  ? 'DuckDuckGo · Adult filtering: Strict, required by Wingman. Submitting sends your query and connection information directly to DuckDuckGo. Typing makes no network request; search terms are not saved by Wingman.'
+                  : 'Library and Official searches run on this device. Typing makes no network request. Entering a supported address connects only after you submit.',
+            ),
+            const SizedBox(height: 12),
+            Text(
+              _web
+                  ? 'Search previews use DuckDuckGo’s adult filter. They are not fully classified against Wingman’s other content rules. This preview opens reviewed pages only; images, pagination and provider forms are unavailable. Use this field for each new search.'
+                  : webAvailable
+                  ? 'Choose Web to search with DuckDuckGo’s required Strict adult filtering.'
+                  : 'Web search is unavailable on this platform or under your current boundaries. The installed library remains available.',
             ),
             if (widget.isPrivate) ...[
               const SizedBox(height: 12),

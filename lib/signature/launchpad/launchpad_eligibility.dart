@@ -54,6 +54,18 @@ class LaunchpadEligibilityService {
           );
         case LaunchpadKind.website:
           final uri = Uri.parse(target.value);
+          // Search terms must not become persistent shortcuts, including an
+          // inactive review record or a caller-forged allow decision.
+          if (uri.host == 'duckduckgo.com' ||
+              uri.host.endsWith('.duckduckgo.com') ||
+              const {'duck.com', 'www.duck.com', 'ddg.gg'}.contains(uri.host)) {
+            return const LaunchpadEligibility(
+              canOpen: false,
+              message:
+                  'Search pages cannot be saved. Pin a reviewed result page instead.',
+              policyCode: PolicyDecisionCode.blockUnsupportedCapability,
+            );
+          }
           final decision =
               evaluateWebsite?.call(uri) ??
               const PolicyDecision(

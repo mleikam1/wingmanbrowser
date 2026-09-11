@@ -721,6 +721,14 @@ class _BrowserShellState extends State<BrowserShell>
 
   void _navigateWebsite(Uri uri, {bool newTab = false}) {
     if (!_validOrigin(_tab)) return;
+    try {
+      uri =
+          const StrictSearchPolicy().rewriteProviderInput(uri.toString()) ??
+          uri;
+    } on FormatException {
+      _deny();
+      return;
+    }
     final decision = _websiteDecision(uri);
     if (!decision.isAllowed) {
       _deny(decision);
@@ -765,7 +773,8 @@ class _BrowserShellState extends State<BrowserShell>
         ),
       );
     }
-    return ProtectedWebSurface(
+    final search = const StrictSearchPolicy().acceptsCanonical(uri);
+    final surface = ProtectedWebSurface(
       key: ValueKey('live-${owner.id}'),
       tabId: owner.id,
       url: uri,
@@ -776,12 +785,33 @@ class _BrowserShellState extends State<BrowserShell>
           _validOrigin(owner) &&
           _websiteDecision(target, isPrivate: owner.isPrivate).isAllowed,
       onNavigation: (target) {
-        if (_validOrigin(owner)) _navigateWebsite(target);
+        if (!_validOrigin(owner)) return;
+        // A result wrapper is decoded locally, never requested. Its target
+        // still passes the ordinary destination policy before any network I/O.
+        final destination = search
+            ? const StrictSearchPolicy().unwrapResultLink(target) ?? target
+            : target;
+        _navigateWebsite(destination);
       },
       onStatus: (status) {
         if (!_validOrigin(owner)) return;
         setState(() => _webStatuses[owner.id] = status);
       },
+    );
+    if (!search) return surface;
+    return Column(
+      children: [
+        const Padding(
+          padding: EdgeInsets.fromLTRB(16, 10, 16, 10),
+          child: Text(
+            'DuckDuckGo search · Adult filtering: Strict\n'
+            'Previews are not fully classified against Wingman’s other rules. '
+            'This preview opens reviewed pages only.',
+            key: ValueKey('strict-search-scope'),
+          ),
+        ),
+        Expanded(child: surface),
+      ],
     );
   }
 
@@ -820,21 +850,59 @@ class _BrowserShellState extends State<BrowserShell>
     );
   }
 
-  void _search(String input) {
+  void _search(String input, {bool web = false}) {
     if (_officialSearch && _features?.initialized == true) {
       _official(input);
       return;
     }
     final value = input.trim();
-    // URI-like input never becomes an outbound search, regardless of scheme.
+    if (value.contains('%')) {
+      // Encoded schemes are not ordinary search terms or address authority.
+      // Keep harmless percentage text searchable without decoding the query
+      // that will be sent to the provider.
+      try {
+        final decoded = Uri.decodeComponent(value);
+        if (decoded != value &&
+            RegExp(
+              r'^[a-z][a-z0-9+.-]*:',
+              caseSensitive: false,
+            ).hasMatch(decoded)) {
+          _deny();
+          return;
+        }
+      } on FormatException {
+        // The URL/query policy below handles malformed input in its own scope.
+      }
+    }
+    // An address is checked before search; provider options are rebuilt before
+    // URI normalization can erase an ambiguous literal path.
     if (RegExp(
-      r'(^[a-z][a-z0-9+.-]*:)|([a-z0-9-]+\.[a-z]{2,}([/\s:]|$))|(%[0-9a-f]{2})',
+      r'^(?:[a-z][a-z0-9+.-]*:|[^\s/]+\.[a-z]{2,}(?:[/?\x23:]|$))',
       caseSensitive: false,
     ).hasMatch(value)) {
       try {
-        _navigateWebsite(Uri.parse(normalizeLaunchpadWebsite(value)));
+        final explicit = RegExp(
+          r'^[a-z][a-z0-9+.-]*:',
+          caseSensitive: false,
+        ).hasMatch(value);
+        final provider = const StrictSearchPolicy().rewriteProviderInput(
+          explicit ? value : 'https://$value',
+        );
+        _navigateWebsite(
+          provider ?? Uri.parse(normalizeLaunchpadWebsite(value)),
+        );
       } catch (_) {
         _deny();
+      }
+      return;
+    }
+    if (web) {
+      try {
+        _navigateWebsite(const StrictSearchPolicy().buildQuery(input));
+      } on FormatException catch (error) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.message)));
       }
       return;
     }
@@ -867,13 +935,17 @@ class _BrowserShellState extends State<BrowserShell>
           contentContext: _context,
           isPrivate: origin.isPrivate,
           localSuggestions: widget.state.settings.localSuggestions,
-          initialQuery: _tab.website?.toString() ?? _query,
+          initialQuery: _tab.website == null
+              ? _query
+              : const StrictSearchPolicy().acceptsCanonical(_tab.website!)
+              ? _tab.website!.queryParameters['q']!
+              : _tab.website.toString(),
         ),
       ),
     );
     if (intent == null || !_validOrigin(origin)) return;
     _officialSearch = intent.official;
-    _search(intent.query);
+    _search(intent.query, web: intent.web);
   }
 
   void _explore() => setState(() {
@@ -1231,7 +1303,7 @@ class _BrowserShellState extends State<BrowserShell>
                 const SizedBox(height: 16),
                 Text(
                   _query.isEmpty
-                      ? 'Reviewed website scopes and installed articles. Search stays on this device.'
+                      ? 'Reviewed website scopes and installed articles. Library search stays on this device.'
                       : 'Matches for “$_query” · On this device',
                 ),
                 const SizedBox(height: 16),
@@ -1489,7 +1561,7 @@ class _BrowserShellState extends State<BrowserShell>
                 ),
                 const SizedBox(height: 12),
                 const Text(
-                  'Reviewed-page sessions in Wingman. Ordinary tabs start fresh on restart; saved Finish Mode tasks can restore their reviewed resources.',
+                  'Tabs start fresh on restart. Search terms stay in this session; saved Finish Mode tasks can restore reviewed library resources only.',
                 ),
                 const SizedBox(height: 16),
                 Wrap(
@@ -2046,6 +2118,7 @@ class _BrowserShellState extends State<BrowserShell>
         !_toolsReady ||
         _ephemeral ||
         uri == null ||
+        const StrictSearchPolicy().acceptsCanonical(uri) ||
         !status.committed ||
         status.url != uri ||
         !_websiteDecision(uri).isAllowed) {
@@ -2408,14 +2481,23 @@ class _BrowserShellState extends State<BrowserShell>
       }
       return [
         if (origin.website case final uri?) ...[
-          Text(uri.toString(), style: Theme.of(context).textTheme.titleMedium),
+          Text(
+            const StrictSearchPolicy().acceptsCanonical(uri)
+                ? 'DuckDuckGo search · Adult filtering: Strict'
+                : uri.toString(),
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
           const SizedBox(height: 16),
-          const Text(
-            'Reviewed live website scope. HTML, styles and listed images load directly from the website. Scripts, accounts, forms, embedded frames and downloads are disabled in this pilot.',
+          Text(
+            const StrictSearchPolicy().acceptsCanonical(uri)
+                ? 'Wingman requires DuckDuckGo’s Strict adult filter and blocks provider shortcuts that bypass it. Search previews are not fully classified against Wingman’s other content rules. Links still require a reviewed destination; pagination, images and provider forms are unavailable.'
+                : 'Reviewed live website scope. HTML, styles and listed images load directly from the website. Scripts, accounts, forms, embedded frames and downloads are disabled in this pilot.',
           ),
           const SizedBox(height: 12),
-          const Text(
-            'Page requests reveal connection information to the requested website. Wingman does not upload your address, page contents or browsing history. Website content can change; this is not a guarantee about every image or word.',
+          Text(
+            const StrictSearchPolicy().acceptsCanonical(uri)
+                ? 'Submitting sends the query and your connection information directly to DuckDuckGo. Wingman does not save search terms, provide remote suggestions or use a paid search API. Private mode does not hide requests from the provider. SafeSearch can miss results.'
+                : 'Page requests reveal connection information to the requested website. Wingman does not upload your address, page contents or browsing history. Website content can change; this is not a guarantee about every image or word.',
           ),
           if (widget.policy.policy.livePolicy?.siteForUri(uri) case final site?)
             Text('Scope review expires ${_date(site.expiresAt)}'),
@@ -2464,6 +2546,7 @@ class _BrowserShellState extends State<BrowserShell>
                   !_toolsReady ||
                   (resource == null &&
                       (live == null ||
+                          const StrictSearchPolicy().acceptsCanonical(live) ||
                           committed?.committed != true ||
                           committed?.url != live ||
                           !_websiteDecision(live).isAllowed))
@@ -2473,6 +2556,9 @@ class _BrowserShellState extends State<BrowserShell>
               : () => _pinToLaunchpad(resource!.id, committedPage: true),
           subtitle: _ephemeral
               ? 'Unavailable for private or temporary pages'
+              : live != null &&
+                    const StrictSearchPolicy().acceptsCanonical(live)
+              ? 'Search terms are not saved; pin a reviewed result page'
               : live != null
               ? 'Pin this committed reviewed page to Home'
               : resource == null

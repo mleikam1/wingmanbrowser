@@ -28,7 +28,7 @@ import java.util.Locale
 import java.util.TimeZone
 import java.util.UUID
 
-/** A separate scriptless renderer. Its allow set comes only from the packaged catalog. */
+/** Scriptless reviewed websites and a separately authorized provider-Strict search surface. */
 class ProtectedWebBridge(private val context: Context, private val channel: MethodChannel) {
     companion object {
         const val VIEW_TYPE = "wingman/protected-web"
@@ -37,6 +37,7 @@ class ProtectedWebBridge(private val context: Context, private val channel: Meth
         const val CATALOG_SHA256 = "7937170f4c5605faff4e7fbfcc0ea4f27623b05a75c84e6adc8aba2243f965c1"
         private const val MAX_PAGE_BYTES = 12 * 1024 * 1024
         private const val MAX_REQUESTS = 80
+        private const val SEARCH_CSS = "https://safe.duckduckgo.com/dist/lr.48ddfe4eadf6a534e93f.css"
         private const val CSP = "default-src 'none'; script-src 'none'; img-src https:; style-src 'unsafe-inline' https:; font-src https:; connect-src 'none'; frame-src 'none'; child-src 'none'; object-src 'none'; media-src 'none'; base-uri 'none'; form-action 'none'; sandbox allow-same-origin"
     }
     private val views = mutableMapOf<Int, ProtectedView>()
@@ -109,7 +110,7 @@ class ProtectedWebBridge(private val context: Context, private val channel: Meth
         try {
             if (call.method == "capabilities") {
                 val supported = ready && !cleanupPending && !profilePurgeFailed && policy.valid()
-                result.success(mapOf("supported" to supported, "privateAvailable" to (supported && privateAvailable()), "mode" to "reviewedScriptlessWeb", "reason" to if (supported) null else "Reviewed website protection is unavailable.")); return
+                result.success(mapOf("supported" to supported, "privateAvailable" to (supported && privateAvailable()), "strictSearchAvailable" to mayOpen(), "mode" to "reviewedScriptlessWeb", "reason" to if (supported) null else "Reviewed website protection is unavailable.")); return
             }
             if (call.method == "state" && call.argument<Number>("viewId") == null) {
                 result.success(mapOf("views" to views.values.count { it.web != null }, "ready" to ready, "foreground" to foreground, "handoffBlocked" to denied, "cleanupPending" to cleanupPending, "catalogValid" to policy.valid(), "profilePurgesPending" to profilePurgeWaiters.size, "profilePurgesCompleted" to purgedProfiles.size, "profilePurgeFailed" to profilePurgeFailed, "profilesRemaining" to if (privateAvailable()) ProfileStore.getInstance().allProfileNames.count { it.startsWith("wingman_private_") } else null)); return
@@ -121,6 +122,14 @@ class ProtectedWebBridge(private val context: Context, private val channel: Meth
                     val url = call.argument<String>("url") ?: view.currentUrl
                     val requestId = call.argument<Number>("requestId")?.toLong() ?: throw IllegalStateException()
                     view.open(url, requestId)
+                    result.success(null)
+                }
+                "openSearch" -> {
+                    check(mayOpen())
+                    val query = call.argument<String>("query") ?: throw IllegalStateException()
+                    val requestId = call.argument<Number>("requestId")?.toLong() ?: throw IllegalStateException()
+                    val url = strictSearchURL(query) ?: throw IllegalStateException()
+                    view.openScope(url, requestId, Site("DuckDuckGo Strict search", policy.expiry(), mapOf(url to Entry(url, setOf("text/html"), 1024 * 1024)), mapOf(SEARCH_CSS to Entry(SEARCH_CSS, setOf("text/css"), 64 * 1024)), true))
                     result.success(null)
                 }
                 "stop" -> { view.suspendView(); result.success(null) }
@@ -154,13 +163,15 @@ class ProtectedWebBridge(private val context: Context, private val channel: Meth
         private var title = ""
         private var loadedImages = 0
         private var decodedImages = 0
+        private var searchResultLinks: Int? = null
+        private var loadedStyleSheets = 0
         private var expiryTask: Runnable? = null
         private var deadlineNanos = 0L
         private val connections = mutableSetOf<HttpURLConnection>()
         private val lock = Any()
         override fun getView(): View = container
         override fun dispose() { release(); disposed = true; views.remove(id) }
-        fun state(): Map<String, Any?> = synchronized(lock) { mapOf("viewId" to id, "requestId" to requestId, "url" to currentUrl, "title" to title, "progress" to progress, "isLoading" to loading, "error" to error, "blockedResources" to blocked, "loadedResources" to loaded, "bytesReceived" to byteCount, "requests" to requests, "requestAttempts" to requests, "networkRequests" to networkRequests, "hasRenderer" to (web != null), "private" to privateMode, "javascript" to (web?.settings?.javaScriptEnabled ?: false), "networkFallback" to false, "engineNetworkBlocked" to (web?.settings?.blockNetworkLoads ?: true), "loadedImageResponses" to loadedImages, "decodedImageResponses" to decodedImages) }
+        fun state(): Map<String, Any?> = synchronized(lock) { mapOf("viewId" to id, "requestId" to requestId, "url" to currentUrl, "title" to title, "progress" to progress, "isLoading" to loading, "error" to error, "blockedResources" to blocked, "loadedResources" to loaded, "bytesReceived" to byteCount, "requests" to requests, "requestAttempts" to requests, "networkRequests" to networkRequests, "hasRenderer" to (web != null), "private" to privateMode, "javascript" to (web?.settings?.javaScriptEnabled ?: false), "networkFallback" to false, "engineNetworkBlocked" to (web?.settings?.blockNetworkLoads ?: true), "loadedImageResponses" to loadedImages, "decodedImageResponses" to decodedImages, "strictSearch" to (site?.search == true), "searchResultLinks" to searchResultLinks, "loadedStyleSheetResponses" to loadedStyleSheets) }
         fun diagnosticState(result: MethodChannel.Result) {
             // Android disables even app-requested script evaluation when JavaScript is off.
             // Do not briefly enable it for diagnostics; decoded native image responses are counted instead.
@@ -168,12 +179,15 @@ class ProtectedWebBridge(private val context: Context, private val channel: Meth
         }
         private fun emit() { container.post { if (!disposed) channel.invokeMethod("pageState", state()) } }
         fun open(raw: String, request: Long) {
-            check(!disposed && mayOpen() && tabId.isNotEmpty() && tabId.length <= 100 && (!privateMode || privateAvailable()))
             val canonical = canonical(raw) ?: throw IllegalStateException()
             val match = policy.document(canonical) ?: throw IllegalStateException()
+            openScope(raw, request, match)
+        }
+        fun openScope(raw: String, request: Long, match: Site) {
+            check(!disposed && mayOpen() && tabId.isNotEmpty() && tabId.length <= 100 && (!privateMode || privateAvailable()))
             check(request > requestId)
             release()
-            synchronized(lock) { currentUrl = raw; requestId = request; site = match; epoch++; active = true; requests = 0; networkRequests = 0; byteCount = 0; reservedBytes = 0; loaded = 0; loadedImages = 0; decodedImages = 0; blocked = 0; error = null; progress = 0; loading = true; title = match.title; deadlineNanos = System.nanoTime() + 45_000_000_000L }
+            synchronized(lock) { currentUrl = raw; requestId = request; site = match; epoch++; active = true; requests = 0; networkRequests = 0; byteCount = 0; reservedBytes = 0; loaded = 0; loadedImages = 0; decodedImages = 0; searchResultLinks = null; loadedStyleSheets = 0; blocked = 0; error = null; progress = 0; loading = true; title = match.title; deadlineNanos = System.nanoTime() + 45_000_000_000L }
             val view = object : WebView(container.context) {
                 override fun onCreateInputConnection(outAttrs: EditorInfo): InputConnection? = null
                 override fun onCheckIsTextEditor() = false
@@ -307,6 +321,7 @@ class ProtectedWebBridge(private val context: Context, private val channel: Meth
                     }
                     output.toByteArray()
                 }
+                val resultLinks = if (request.isForMainFrame && site?.search == true) Regex("""<a\b[^>]*\bclass\s*=\s*["'][^"']*\bresult-link\b""", RegexOption.IGNORE_CASE).findAll(String(bytes, Charsets.UTF_8)).count() else null
                 var decodedRaster = false
                 if (mime.startsWith("image/") && mime != "image/svg+xml") {
                     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
@@ -319,7 +334,7 @@ class ProtectedWebBridge(private val context: Context, private val channel: Meth
                     decodedRaster = true
                     bitmap.recycle()
                 }
-                synchronized(lock) { check(active && capture == epoch && mayOpen()); loaded++; if (mime.startsWith("image/")) loadedImages++; if (decodedRaster) decodedImages++ }
+                synchronized(lock) { check(active && capture == epoch && mayOpen()); loaded++; if (mime == "text/css") loadedStyleSheets++; if (resultLinks != null) searchResultLinks = resultLinks; if (mime.startsWith("image/")) loadedImages++; if (decodedRaster) decodedImages++ }
                 val headers = mutableMapOf("Cache-Control" to "no-store", "X-Content-Type-Options" to "nosniff", "Referrer-Policy" to "no-referrer", "Content-Security-Policy" to CSP)
                 connection.getHeaderField("Content-Security-Policy")?.let { headers["Content-Security-Policy"] = "$CSP, $it" }
                 emit()
@@ -327,7 +342,7 @@ class ProtectedWebBridge(private val context: Context, private val channel: Meth
             } catch (_: Exception) { return deny() }
             finally { connection?.disconnect(); synchronized(lock) { connections.remove(connection) } }
         }
-        private fun fail() { release(); error = "This page could not load within its reviewed website scope."; emit() }
+        private fun fail() { release(); error = if (site?.search == true) "Strict search is unavailable. Wingman did not open another search endpoint." else "This page could not load within its reviewed website scope."; emit() }
         fun suspendView() { release() }
         fun activate() { /* Resuming requires an explicit new open and current policy checks. */ }
         fun release() {
@@ -347,7 +362,7 @@ class ProtectedWebBridge(private val context: Context, private val channel: Meth
     }
 
     private data class Entry(val url: String, val mimeTypes: Set<String>, val maxBytes: Int)
-    private data class Site(val title: String, val expires: Long, val documents: Map<String, Entry>, val resources: Map<String, Entry>)
+    private data class Site(val title: String, val expires: Long, val documents: Map<String, Entry>, val resources: Map<String, Entry>, val search: Boolean = false)
     private class Catalog(context: Context) {
         private var sites = emptyList<Site>()
         private var expires = 0L
@@ -389,6 +404,7 @@ class ProtectedWebBridge(private val context: Context, private val channel: Meth
             } catch (_: Exception) { sites = emptyList(); expires = 0L }
         }
         fun valid() = System.currentTimeMillis() < expires && sites.any { System.currentTimeMillis() < it.expires }
+        fun expiry() = expires
         fun document(url: String) = if (!valid()) null else sites.firstOrNull { System.currentTimeMillis() < it.expires && url in it.documents }
         fun resourceDenied(url: String, document: String): Boolean {
             val host = URI(url).host ?: return true

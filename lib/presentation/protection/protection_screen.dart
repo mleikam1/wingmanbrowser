@@ -31,7 +31,7 @@ class ProtectionScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
-    listenable: policy,
+    listenable: Listenable.merge([state, policy]),
     builder: (context, _) => WingmanPage(
       title: 'Protection',
       child: Column(
@@ -66,7 +66,7 @@ class ProtectionScreen extends StatelessWidget {
                 const SizedBox(height: 12),
                 Text(
                   policy.status.usable
-                      ? 'Your core protections have no off switch.'
+                      ? 'Your reviewed-content rules have no off switch.'
                       : 'Core rules remain active. Reviewed content is currently unavailable.',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: Colors.white,
@@ -85,7 +85,13 @@ class ProtectionScreen extends StatelessWidget {
                 : 'No usable catalog is available. A polished interface is not evidence of live-site coverage.',
             tone: WingmanTone.caution,
           ),
-          const WingmanSection(title: 'Always-on policy'),
+          WingmanStatus(
+            title: 'Web search has a separate filtering scope',
+            message:
+                '${policy.searchAvailable(isPrivate: isPrivate, additional: state.protectedPreferences.additional) ? 'The first, text-only DuckDuckGo results page is available with publisher-fixed Strict adult filtering.' : 'Web search is unavailable or disabled in this session.'} Search snippets and ads are not classified against all six Wingman rules. Search results do not expand the reviewed destination list.',
+            tone: WingmanTone.caution,
+          ),
+          const WingmanSection(title: 'Reviewed-content policy'),
           for (final category in MandatoryCategory.values.where(
             (value) => value != MandatoryCategory.securityThreat,
           )) ...[
@@ -117,7 +123,7 @@ class ProtectionScreen extends StatelessWidget {
           WingmanSettingsRow(
             icon: Icons.tune,
             title: 'Additional boundaries',
-            subtitle: 'Hide eligible collections or reviewed items',
+            subtitle: 'Disable web search or hide reviewed content',
             onTap: () => _open(
               context,
               AdditionalBoundariesScreen(
@@ -185,14 +191,14 @@ class AlwaysOnProtectionsScreen extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'These boundaries are built into the application. Private sessions, optional settings, review requests and compatibility corrections cannot turn them off.',
+            'These reviewed-content boundaries are built into the application. Private sessions, optional settings, review requests and compatibility corrections cannot turn them off. Live search previews use a separate provider filter; they are not classified against all six rules.',
           ),
           const SizedBox(height: 20),
           for (final category in MandatoryCategory.values)
             WingmanSettingsRow(
               icon: Icons.lock_outline,
               title: category.label,
-              subtitle: 'Always restricted',
+              subtitle: 'Restricted in the reviewed-content policy',
             ),
           const SizedBox(height: 24),
           const WingmanSection(title: 'Policy & review data'),
@@ -213,6 +219,10 @@ class AlwaysOnProtectionsScreen extends StatelessWidget {
           const SizedBox(height: 16),
           const Text(
             'Installed text uses exact-content approval. The native website pilot permits separately reviewed page and asset addresses. Unknown or unsupported destinations stay closed. Website content can change; no per-image or automatic text classifier checks every response. iOS cannot inspect every image response before display. Expired website scope closes live access until a reviewed app update; there is no automatic online filter-update service.',
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'DuckDuckGo adult filtering stays Strict where native web search is supported. The provider can miss adult content, and its results and advertisements are not a six-category Wingman classification. An additional boundary can disable web search; private tabs inherit it.',
           ),
         ],
       ),

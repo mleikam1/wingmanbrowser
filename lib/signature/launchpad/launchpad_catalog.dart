@@ -183,7 +183,7 @@ class LaunchpadCatalog {
     provenanceUrls: [url, ...evidence.where((e) => e != url)],
     scope: scope,
     limitation:
-        'Live website unavailable in this build; saving records a local review request. No destination, dependency, account or dynamic content is approved by this catalog.',
+        'This catalog does not grant website access. An unsupported destination can only be saved as a local review record. Live browsing requires separate, current native permission.',
   );
   static final websites = List<StarterCatalogEntry>.unmodifiable([
     _website(

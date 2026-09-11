@@ -46,6 +46,7 @@ Future<void> main() async {
         reviewed,
         nativeAvailable: capabilities.supported,
         privateAvailable: capabilities.privateAvailable,
+        strictSearchAvailable: capabilities.strictSearchAvailable,
       );
     } catch (_) {
       // A missing/invalid live pack cannot break the existing offline library

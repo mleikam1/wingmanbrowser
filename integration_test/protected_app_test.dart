@@ -67,6 +67,8 @@ void main() {
 
   Future<void> search(WidgetTester tester, String text) async {
     await focusSearch(tester);
+    // This fixture exercises installed articles; Web is the native default.
+    await tap(tester, find.widgetWithText(ChoiceChip, 'Library'));
     await tester.enterText(
       find.byKey(const ValueKey('protected-search')),
       text,

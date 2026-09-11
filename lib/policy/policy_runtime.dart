@@ -5,17 +5,20 @@ import 'policy_checkpoint_store.dart';
 import 'policy_models.dart';
 import 'signed_policy_repository.dart';
 import 'live_browsing_policy.dart';
+import 'strict_search_policy.dart';
 
 export 'policy_models.dart';
 export 'signed_policy_repository.dart';
 export 'policy_checkpoint_store.dart';
 export 'live_browsing_policy.dart';
+export 'strict_search_policy.dart';
 
 class ContentEligibilityService {
   ContentEligibilityService(this.repository);
   final SignedPolicyRepository repository;
   LiveBrowsingPolicy? livePolicy;
   bool nativeLiveAvailable = false, privateLiveAvailable = false;
+  bool nativeSearchAvailable = false;
   PolicyDecision evaluate(
     PolicyRequest request, {
     AdditionalRestrictions? additional,
@@ -30,6 +33,32 @@ class ContentEligibilityService {
       }
       if (!repository.status.usable) {
         return const PolicyDecision(PolicyDecisionCode.blockPolicyUnavailable);
+      }
+      // Provider search is a separate capability with adult SafeSearch fixed
+      // by the publisher. It does not classify its previews against the other
+      // Wingman categories or grant permission to any result destination.
+      if (const StrictSearchPolicy().acceptsCanonical(request.uri!)) {
+        if (!nativeSearchAvailable) {
+          return const PolicyDecision(
+            PolicyDecisionCode.blockUnsupportedCapability,
+          );
+        }
+        if (!livePolicy!.isUsable(now: repository.clock.now())) {
+          return const PolicyDecision(
+            PolicyDecisionCode.blockPolicyUnavailable,
+          );
+        }
+        if (additional?.blockedCollections.contains('web-search') == true ||
+            additional?.blockedResourceIds.contains('web-search') == true) {
+          return const PolicyDecision(
+            PolicyDecisionCode.blockAdditionalRestriction,
+          );
+        }
+        return const PolicyDecision(
+          PolicyDecisionCode.allowApproved,
+          resourceId: 'web-search',
+          safeTitle: 'DuckDuckGo search',
+        );
       }
       return livePolicy!.assessNavigation(
         request.uri!,
@@ -102,16 +131,27 @@ class PolicyRuntime extends ChangeNotifier {
       (!isPrivate || policy.privateLiveAvailable) &&
       (policy.livePolicy?.isUsable(now: clock.now()) ?? false);
 
+  bool searchAvailable({
+    bool isPrivate = false,
+    AdditionalRestrictions? additional,
+  }) =>
+      liveAvailable(isPrivate: isPrivate) &&
+      policy.nativeSearchAvailable &&
+      additional?.blockedCollections.contains('web-search') != true &&
+      additional?.blockedResourceIds.contains('web-search') != true;
+
   /// Native capability is observed after startup quarantine; it is never loaded
   /// from preferences, a Launchpad record, user role or remote allow flag.
   void configureLiveBrowsing(
     LiveBrowsingPolicy reviewed, {
     required bool nativeAvailable,
     required bool privateAvailable,
+    bool strictSearchAvailable = false,
   }) {
     policy.livePolicy = reviewed;
     policy.nativeLiveAvailable = nativeAvailable;
     policy.privateLiveAvailable = privateAvailable;
+    policy.nativeSearchAvailable = strictSearchAvailable;
     _schedule();
     if (!_disposed) notifyListeners();
   }

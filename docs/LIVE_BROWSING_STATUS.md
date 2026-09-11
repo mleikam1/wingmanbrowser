@@ -1,5 +1,7 @@
 # Protected visual browsing: v0.8 status
 
+> Version 0.9 adds a separate native DuckDuckGo Strict search capability. Its scope, provider limits and current validation are in [Strict search](STRICT_SEARCH.md). The six reviewed destination pages and the platform limitations below remain; this document's original general-search unavailability and test counts describe v0.8.
+
 Source review: **September 11, 2026**. This document describes the new native pilot and supersedes earlier milestone statements that Wingman never creates a website renderer or makes browsing requests. The 528-test host suite, both platforms' live journeys and actual-app pin/revocation flows have passed. Fresh native visual sign-off and production release acceptance remain open; see [Protected visual browsing QA](PROTECTED_VISUAL_BROWSING_QA.md) for the evidence and limits.
 
 ## What this milestone adds

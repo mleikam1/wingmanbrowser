@@ -158,6 +158,7 @@ void main() {
       // Follow the actual search → article → page menu → pin preview path.
       stage = 'pin-article';
       await tap(tester, find.byKey(const ValueKey('home-search-entry')));
+      await tap(tester, find.widgetWithText(ChoiceChip, 'Library'));
       await tester.enterText(
         find.byKey(const ValueKey('protected-search')),
         article.title,

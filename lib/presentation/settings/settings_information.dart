@@ -82,7 +82,15 @@ class AboutScreen extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           const Text(
-            'Eligible Android and iOS 18.4+ builds include a limited reviewed website pilot with images and styles. Scripts, external search, account sign-in, site permissions, remote Reader, downloads, cloud sync and report submission remain unavailable. Web is a local-tools companion and does not control other browser tabs.',
+            'Eligible Android and iOS 18.4+ builds include a limited reviewed website pilot with images and styles. Supported native sessions can also open the first, text-only DuckDuckGo results page with a fixed Strict adult filter. Search previews are not classified against all six Wingman rules, and only reviewed destination pages can open. Search images, pagination and page forms are unavailable.',
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'Web search sends submitted queries and the connection’s IP address directly to DuckDuckGo, with no remote suggestions while typing and no paid search service. Native desktop apps are not available. The web companion has local tools only and does not control other browser tabs.',
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'Website scripts, account sign-in, site permissions, remote Reader, downloads, cloud sync and report submission remain unavailable.',
           ),
           const SizedBox(height: 20),
           WingmanSettingsRow(

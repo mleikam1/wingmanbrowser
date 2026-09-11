@@ -59,9 +59,14 @@ class SettingsScreen extends StatelessWidget {
           _SettingsLink(
             icon: Icons.search,
             title: 'Search',
-            subtitle: 'Approved resources and local suggestions',
+            subtitle: 'Fixed Strict web filtering and on-device search',
             onTap: () => open(
-              SearchSettingsScreen(state: state, canContinue: canContinue),
+              SearchSettingsScreen(
+                state: state,
+                policy: policy,
+                isPrivate: isPrivate,
+                canContinue: canContinue,
+              ),
             ),
           ),
           const _GroupLabel(title: 'Protection & privacy'),

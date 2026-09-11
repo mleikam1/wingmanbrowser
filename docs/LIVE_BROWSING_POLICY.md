@@ -1,5 +1,7 @@
 # Wingman live browsing policy
 
+> This document defines the six reviewed website scopes. Version 0.9 also permits the separately controlled provider results surface described in [Strict search](STRICT_SEARCH.md). That provider surface has an adult SafeSearch filter, not full Wingman content classification; it grants no destination permission.
+
 Review date: **September 11, 2026**. This milestone adds a constrained live-rendering capability beside the existing signed offline library. It does not certify general website compatibility or claim perfect content classification. The mandatory categories remain application rules; a favorite, role, private session, edited shortcut or familiar brand cannot disable them.
 
 ## Authority and scope
