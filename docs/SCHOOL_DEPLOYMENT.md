@@ -1,17 +1,17 @@
 # School deployment — first permanent-protection milestone
 
-Wingman Student is an **ad-free product configuration**, not a claim of completed school deployment. Every edition keeps the same mandatory protection baseline. A manager may add restrictions or select already-eligible resources, but cannot approve prohibited/unreviewed content through a lower-priority allowlist.
+Wingman Student is an **ad-free product configuration**, not a claim of completed school deployment. Every edition keeps the same mandatory protection baseline. Current additional controls are user-editable; authenticated institutional restrictions and classroom provisioning are not implemented. A future managed configuration could add restrictions or select already-eligible resources, but could not approve prohibited/unreviewed content through a lower-priority allowlist.
 
 ## Actual scope and status
 
 | Capability | Current milestone status |
 |---|---|
-| Compile-time student configuration | **Implemented and tested** for edition selection and commerce denial; selected by `--dart-define WINGMAN_EDITION=student`. Complete Student application acceptance remains unverified |
+| Compile-time student configuration | **Implemented and tested** for edition selection, commerce denial, session data and the complete app startup/discovery fixture on an Android emulator; selected by `--dart-define WINGMAN_EDITION=student`. Physical-device and institutional acceptance remain unverified |
 | Advertising | **Disabled pending review** across the product; student advertising is prohibited, not a future opt-in |
 | Personal Wingman accounts | **Deferred**; basic local use does not require one |
 | Managed-app configuration adapters and enrollment | **Deferred**; no existing Android/iOS adapter or enrolled test deployment is claimed |
 | School administration/authentication/tenant isolation | **Deferred**; no admin backend, dashboard or school accounts |
-| Discovery-session reset | **Implemented but unverified** until final UI results are recorded; clears current reviewed saves/tabs/searches and preserves additional restrictions. Private reset leaves normal saves intact |
+| Discovery-session reset | **Implemented and tested** at state/UI boundaries; clears current reviewed saves/tabs/searches and preserves additional restrictions. Private reset leaves normal saves intact |
 | Complete shared-device school sanitation | **Deferred** pending management, file-provider and identity-provider acceptance; discovery reset is not a complete device wipe |
 | ChromeOS/managed desktop extension | **Deferred**; Flutter Web is a companion, not an extension or device-wide filter |
 | Real school pilot deployment | **Blocked** by an approved test management environment, enrollment authorization and school/provider agreements |
@@ -20,6 +20,12 @@ Wingman Student is an **ad-free product configuration**, not a claim of complete
 An invalid edition value is unknown and receives noncommercial, restrictive behavior. Edition selection is build configuration, not authenticated enrollment. No build flag can remove mandatory protection.
 
 No school deployment is performed in this milestone. No real device is silently enrolled, no school account is created, and no production cloud resource is provisioned.
+
+## Verified configuration evidence
+
+The Android Student debug integration exercised real main startup, the 14-entry signed catalog, local search, article rendering, saves, immutable core controls and rejected external navigation: **1 passed**, with zero fixture requests and zero content WebViews (`work/mandatory-app-android-student-handoff.log`). Its 3,076 ms first-settled sample includes the debug integration harness and is not a cold-start or physical-device measurement. Focused state/data suites passed **12 tests each** for Student and unknown editions (`work/permanent-student-data-tests.log`, `work/permanent-unknown-data-tests.log`).
+
+The final clean Student debug APK and consumer iOS simulator app were inspected for retired advertising and external-content plugins; they contain no GMA/UMP or Flutter WebView/share/launcher/file-picker implementation. Android debug retains INTERNET for developer tooling. A separate successful release manifest-merger task confirms the release intermediate omits INTERNET and advertising/media/location permissions. These are development artifacts and a build intermediate, not signed distribution acceptance; the Android release APK build is **Blocked** by a local AOT tool execution problem. See [monetization artifact evidence](MONETIZATION_POLICY.md). No MDM, shared-device sanitation or school-provider acceptance is implied by these tests.
 
 ## Smallest useful managed pilot
 

@@ -36,7 +36,7 @@ flutter run -d emulator-5556 --dart-define=WINGMAN_EDITION=student
 For a local web preview:
 
 ```sh
-flutter build web --no-web-resources-cdn
+flutter build web --no-web-resources-cdn --no-tree-shake-icons
 python3 -m http.server 8791 --bind 127.0.0.1 --directory build/web
 ```
 

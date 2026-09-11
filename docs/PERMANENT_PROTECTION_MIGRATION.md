@@ -2,6 +2,10 @@
 
 Status: first foundation milestone implemented; final verification is recorded in RELEASE_READINESS.md. Audit date: September 10, 2026. Starting commit: `060839b8b656f89ea1a1998b2843f3322f7e33b3`, clean `main`, already merged Phase 3A. Work proceeds locally on `permanent-protection/foundation`; no push, production deployment, purchase, enrollment, or publication is authorized by this milestone.
 
+## Audited environment and integrations
+
+Repository: `/Users/MattLeikam/Documents/Codex/2026-09-10/files-pasted-by-the-user-you/outputs/wingman_browser`; remote `https://github.com/mleikam1/wingmanbrowser.git`. Installed tooling: Flutter 3.44.4, Dart 3.12.2, Xcode 26.3 and Android Studio JBR 21. Baseline architecture used Flutter UI, SQLite metadata, platform WebViews, optional native Guard, external search/Reader/download/launch paths and GMA/UMP. No Browser Firebase app, policy endpoint, school tenant service, cloud sync or AI integration is configured. This repository inventory does not claim an account-wide cloud audit; no cloud resources were created.
+
 ## Baseline preserved
 
 Fresh baseline: 289 host tests passed plus one optional benchmark skipped; analyzer clean on retry (2.6 s). Android debug build passed (14.9 s), iOS simulator debug (21.4 s), web (27.8 s). The first analyzer invocation hit Flutter's generated ephemeral package deletion race during concurrent commands; the independent no-pub retry passed. Compilation is not device testing. The earlier committed source remains in Git and historical docs.

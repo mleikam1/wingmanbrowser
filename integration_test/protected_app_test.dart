@@ -114,6 +114,37 @@ void main() {
               'Student/unknown reviewed saves must remain in session memory',
         );
       }
+      // Exercise the actual catalog-tab UI with two independently opened,
+      // approved articles. Timing includes the selection tap, sheet dismissal
+      // and settled article frame; it is not renderer/FPS or cold-start timing.
+      await tester.tap(find.byTooltip('Tabs (1)'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('New tab'));
+      await tester.pumpAndSettle();
+      await search(tester, 'tides');
+      await tester.ensureVisible(find.text('How tides work'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('How tides work'));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('article-how-tides-work')),
+        findsOneWidget,
+      );
+      await tester.tap(find.byTooltip('Tabs (2)'));
+      await tester.pumpAndSettle();
+      final moonTab = find.widgetWithText(ListTile, 'A month of moonlight');
+      expect(moonTab.hitTestable(), findsOneWidget);
+      final switching = Stopwatch()..start();
+      await tester.tap(moonTab);
+      await tester.pumpAndSettle();
+      switching.stop();
+      expect(find.byKey(const ValueKey('article-moon-phases')), findsOneWidget);
+      expect(find.textContaining('The Moon does not make'), findsOneWidget);
+      expect(find.byTooltip('Tabs (2)'), findsOneWidget);
+      debugPrint(
+        'MANDATORY catalogTabSwitchMs=${(switching.elapsedMicroseconds / 1000).toStringAsFixed(1)} tabs=2 platform=${Platform.operatingSystem} edition=${productEdition.name} mode=debug-integration single-observation NOT-performance-guarantee',
+      );
+
       await tester.ensureVisible(find.text('Library'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Library'));
@@ -163,7 +194,7 @@ void main() {
       expect(native?['contentViews'], 0);
       expect(requests, 0);
       debugPrint(
-        'MANDATORY app catalog=14 localSearch=true article=true saves=true coreLocks=true coreLockTapNoOverride=true rejectedUrl=true requests=0 views=0',
+        'MANDATORY app catalog=14 localSearch=true article=true saves=true catalogTabSwitch=true coreLocks=true coreLockTapNoOverride=true rejectedUrl=true requests=0 views=0',
       );
     } finally {
       // Restore only the reviewed IDs changed by this test; do not erase the
