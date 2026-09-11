@@ -1,5 +1,7 @@
 # Native browser implementation and verification boundaries
 
+> Historical Phase 1–3A evidence. The mandatory bundled-content milestone removes live browsing, WebView plugins, live Reader extraction, authentication and downloads. The current boundary and tests are in [SECURITY_TEST_MATRIX.md](SECURITY_TEST_MATRIX.md); capabilities described below are retired, not available product features.
+
 Wingman uses the official `webview_flutter` controller and platform view on Android and iOS. The app's Flutter/native method channel is not exposed to websites. No `addJavaScriptChannel` or Android `addJavascriptInterface` is installed. On Android 8+ a narrow forwarding WebViewClient contains renderer process failures, destroys affected views, and exposes a recoverable page error. Reload creates a fresh isolated session. A debug-only app-channel integration hook can terminate the real renderer for tests; release builds reject it. Explicitly requested iOS Reader uses a bounded script in a WK isolated content world to produce an ephemeral plain-text document. The separate integration helper can execute fixture scripts; there is no general page-script UI or remote extraction service.
 
 ## Engines and sessions

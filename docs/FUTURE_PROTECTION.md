@@ -1,3 +1,5 @@
+> Historical Phase 1–3A document. Optional Guard, live browsing, external search, Reader and ad behavior described here is superseded by [permanent protection 0.4](RELEASE_READINESS.md). It is not a current capability or release claim.
+
 # Future protection beyond the Wingman browser
 
 Phase 2 Guard controls navigation inside Wingman's native browser. The web companion can apply local decisions before it hands a link to its host browser, but cannot control subsequent navigation in Safari, Chrome or other apps. No VPN, device-management profile, restricted entitlement request, extension or network-wide filter was created.

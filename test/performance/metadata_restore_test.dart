@@ -22,11 +22,11 @@ class ClosingRepository extends SqliteBrowserRepository {
   }
 }
 
-/// Intentionally compatible with Phase 2's API for the same-fixture comparison.
+/// Reopens a maximum-size synthetic legacy database after mandatory quarantine.
 /// Times metadata/database work only: no Flutter paint or native WebView startup.
 void main() {
   test(
-    'host metadata reopen preserves normal state and excludes private records',
+    'host metadata reopen quarantines legacy records before restore and excludes private records',
     () async {
       sqfliteFfiInit();
       final now = DateTime(2026, 9, 10, 12);
@@ -104,9 +104,17 @@ void main() {
         expect(state.storageError, isNull);
         expect(state.tabs.length, 10);
         expect(state.activeId, 'normal-4');
-        expect(state.bookmarks.length, 5000);
-        expect(state.history.length, 5000);
-        expect(state.settings.guardJson, '{"fixture":true}');
+        expect(state.bookmarks, isEmpty);
+        expect(state.quarantined.bookmarks, 5000);
+        expect(state.history, isEmpty);
+        expect(state.quarantined.history, 5000);
+        expect(state.quarantined.archivedTabs, 10);
+        expect(
+          state.tabs.every((tab) => tab.isHome && tab.title == 'New tab'),
+          true,
+        );
+        expect(jsonDecode(state.settings.guardJson)['guardEnabled'], true);
+        expect(state.settings.searchProviderId, 'approved-content');
         expect(state.settings.guardStatsJson, '{"count":7}');
         if (iteration == 0) {
           firstLoad = timer.elapsedMicroseconds;
@@ -114,13 +122,10 @@ void main() {
           samples.add(timer.elapsedMicroseconds);
         }
         if (iteration == 20) {
-          final private = state.newTab(
-            isPrivate: true,
-            url: 'https://private-restore.test/secret',
-          );
+          final private = state.newTab(isPrivate: true);
           state.pageChanged(
             tabId: private.id,
-            url: private.url,
+            url: 'https://private-restore.test/secret',
             title: 'PRIVATE-RESTORE-TITLE',
             completed: true,
           );
@@ -146,7 +151,7 @@ void main() {
       samples.sort();
       // ignore: avoid_print
       print(
-        'METADATA_RESTORE ${jsonEncode({'tabs': 10, 'bookmarks': 5000, 'history': 5000, 'schemaVersionAfter': version, 'firstOpenMicros': firstLoad, 'repeatCount': samples.length, 'repeatP50Micros': samples[10], 'repeatP95Micros': samples[18], 'privateRowsAfterClose': privateRows, 'processRssBeforeBytes': rssBefore, 'processRssAfterBytes': ProcessInfo.currentRss, 'scope': 'Host metadata only; fixture creation warmed SQLite; no app/WebView startup'})}',
+        'METADATA_RESTORE ${jsonEncode({'homeTabs': 10, 'quarantinedBookmarks': 5000, 'quarantinedHistory': 5000, 'archivedTabs': 10, 'schemaVersionAfter': version, 'firstOpenMicros': firstLoad, 'repeatCount': samples.length, 'repeatP50Micros': samples[10], 'repeatP95Micros': samples[18], 'privateRowsAfterClose': privateRows, 'processRssBeforeBytes': rssBefore, 'processRssAfterBytes': ProcessInfo.currentRss, 'scope': 'Host metadata only; fixture creation warmed SQLite; no app/WebView startup'})}',
       );
       await directory.delete(recursive: true);
     },

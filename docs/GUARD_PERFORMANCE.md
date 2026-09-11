@@ -1,3 +1,5 @@
+> Historical Phase 1–3A document. Optional Guard, live browsing, external search, Reader and ad behavior described here is superseded by [permanent protection 0.4](RELEASE_READINESS.md). It is not a current capability or release claim.
+
 # Guard lookup and storage measurements
 
 Measured on 2026-09-10 with Flutter host tests, Dart 3.12.2, macOS 15.7.4 ARM64.

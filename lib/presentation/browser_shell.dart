@@ -1,860 +1,953 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:share_plus/share_plus.dart';
-import 'package:url_launcher/url_launcher.dart';
+import '../config/product_edition.dart';
 import '../browser/browser_engine.dart';
-import '../domain/search.dart';
-import '../domain/local_suggestions.dart';
-import '../guard_ui/guard_controller.dart';
-import '../guard_ui/guard_settings_screen.dart';
-import '../guard_ui/guard_surfaces.dart';
-import '../monetization/ad_policy_service.dart';
-import '../monetization/ad_route_observer.dart';
+import '../policy/policy_runtime.dart';
 import '../state/browser_state.dart';
-import 'screens/home_screen.dart';
-import 'screens/library_screen.dart';
-import 'screens/reader_screen.dart';
-import 'screens/settings_screen.dart';
-import 'screens/tab_switcher.dart';
-import 'widgets/omnibox.dart';
-import 'widgets/browser_toolbar.dart';
-import 'widgets/browser_page_error.dart';
-import 'widgets/clear_browsing_data_dialog.dart';
 
+const _collections = <String, String>{
+  'science': 'Science',
+  'creative': 'Create something',
+  'learning': 'Learning skills',
+  'digital-life': 'Digital life',
+  'outdoors': 'Outdoors',
+  'support': 'Support',
+};
+
+class _DiscoveryTab {
+  _DiscoveryTab({this.isPrivate = false});
+  final bool isPrivate;
+  final List<String?> trail = [null];
+  int position = 0;
+  String? get resourceId => trail[position];
+  void visit(String? id) {
+    if (id == resourceId) return;
+    trail.removeRange(position + 1, trail.length);
+    trail.add(id);
+    position = trail.length - 1;
+    if (trail.length > 50) {
+      trail.removeAt(0);
+      position--;
+    }
+  }
+}
+
+/// Production content accepts only verified IDs. No HTML, linkifier, live
+/// controller, or external launcher is reachable from this surface.
 class BrowserShell extends StatefulWidget {
-  const BrowserShell({
-    super.key,
-    required this.state,
-    this.guard,
-    this.readerForTesting,
-  });
+  const BrowserShell({super.key, required this.state, required this.policy});
   final BrowserState state;
-  final GuardController? guard;
-  @visibleForTesting
-  final Future<ReaderArticle?> Function(String)? readerForTesting;
+  final PolicyRuntime policy;
   @override
   State<BrowserShell> createState() => _BrowserShellState();
 }
 
 class _BrowserShellState extends State<BrowserShell>
-    with WidgetsBindingObserver, RouteAware {
-  BrowserState get data => widget.state;
-  GuardController? get guard => widget.guard;
-  late final BrowserEnginePool engine;
-  late Listenable _adEligibilityChanges;
-  late Listenable _shellChanges;
-  final native = NativeBrowserService();
-  bool _isForeground = true;
-  bool _reading = false;
-  int _readerGeneration = 0;
-  ModalRoute<dynamic>? _route;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final next = ModalRoute.of(context);
-    if (_route != next) {
-      adRouteObserver.unsubscribe(this);
-      _route = next;
-      if (next != null) adRouteObserver.subscribe(this, next);
-      _readerGeneration++;
-    }
-  }
-
-  @override
-  void didPushNext() {
-    _readerGeneration++;
-  }
-
-  @override
-  void didPop() {
-    _readerGeneration++;
-  }
+    with WidgetsBindingObserver {
+  final _native = NativeBrowserService();
+  final _queryController = TextEditingController();
+  final _tabs = <_DiscoveryTab>[_DiscoveryTab()];
+  int _activeTab = 0;
+  int _destination = 0;
+  String _query = '';
+  String? _collection;
+  String? _notice;
+  bool _covered = false;
+  _DiscoveryTab get _tab => _tabs[_activeTab];
+  bool get _ephemeral =>
+      _tab.isPrivate || productEdition != ProductEdition.consumer;
+  ContentContext get _context => productEdition == ProductEdition.consumer
+      ? ContentContext.general
+      : ContentContext.student;
+  AdditionalRestrictions get _additional =>
+      widget.state.protectedPreferences.additional;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _isForeground =
-        WidgetsBinding.instance.lifecycleState == null ||
-        WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
-    engine = BrowserEnginePool(
-      confirm: confirm,
-      prompt: prompt,
-      navigationPolicy: guard?.evaluate,
-      onGuardBlock: guard?.recordBlock,
-      onTrackersBlocked: guard?.recordTrackers,
-      onPageChanged: (id, url, title, completed) {
-        if (completed) guard?.navigationCompleted(id);
-        return data.pageChanged(
-          tabId: id,
-          url: url,
-          title: title,
-          completed: completed,
-        );
-      },
-      onMessage: message,
-    );
-    _adEligibilityChanges = Listenable.merge([data, guard]);
-    _shellChanges = Listenable.merge([data, engine, guard]);
-    guard?.applyNative = (policy, recheck) async {
-      if (kIsWeb) return;
-      await engine.updateGuardPolicy(policy);
-      if (recheck) await engine.recheckGuard();
-    };
-    if (!kIsWeb) unawaited(initializeNative());
-    if (guard?.requestSetup ?? false) {
-      guard!.requestSetup = false;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) guardSettings();
-      });
-    }
-  }
-
-  Future<void> initializeNative() async {
-    try {
-      // Install policy before initialize can deliver a cold-start external URL.
-      await guard?.sync();
-      await engine.setPageScale(data.settings.pageScale);
-      await native.initialize(
-        onMessage: message,
-        onRendererGone: engine.rendererGone,
-        onNavigationSettled: engine.navigationSettled,
-        onGuardBlocked: engine.guardBlocked,
-        onTrackersBlocked: engine.trackersBlocked,
-        onIncomingUri: (uri) {
-          if (!mounted) return;
-          try {
-            data.newTab(url: uri.toString());
-            unawaited(openActive());
-          } on StateError {
-            message('Close a tab before opening another (50 tab limit).');
-          } on FormatException {
-            message('This incoming address could not be opened.');
-          }
-        },
-      );
-      if (!data.activeTab.isHome) await openActive();
-    } catch (_) {
-      message(
-        'Some device features are unavailable. You can still use Wingman Home.',
-      );
-    }
-  }
-
-  @override
-  void didUpdateWidget(covariant BrowserShell oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.state != widget.state || oldWidget.guard != widget.guard) {
-      _adEligibilityChanges = Listenable.merge([data, guard]);
-      _shellChanges = Listenable.merge([data, engine, guard]);
-    }
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state != AppLifecycleState.resumed) _readerGeneration++;
-    if (mounted) {
-      setState(() => _isForeground = state == AppLifecycleState.resumed);
-    }
-    if (state == AppLifecycleState.inactive ||
-        state == AppLifecycleState.paused) {
-      unawaited(data.flush());
-      guard?.pin.lock();
-    }
+    widget.state.addListener(_changed);
+    widget.policy.addListener(_changed);
+    unawaited(_bindIncoming());
   }
 
   @override
   void dispose() {
-    _readerGeneration++;
-    adRouteObserver.unsubscribe(this);
     WidgetsBinding.instance.removeObserver(this);
-    native.dispose();
-    guard?.applyNative = null;
-    engine.dispose();
+    widget.state.removeListener(_changed);
+    widget.policy.removeListener(_changed);
+    _native.dispose();
+    _queryController.dispose();
     super.dispose();
   }
 
-  void message(String text) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+  Future<void> _bindIncoming() async {
+    try {
+      await _native.initialize(
+        onIncomingUri: (_) {
+          if (mounted) _deny();
+        },
+      );
+    } catch (_) {
+      // No incoming-link support can grant content. Keep the offline shell.
+    }
   }
 
-  Future<bool> confirm(String title, String text) async {
-    if (!mounted) return false;
-    return await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: Text(title),
-            content: SingleChildScrollView(child: Text(text)),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('Continue'),
-              ),
-            ],
-          ),
-        ) ??
-        false;
+  void _changed() {
+    if (mounted) setState(() {});
   }
 
-  Future<String?> prompt(String title, String text, String initial) async {
-    if (!mounted) return null;
-    final input = TextEditingController(text: initial);
-    final result = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(title),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (text.isNotEmpty) Text(text),
-              const SizedBox(height: 12),
-              TextField(
-                controller: input,
-                autofocus: true,
-                obscureText: title == 'Website password',
-                enableSuggestions: false,
-                autocorrect: false,
-                enableIMEPersonalizedLearning: !data.activeTab.isPrivate,
-              ),
-            ],
-          ),
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (mounted) setState(() => _covered = state != AppLifecycleState.resumed);
+  }
+
+  bool _eligible(ApprovedResource r) => widget.policy.policy
+      .evaluate(
+        PolicyRequest.bundled(
+          r.id,
+          context: _context,
+          isPrivate: _tab.isPrivate,
         ),
+        additional: _additional,
+      )
+      .isAllowed;
+  ApprovedResource? _current() {
+    final id = _tab.resourceId;
+    final r = id == null ? null : widget.policy.resource(id);
+    return r != null && _eligible(r) ? r : null;
+  }
+
+  void _home() => setState(() {
+    _tab.visit(null);
+    _destination = 0;
+    _query = '';
+    _collection = null;
+    _queryController.clear();
+    _notice = null;
+  });
+  void _open(ApprovedResource r) {
+    if (!_eligible(r)) {
+      _deny();
+      return;
+    }
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _tab.visit(r.id);
+      _destination = 0;
+      _notice = null;
+    });
+  }
+
+  void _deny() {
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _tab.visit(null);
+      _destination = 0;
+      _query = '';
+      _collection = null;
+      _queryController.clear();
+      _notice =
+          'This destination is not approved. Live websites, downloads, and external apps are unavailable in this version. Explore the reviewed library below.';
+    });
+  }
+
+  void _search(String input) {
+    final value = input.trim();
+    // URI-like input never becomes an outbound search, regardless of scheme.
+    if (RegExp(
+      r'(^[a-z][a-z0-9+.-]*:)|([a-z0-9-]+\.[a-z]{2,}([/\s:]|$))|(%[0-9a-f]{2})',
+      caseSensitive: false,
+    ).hasMatch(value)) {
+      _deny();
+      return;
+    }
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _tab.visit(null);
+      _destination = 0;
+      _query = value;
+      _notice = null;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final resource = _current();
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(_tab.isPrivate ? 'Wingman · Private' : 'Wingman'),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+          IconButton(
+            tooltip: 'Protection details',
+            onPressed: _protection,
+            icon: const Icon(Icons.verified_user_outlined),
           ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, input.text),
-            child: const Text('OK'),
+          IconButton(
+            tooltip: 'Tabs (${_tabs.length})',
+            onPressed: _showTabs,
+            icon: Badge(
+              label: Text('${_tabs.length}'),
+              child: const Icon(Icons.tab_outlined),
+            ),
+          ),
+          IconButton(
+            tooltip: 'Settings',
+            onPressed: _settings,
+            icon: const Icon(Icons.tune),
+          ),
+        ],
+      ),
+      body: SafeArea(
+        child: _covered
+            ? const Center(child: Icon(Icons.shield_outlined, size: 56))
+            : Column(
+                children: [
+                  if (_ephemeral)
+                    _banner(
+                      _tab.isPrivate
+                          ? 'Private session · Same protection, no saved activity'
+                          : 'Student experience · No ads or account required',
+                    ),
+                  Expanded(
+                    child: _destination == 0 && resource != null
+                        ? _article(resource)
+                        : _discovery(
+                            unavailable:
+                                _tab.resourceId != null && resource == null,
+                          ),
+                  ),
+                ],
+              ),
+      ),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _destination,
+        onDestinationSelected: (index) => setState(() {
+          _destination = index;
+          _query = '';
+          _collection = null;
+          _queryController.clear();
+          _notice = null;
+          if (index == 0) _tab.visit(null);
+        }),
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.explore_outlined),
+            selectedIcon: Icon(Icons.explore),
+            label: 'Discover',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.bookmark_border),
+            selectedIcon: Icon(Icons.bookmark),
+            label: 'Bookmarks',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.menu_book_outlined),
+            selectedIcon: Icon(Icons.menu_book),
+            label: 'Reading list',
           ),
         ],
       ),
     );
-    // The route may still animate with its field attached after pop.
-    Future<void>.delayed(const Duration(milliseconds: 300), input.dispose);
-    return result;
   }
 
-  Future<void> navigate(String input) async {
-    try {
-      final parsed = const OmniboxParser().parse(
-        input,
-        provider: SearchProvider.byId(data.settings.searchProviderId),
-      );
-      final normalized = guard?.safeSearch(parsed.uri) ?? parsed.uri;
-      final target = kIsWeb ? parsed : data.navigate(normalized.toString());
-      if (kIsWeb || target.isExternal) {
-        if (target.isExternal &&
-            !await confirm(
-              'Open another app?',
-              'This link will leave Wingman and open an app for ${target.uri.scheme} links.',
-            )) {
-          return;
-        }
-        final opened = await launchUrl(
-          normalized,
-          mode: LaunchMode.externalApplication,
-          webOnlyWindowName: '_blank',
-        );
-        if (!opened) message('No app could open this link.');
-      } else {
-        await openActive();
-      }
-    } on FormatException catch (error) {
-      message(error.message);
-    } catch (_) {
-      message('That page could not be opened. Please try again.');
-    }
-  }
-
-  Future<void> openActive() async {
-    if (kIsWeb) return;
-    final tab = data.activeTab;
-    if (tab.isHome) return;
-    try {
-      await engine.open(
-        tabId: tab.id,
-        url: tab.url,
-        isPrivate: tab.isPrivate,
-        desktopMode: tab.desktopMode,
-      );
-      if (!mounted) return;
-      engine.activate(data.activeId);
-      if (data.activeId == tab.id &&
-          engine.view(tab.id) == null &&
-          engine.status(tab.id).guardDecision == null) {
-        message('The browser could not start this tab. Please try again.');
-        data.goHome();
-      }
-    } catch (_) {
-      if (!mounted) return;
-      message(
-        'The browser engine could not open this tab. Return home and try again.',
-      );
-      if (data.activeId == tab.id && engine.view(tab.id) == null) data.goHome();
-    }
-  }
-
-  Future<void> newTab(bool private) async {
-    if (private) {
-      try {
-        if (!await native.privateBrowsingAvailable()) {
-          message(
-            'Private browsing requires an updated WebView provider with isolated profile cleanup.',
-          );
-          return;
-        }
-      } catch (_) {
-        message('Private browsing is unavailable on this device.');
-        return;
-      }
-    }
-    try {
-      data.newTab(isPrivate: private);
-      engine.activate(data.activeId);
-    } on StateError {
-      message('Close a tab before opening another (50 tab limit).');
-    }
-  }
-
-  Future<void> closeTab(String id) async {
-    guard?.forgetTab(id);
-    await engine.close(id);
-    data.closeTab(id);
-    await openActive();
-  }
-
-  void selectTab(String id) {
-    data.selectTab(id);
-    unawaited(openActive());
-  }
-
-  Future<void> home() async {
-    final id = data.activeId;
-    guard?.forgetTab(id);
-    data.goHome();
-    await engine.close(id);
-  }
-
-  void library(LibraryKind kind) => Navigator.push(
-    context,
-    MaterialPageRoute<void>(
-      builder: (_) =>
-          LibraryScreen(state: data, kind: kind, onNavigate: navigate),
-    ),
-  );
-  void settings() => Navigator.push(
-    context,
-    MaterialPageRoute<void>(
-      builder: (_) => SettingsScreen(
-        state: data,
-        onClear: clearData,
-        onPageScale: (value) async {
-          data.saveSettings(data.settings.copyWith(pageScale: value));
-          try {
-            await engine.setPageScale(value);
-          } catch (_) {
-            message(
-              'This website could not apply the new size. Try reloading it.',
-            );
-          }
-        },
-        onGuard: guard == null ? null : guardSettings,
-        onDefaultBrowser: () async {
-          try {
-            if (!await native.requestDefaultBrowser()) {
-              message(
-                'Default-browser settings are unavailable on this device.',
-              );
-            }
-          } catch (_) {
-            message('Default-browser settings are unavailable on this device.');
-          }
-        },
-      ),
-    ),
-  );
-  void guardSettings() {
-    if (guard == null) return;
-    Navigator.push(
-      context,
-      MaterialPageRoute<void>(
-        builder: (_) => GuardSettingsScreen(guard: guard!),
-      ),
-    );
-  }
-
-  void tabs() => Navigator.push(
-    context,
-    MaterialPageRoute<void>(
-      builder: (_) => TabSwitcher(
-        state: data,
-        onSelect: selectTab,
-        onClose: closeTab,
-        onNew: newTab,
-      ),
-    ),
-  );
-  Future<void> clearData() async {
-    final choice = await showDialog<Set<String>>(
-      context: context,
-      builder: (_) => const ClearBrowsingDataDialog(),
-    );
-    if (choice == null || choice.isEmpty) return;
-    try {
-      guard?.runtime.repository.clearCache();
-      if (!kIsWeb && choice.any((e) => e != 'history')) {
-        await engine.clearData(
-          cookies: choice.contains('cookies'),
-          cache: choice.contains('cache'),
-          storage: choice.contains('storage'),
-        );
-      }
-      if (choice.contains('history')) await data.clearHistory();
-      message('Selected browsing data cleared.');
-      await openActive();
-    } catch (_) {
-      message(
-        engine.isClearingSiteData
-            ? 'Website data is still clearing. New pages are paused until it finishes. Please wait before trying again.'
-            : 'Some data could not be cleared. Please close your tabs and try again.',
-      );
-    }
-  }
-
-  Future<void> menu(String value) async {
-    final tab = data.activeTab;
-    switch (value) {
-      case 'bookmark':
-        await data.toggleBookmark();
-      case 'bookmarks':
-        library(LibraryKind.bookmarks);
-      case 'history':
-        library(LibraryKind.history);
-      case 'readingList':
-        library(LibraryKind.readingList);
-      case 'saveReading':
-        final saved = await data.addToReadingList();
-        message(
-          saved
-              ? 'Saved to your reading list.'
-              : 'Already saved, or this page cannot be added to the reading list.',
-        );
-      case 'reader':
-        await openReader();
-      case 'settings':
-        settings();
-      case 'guard':
-        guardSettings();
-      case 'reportGuard':
-        await showGuardReport(context, url: tab.url, missed: true);
-      case 'tracking':
-        await guard?.pauseTracking(tab.url);
-        message(
-          'Temporary tracking exception updated. Reload the page to apply it to existing resources.',
-        );
-      case 'private':
-        await newTab(true);
-      case 'new':
-        await newTab(false);
-      case 'copy':
-        await Clipboard.setData(ClipboardData(text: tab.url));
-        message('Address copied.');
-      case 'share':
-        final box = context.findRenderObject() as RenderBox?;
-        await SharePlus.instance.share(
-          ShareParams(
-            uri: Uri.parse(tab.url),
-            sharePositionOrigin: box == null
-                ? null
-                : box.localToGlobal(Offset.zero) & box.size,
-          ),
-        );
-      case 'external':
-        if (await confirm(
-          'Open outside Wingman?',
-          'Your device’s external browser will receive this address.',
-        )) {
-          if (!await launchUrl(
-            Uri.parse(tab.url),
-            mode: LaunchMode.externalApplication,
-          )) {
-            message('No external browser could open this page.');
-          }
-        }
-      case 'desktop':
-        data.setDesktopMode(!tab.desktopMode);
-        await engine.setDesktopMode(tab.id, !tab.desktopMode);
-      case 'find':
-        final query = await prompt('Find in page', '', '');
-        if (query != null) await engine.find(tab.id, query);
-    }
-  }
-
-  Future<void> openReader() async {
-    if (kIsWeb || _reading || !_isForeground || _route?.isCurrent != true) {
-      return;
-    }
-    final tab = data.activeTab;
-    if (tab.isHome) return;
-    _reading = true;
-    final generation = _readerGeneration;
-    try {
-      final article = await (widget.readerForTesting ?? engine.readArticle)(
-        tab.id,
-      );
-      if (!mounted ||
-          generation != _readerGeneration ||
-          !_isForeground ||
-          _route?.isCurrent != true ||
-          data.activeId != tab.id ||
-          data.activeTab.url != tab.url) {
-        return;
-      }
-      if (article == null) {
-        message(
-          'This page does not have readable article text. Finish loading it or try another page.',
-        );
-        return;
-      }
-      await Navigator.push<void>(
-        context,
-        MaterialPageRoute(builder: (_) => ReaderScreen(article: article)),
-      );
-    } finally {
-      _reading = false;
-    }
-  }
-
-  AdProtectionRequirements get adProtectionRequirements {
-    final controller = guard;
-    if (controller == null ||
-        controller.problem != null ||
-        !controller.pack.integrityVerified) {
-      return AdProtectionRequirements.unknown;
-    }
-    final policy = controller.configuration;
-    if (controller.pin.hasPin ||
-        controller.locked ||
-        controller.focusActive ||
-        policy.customBlock.isNotEmpty ||
-        (policy.guardEnabled && policy.enabledCategories.isNotEmpty)) {
-      return AdProtectionRequirements.strict;
-    }
-    return AdProtectionRequirements.standard;
-  }
-
-  AdEligibilityContext readAdEligibility() => AdEligibilityContext(
-    currentSurface: data.activeTab.isHome || kIsWeb
-        ? AdHostSurface.home
-        : AdHostSurface.browserPage,
-    isCurrentRoute: mounted && _route?.isCurrent == true,
-    isForeground: _isForeground,
-    protectionRequirements: adProtectionRequirements,
+  Widget _banner(String text) => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+    color: Theme.of(context).colorScheme.secondaryContainer,
+    child: Text(text, textAlign: TextAlign.center),
   );
 
-  @override
-  Widget build(BuildContext context) => ListenableBuilder(
-    listenable: _shellChanges,
-    builder: (context, _) {
-      final isCurrentRoute = ModalRoute.isCurrentOf(context) ?? false;
-      final tab = data.activeTab;
-      final page = engine.status(tab.id);
-      final scheme = Theme.of(context).colorScheme;
-      final liveIds = engine.liveTabIds;
-      final visibleIndex = tab.isHome || kIsWeb
-          ? 0
-          : liveIds.indexOf(tab.id) + 1;
-      return PopScope(
-        canPop: tab.isHome,
-        onPopInvokedWithResult: (didPop, _) {
-          if (!didPop) {
-            if (page.canGoBack) {
-              engine.back(tab.id);
-            } else {
-              home();
-            }
-          }
-        },
-        child: Scaffold(
-          backgroundColor: tab.isPrivate ? scheme.tertiaryContainer : null,
-          body: SafeArea(
-            bottom: false,
+  Widget _discovery({required bool unavailable}) {
+    final available = widget.policy
+        .search(_query, additional: _additional, context: _context)
+        .where(_eligible)
+        .where((r) => _collection == null || r.collection == _collection);
+    final prefs = widget.state.protectedPreferences;
+    final resources = available
+        .where(
+          (r) =>
+              _destination == 0 ||
+              (!_tab.isPrivate &&
+                  (_destination == 1 ? prefs.bookmarkedIds : prefs.readingIds)
+                      .contains(r.id)),
+        )
+        .toList();
+    final usable = widget.policy.status.usable;
+    return ListView(
+      key: const ValueKey('protected-discovery'),
+      padding: const EdgeInsets.all(20),
+      children: [
+        Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 900),
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (data.storageError != null)
-                  MaterialBanner(
-                    content: const Text(
-                      'Local storage is unavailable. Changes may not be saved.',
+                const SizedBox(height: 12),
+                Text(
+                  _destination == 0
+                      ? 'Built for discovery.\nDesigned with boundaries.'
+                      : _destination == 1
+                      ? 'Your bookmarks'
+                      : 'Your reading list',
+                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  _destination == 0
+                      ? "We've got your back, not your data."
+                      : 'Only resources still approved for this session appear here.',
+                ),
+                const SizedBox(height: 20),
+                if (_notice != null)
+                  _info(
+                    _notice!,
+                    action: TextButton(
+                      onPressed: _review,
+                      child: const Text('About content review'),
                     ),
-                    actions: [
-                      TextButton(
-                        onPressed: () => confirm(
-                          'Local storage unavailable',
-                          'This session can continue in memory. Restart Wingman to retry local storage. Existing stored data has not been overwritten.',
-                        ),
-                        child: const Text('Details'),
+                  ),
+                if (unavailable)
+                  _info(
+                    'This resource is no longer available under the current policy. Its content and title are hidden.',
+                  ),
+                if (!usable)
+                  _info(
+                    'The approved library is unavailable. Content stays closed until a valid policy is installed. Settings and protection information are still available.',
+                  ),
+                if (widget.state.storageError != null)
+                  _info(widget.state.storageError!),
+                if (_destination == 0) ...[
+                  TextField(
+                    key: const ValueKey('protected-search'),
+                    controller: _queryController,
+                    maxLength: 512,
+                    autocorrect: false,
+                    enableSuggestions: false,
+                    enableIMEPersonalizedLearning: false,
+                    textInputAction: TextInputAction.search,
+                    contextMenuBuilder: safeTextContextMenu,
+                    onSubmitted: _search,
+                    decoration: InputDecoration(
+                      labelText: 'Search the approved library',
+                      hintText: 'Try moon, drawing, or support',
+                      counterText: '',
+                      prefixIcon: const Icon(Icons.search),
+                      suffixIcon: IconButton(
+                        tooltip: 'Search library',
+                        onPressed: () => _search(_queryController.text),
+                        icon: const Icon(Icons.arrow_forward),
                       ),
-                    ],
-                  ),
-                if (tab.isPrivate)
-                  Container(
-                    width: double.infinity,
-                    color: scheme.tertiaryContainer,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.visibility_off_outlined,
-                          size: 16,
-                          color: scheme.onTertiaryContainer,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'Private tab · not saved in history',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: scheme.onTertiaryContainer,
-                            ),
-                          ),
-                        ),
-                      ],
                     ),
                   ),
-                if (!tab.isHome && !kIsWeb)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-                    child: Column(
-                      children: [
-                        Omnibox(
-                          key: ValueKey(tab.id),
-                          compact: true,
-                          hasPageError: page.error != null,
-                          url: tab.url,
-                          isPrivate: tab.isPrivate,
-                          onSubmit: navigate,
-                          localSuggestions: (input) =>
-                              const LocalSuggestionService().suggest(
-                                input,
-                                bookmarks: data.bookmarks,
-                                history: data.history,
-                                isPrivate: tab.isPrivate,
-                                enabled: data.settings.localSuggestions,
-                              ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.only(top: 5),
-                          child: Text(
-                            page.error != null
-                                ? 'Page unavailable · ${Uri.tryParse(tab.url)?.host ?? ''}'
-                                : '${tab.isSecure ? 'HTTPS address' : 'Not encrypted · HTTP'} · ${page.title.isEmpty ? tab.title : page.title}',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.labelSmall,
-                          ),
-                        ),
-                      ],
-                    ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Search runs on this device. Live web search is unavailable.',
                   ),
-                if (!tab.isHome && page.isLoading)
-                  LinearProgressIndicator(
-                    value: page.progress / 100,
-                    minHeight: 2,
-                  ),
-                Expanded(
-                  child: Stack(
+                  const SizedBox(height: 20),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
                     children: [
-                      Positioned.fill(
-                        child: IndexedStack(
-                          index: visibleIndex,
-                          children: [
-                            if (tab.isHome || kIsWeb)
-                              HomeScreen(
-                                key: ValueKey('home-${tab.id}'),
-                                state: data,
-                                onNavigate: navigate,
-                                onSettings: settings,
-                                onBookmarks: () =>
-                                    library(LibraryKind.bookmarks),
-                                onReadingList: () =>
-                                    library(LibraryKind.readingList),
-                                adEligibility: AdEligibilityContext(
-                                  currentSurface: AdHostSurface.home,
-                                  isCurrentRoute: isCurrentRoute,
-                                  isForeground: _isForeground,
-                                  protectionRequirements:
-                                      adProtectionRequirements,
-                                ),
-                                adEligibilityChanges: _adEligibilityChanges,
-                                readAdEligibility: readAdEligibility,
-                                readAdIsPrivate: () => data.activeTab.isPrivate,
-                                onPrivate: () => newTab(true),
-                                guardCard: guard == null
-                                    ? null
-                                    : GuardHomeCard(
-                                        enabled:
-                                            guard!.configuration.guardEnabled,
-                                        focusActive: guard!.focusActive,
-                                        ready:
-                                            guard!.pack.integrityVerified &&
-                                            guard!.problem == null,
-                                        locked: guard!.locked,
-                                        blocks:
-                                            guard!.guardToday +
-                                            guard!.riskyToday,
-                                        onOpen: guardSettings,
-                                      ),
-                              )
-                            else
-                              const SizedBox.shrink(),
-                            for (final id in liveIds)
-                              KeyedSubtree(
-                                key: ValueKey('engine-$id'),
-                                child:
-                                    engine.view(id) ??
-                                    const Center(
-                                      child: CircularProgressIndicator(),
-                                    ),
+                      ChoiceChip(
+                        label: const Text('All topics'),
+                        selected: _collection == null,
+                        onSelected: (_) => setState(() => _collection = null),
+                      ),
+                      for (final entry in _collections.entries)
+                        if (!_additional.blockedCollections.contains(entry.key))
+                          ChoiceChip(
+                            label: Text(entry.value),
+                            selected: _collection == entry.key,
+                            onSelected: (_) =>
+                                setState(() => _collection = entry.key),
+                          ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                ],
+                if (resources.isEmpty && usable)
+                  _info(
+                    _tab.isPrivate && _destination != 0
+                        ? 'Saved items from other sessions stay hidden in a private tab.'
+                        : _query.isNotEmpty
+                        ? 'No approved matches. Try another topic or browse a collection.'
+                        : _destination == 0
+                        ? 'No resources in this collection.'
+                        : 'Save a reviewed article to see it here.',
+                  ),
+                for (final r in resources)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Card(
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(24),
+                        onTap: () => _open(r),
+                        child: Padding(
+                          padding: const EdgeInsets.all(20),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _collections[r.collection] ??
+                                    'Reviewed resource',
+                                style: Theme.of(context).textTheme.labelLarge,
                               ),
-                          ],
+                              const SizedBox(height: 8),
+                              Text(
+                                r.title,
+                                style: Theme.of(context).textTheme.titleLarge,
+                              ),
+                              const SizedBox(height: 6),
+                              Text(r.summary),
+                              const SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  const Icon(
+                                    Icons.offline_pin_outlined,
+                                    size: 18,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      _destination == 2 &&
+                                              prefs.readIds.contains(r.id)
+                                          ? 'Read · Available offline'
+                                          : 'Reviewed · Available offline',
+                                    ),
+                                  ),
+                                  const Icon(Icons.arrow_forward, size: 20),
+                                ],
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                      if (!tab.isHome && !kIsWeb && !liveIds.contains(tab.id))
-                        const Positioned.fill(
-                          child: ColoredBox(
-                            color: Colors.white,
-                            child: Center(child: CircularProgressIndicator()),
+                    ),
+                  ),
+                const SizedBox(height: 8),
+                const Text(
+                  'This first milestone contains a small reviewed offline library. It does not provide live website access or claim whole-web protection.',
+                ),
+                const SizedBox(height: 24),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _article(ApprovedResource r) {
+    final prefs = widget.state.protectedPreferences;
+    final bookmarked = prefs.bookmarkedIds.contains(r.id);
+    final saved = prefs.readingIds.contains(r.id);
+    return ListView(
+      key: ValueKey('article-${r.id}'),
+      padding: const EdgeInsets.all(20),
+      children: [
+        Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 760),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    IconButton(
+                      tooltip: 'Back',
+                      onPressed: _tab.position > 0
+                          ? () => setState(() => _tab.position--)
+                          : null,
+                      icon: const Icon(Icons.arrow_back),
+                    ),
+                    IconButton(
+                      tooltip: 'Forward',
+                      onPressed: _tab.position + 1 < _tab.trail.length
+                          ? () => setState(() => _tab.position++)
+                          : null,
+                      icon: const Icon(Icons.arrow_forward),
+                    ),
+                    TextButton.icon(
+                      onPressed: _home,
+                      icon: const Icon(Icons.explore_outlined),
+                      label: const Text('Library'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                Text(_collections[r.collection] ?? 'Reviewed resource'),
+                const SizedBox(height: 12),
+                Text(
+                  r.title,
+                  style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(r.summary, style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 24),
+                if (!_tab.isPrivate)
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      OutlinedButton.icon(
+                        onPressed: () => _run(
+                          () => widget.state.setResourceBookmarked(
+                            r.id,
+                            !bookmarked,
+                            isPrivate: _tab.isPrivate,
                           ),
                         ),
-                      if (!tab.isHome && page.error != null)
-                        Positioned.fill(
-                          child: BrowserPageError(
-                            message: page.error.toString(),
-                            securityWarning: page.error.toString().contains(
-                              'secure connection could not be verified',
-                            ),
-                            onRetry: () => engine.reload(tab.id),
-                            onHome: home,
-                            onBack: page.canGoBack
-                                ? () => engine.back(tab.id)
-                                : null,
+                        icon: Icon(
+                          bookmarked ? Icons.bookmark : Icons.bookmark_border,
+                        ),
+                        label: Text(bookmarked ? 'Bookmarked' : 'Bookmark'),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: () => _run(
+                          () => widget.state.setResourceReading(
+                            r.id,
+                            !saved,
+                            isPrivate: _tab.isPrivate,
                           ),
                         ),
-                      if (!tab.isHome &&
-                          page.guardDecision != null &&
-                          guard != null)
-                        Positioned.fill(
-                          child: GuardBlockedPage(
-                            decision: page.guardDecision!,
-                            isPrivate: tab.isPrivate,
-                            onBack: () {
-                              if (page.canGoBack) {
-                                engine.back(tab.id);
-                              } else {
-                                home();
-                              }
-                            },
-                            onSettings: guardSettings,
-                            onReport: () => showGuardReport(
-                              context,
-                              url: page.url.isEmpty ? tab.url : page.url,
-                              decision: page.guardDecision,
+                        icon: Icon(
+                          saved ? Icons.menu_book : Icons.playlist_add,
+                        ),
+                        label: Text(saved ? 'In reading list' : 'Read later'),
+                      ),
+                      if (saved)
+                        OutlinedButton(
+                          onPressed: () => _run(
+                            () => widget.state.setResourceRead(
+                              r.id,
+                              !prefs.readIds.contains(r.id),
+                              isPrivate: _tab.isPrivate,
                             ),
-                            onAllowOnce: guard!.locked
-                                ? null
-                                : () async {
-                                    try {
-                                      await guard!.allowOnce(
-                                        tab.id,
-                                        page.guardDecision!,
-                                      );
-                                      await engine.retryGuard(tab.id);
-                                    } catch (_) {
-                                      message(
-                                        'This exception could not be applied.',
-                                      );
-                                    }
-                                  },
-                            onAlwaysAllow: guard!.locked
-                                ? null
-                                : () async {
-                                    try {
-                                      await guard!.alwaysAllow(
-                                        page.guardDecision!,
-                                      );
-                                      await engine.retryGuard(tab.id);
-                                    } catch (_) {
-                                      message(
-                                        'This exception could not be applied.',
-                                      );
-                                    }
-                                  },
+                          ),
+                          child: Text(
+                            prefs.readIds.contains(r.id)
+                                ? 'Mark unread'
+                                : 'Mark read',
                           ),
                         ),
                     ],
                   ),
+                const SizedBox(height: 24),
+                // No SelectableText: OS lookup/search/share are external bypasses.
+                for (final paragraph in r.body.split('\n\n'))
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 20),
+                    child: Text(
+                      paragraph,
+                      style: TextStyle(
+                        fontSize: 18 * widget.state.settings.pageScale / 100,
+                        height: 1.65,
+                      ),
+                    ),
+                  ),
+                const Divider(),
+                Text(
+                  'Reviewed ${_date(r.reviewedAt)} · Review expires ${_date(r.expiresAt)}',
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Original Wingman text. References support editorial review; they are not approved live destinations.',
+                ),
+                const SizedBox(height: 12),
+                for (final source in r.sourceUrls)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(
+                      source,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ),
+                TextButton(
+                  onPressed: _review,
+                  child: const Text('About content review'),
                 ),
               ],
             ),
           ),
-          bottomNavigationBar: kIsWeb
-              ? null
-              : BrowserToolbar(
-                  isHome: tab.isHome,
-                  isPrivate: tab.isPrivate,
-                  isLoading: page.isLoading,
-                  isBookmarked: data.isBookmarked,
-                  desktopMode: tab.desktopMode,
-                  tabCount: data.tabs.length,
-                  guardAvailable: guard != null,
-                  readerAvailable:
-                      engine.supportsReader &&
-                      !tab.isHome &&
-                      !page.isLoading &&
-                      page.error == null &&
-                      page.guardDecision == null &&
-                      engine.view(tab.id) != null,
-                  readerSupported: engine.supportsReader,
-                  onBack: !tab.isHome && page.canGoBack
-                      ? () => engine.back(tab.id)
-                      : null,
-                  onForward: !tab.isHome && page.canGoForward
-                      ? () => engine.forward(tab.id)
-                      : null,
-                  onPrimaryAction: tab.isHome
-                      ? () => newTab(false)
-                      : page.isLoading
-                      ? () => engine.stop(tab.id)
-                      : () => engine.reload(tab.id),
-                  onHome: home,
-                  onTabs: tabs,
-                  onMenuSelected: (value) async {
-                    try {
-                      await menu(value);
-                    } on LibraryOperationException catch (error) {
-                      message(error.message);
-                    } catch (_) {
-                      message('This action could not be completed.');
+        ),
+      ],
+    );
+  }
+
+  String _date(DateTime value) =>
+      value.toUtc().toIso8601String().split('T').first;
+  Widget _info(String text, {Widget? action}) => Padding(
+    padding: const EdgeInsets.only(bottom: 20),
+    child: Card(
+      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [Text(text), ?action],
+        ),
+      ),
+    ),
+  );
+
+  Future<void> _showTabs() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => ListenableBuilder(
+        listenable: widget.policy,
+        builder: (context, _) => StatefulBuilder(
+          builder: (context, update) => SafeArea(
+            child: SizedBox(
+              height: MediaQuery.sizeOf(context).height * .7,
+              child: ListView(
+                padding: const EdgeInsets.all(20),
+                children: [
+                  Text(
+                    'Session tabs',
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                  const SizedBox(height: 8),
+                  const Text('Tabs start fresh when Wingman restarts.'),
+                  for (var i = 0; i < _tabs.length; i++)
+                    ListTile(
+                      leading: Icon(
+                        _tabs[i].isPrivate
+                            ? Icons.visibility_off_outlined
+                            : Icons.tab,
+                      ),
+                      title: Text(
+                        _tabs[i].isPrivate
+                            ? 'Private tab'
+                            : _safeTabTitle(_tabs[i]),
+                      ),
+                      selected: i == _activeTab,
+                      onTap: () {
+                        setState(() {
+                          _activeTab = i;
+                          _destination = 0;
+                          _query = '';
+                          _queryController.clear();
+                          _collection = null;
+                          _notice = null;
+                        });
+                        Navigator.pop(context);
+                      },
+                      trailing: IconButton(
+                        tooltip: 'Close tab ${i + 1}',
+                        onPressed: () {
+                          setState(() {
+                            _tabs.removeAt(i);
+                            if (i < _activeTab) _activeTab--;
+                            _query = '';
+                            _queryController.clear();
+                            _collection = null;
+                            _notice = null;
+                            _destination = 0;
+                            if (_tabs.isEmpty) _tabs.add(_DiscoveryTab());
+                            _activeTab = _activeTab.clamp(0, _tabs.length - 1);
+                          });
+                          update(() {});
+                        },
+                        icon: const Icon(Icons.close),
+                      ),
+                    ),
+                  const SizedBox(height: 16),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      FilledButton(
+                        onPressed: _tabs.length >= 12
+                            ? null
+                            : () => _newTab(context, false),
+                        child: const Text('New tab'),
+                      ),
+                      OutlinedButton(
+                        onPressed: _tabs.length >= 12
+                            ? null
+                            : () => _newTab(context, true),
+                        child: const Text('New private tab'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _safeTabTitle(_DiscoveryTab tab) {
+    final r = tab.resourceId == null
+        ? null
+        : widget.policy.resource(tab.resourceId!);
+    return r != null && _eligible(r) ? r.title : 'Discover';
+  }
+
+  void _newTab(BuildContext sheet, bool private) {
+    setState(() {
+      _tabs.add(_DiscoveryTab(isPrivate: private));
+      _activeTab = _tabs.length - 1;
+      _destination = 0;
+      _query = '';
+      _queryController.clear();
+      _collection = null;
+      _notice = null;
+    });
+    Navigator.pop(sheet);
+  }
+
+  Future<void> _protection() => _sheet(
+    'Always protected',
+    () => [
+      const Text(
+        'Core protection is built into Wingman. Private sessions, additional restrictions, and editions use the same mandatory rules.',
+      ),
+      const SizedBox(height: 16),
+      for (final category in MandatoryCategory.values)
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.lock_outline),
+          title: Text(category.label),
+          subtitle: const Text('Always restricted'),
+        ),
+      const Divider(),
+      Text(
+        widget.policy.status.usable
+            ? 'Approved offline library · ${widget.policy.status.resourceCount} resources'
+            : 'Approved library unavailable · Content stays closed',
+      ),
+      const SizedBox(height: 12),
+      const Text(
+        'An approved article does not approve a website, its links, ads, media, or sign-in pages. Unreviewed live content is unavailable. This is a bounded first milestone, not a guarantee about the whole internet.',
+      ),
+    ],
+  );
+  Future<void> _review() => _sheet(
+    'Content review',
+    () => [
+      const Text(
+        'Approval applies to the exact reviewed article and its version. Sources, topics, or a familiar domain do not create an exception.',
+      ),
+      const SizedBox(height: 16),
+      const Text(
+        'A submission service is not connected in this milestone. Nothing you search or attempt to open is sent for review. There is no temporary access while a review is pending.',
+      ),
+      const SizedBox(height: 16),
+      Text(
+        productEdition == ProductEdition.consumer
+            ? 'To suggest a future resource, use your established contact with the Wingman project. Share only a public domain and a short reason; omit private paths, search terms, account links, and personal details.'
+            : 'Ask your school contact about a resource you need. School-managed submission and approval workflows are not connected in this milestone.',
+      ),
+    ],
+  );
+  Future<void> _settings() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => ListenableBuilder(
+        listenable: widget.state,
+        builder: (context, _) => SafeArea(
+          child: SizedBox(
+            height: MediaQuery.sizeOf(context).height * .85,
+            child: ListView(
+              padding: const EdgeInsets.all(24),
+              children: [
+                Text(
+                  'Settings',
+                  style: Theme.of(context).textTheme.headlineSmall,
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<ThemeMode>(
+                  initialValue: widget.state.settings.themeMode,
+                  decoration: const InputDecoration(labelText: 'Appearance'),
+                  items: ThemeMode.values
+                      .map(
+                        (mode) => DropdownMenuItem(
+                          value: mode,
+                          child: Text(mode.name),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (value) {
+                    if (value != null) {
+                      _run(
+                        () => widget.state.saveSettings(
+                          widget.state.settings.copyWith(themeMode: value),
+                        ),
+                      );
                     }
                   },
                 ),
+                const SizedBox(height: 24),
+                Text('Article text size · ${widget.state.settings.pageScale}%'),
+                Slider(
+                  value: widget.state.settings.pageScale.toDouble(),
+                  min: 75,
+                  max: 200,
+                  divisions: 5,
+                  label: '${widget.state.settings.pageScale}%',
+                  onChanged: (value) => _run(
+                    () => widget.state.saveSettings(
+                      widget.state.settings.copyWith(pageScale: value.round()),
+                    ),
+                  ),
+                ),
+                const Divider(),
+                const Text(
+                  'Additional restrictions',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Hide optional collections. These controls cannot weaken the core policy. Support remains available when its review is valid.',
+                ),
+                for (final entry in _collections.entries.where(
+                  (e) => e.key != 'support',
+                ))
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text('Hide ${entry.value.toLowerCase()}'),
+                    value: _additional.blockedCollections.contains(entry.key),
+                    onChanged: _tab.isPrivate
+                        ? null
+                        : (hidden) {
+                            final blocked = {..._additional.blockedCollections};
+                            hidden
+                                ? blocked.add(entry.key)
+                                : blocked.remove(entry.key);
+                            _run(
+                              () => widget.state.saveAdditionalRestrictions(
+                                AdditionalRestrictions(
+                                  blockedCollections: blocked,
+                                  blockedResourceIds:
+                                      _additional.blockedResourceIds,
+                                ),
+                                isPrivate: _tab.isPrivate,
+                              ),
+                            );
+                          },
+                  ),
+                const Divider(),
+                const Text(
+                  'Earlier browsing data',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '${widget.state.quarantined.total} earlier items quarantined. Titles, addresses, and previews are hidden. Original records are preserved in local storage; they are not an approved library.',
+                ),
+                const SizedBox(height: 16),
+                FilledButton.tonal(
+                  onPressed: () async {
+                    final private = _tab.isPrivate;
+                    if (!private &&
+                        !await _run(widget.state.resetProtectedSession)) {
+                      return;
+                    }
+                    if (!mounted || !context.mounted) return;
+                    setState(() {
+                      if (private) {
+                        _tabs.removeWhere((tab) => tab.isPrivate);
+                      } else {
+                        _tabs.clear();
+                      }
+                      if (_tabs.isEmpty) _tabs.add(_DiscoveryTab());
+                      _activeTab = 0;
+                      _destination = 0;
+                      _query = '';
+                      _queryController.clear();
+                      _collection = null;
+                      _notice = null;
+                    });
+                    Navigator.pop(context);
+                  },
+                  child: const Text('Reset this discovery session'),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  _tab.isPrivate
+                      ? 'Closes private tabs and clears their searches. Your normal saved library and restrictions stay unchanged.'
+                      : 'Clears current reviewed saves, tabs, and searches. Keeps additional restrictions and quarantined legacy records. It does not erase completed downloads or data in other apps.',
+                ),
+                const SizedBox(height: 24),
+                const Text(
+                  'No advertising SDK, ad requests, analytics, or account sign-in. School device management is not connected in this milestone.',
+                ),
+                const SizedBox(height: 16),
+                const Text('Wingman 0.4 · Protected discovery foundation'),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<bool> _run(FutureOr<void> Function() operation) async {
+    try {
+      await operation();
+      return true;
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'That change could not be saved. Protection remains active.',
+            ),
+          ),
+        );
+      }
+      return false;
+    }
+  }
+
+  Future<void> _sheet(String title, List<Widget> Function() children) =>
+      showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        builder: (context) => ListenableBuilder(
+          listenable: widget.policy,
+          builder: (context, _) => SafeArea(
+            child: SizedBox(
+              height: MediaQuery.sizeOf(context).height * .8,
+              child: ListView(
+                padding: const EdgeInsets.all(24),
+                children: [
+                  Text(title, style: Theme.of(context).textTheme.headlineSmall),
+                  const SizedBox(height: 20),
+                  ...children(),
+                ],
+              ),
+            ),
+          ),
         ),
       );
-    },
-  );
 }
+
+/// Preserve text editing while excluding OS lookup/search/share/process-text.
+Widget safeTextContextMenu(BuildContext context, EditableTextState editable) =>
+    AdaptiveTextSelectionToolbar.buttonItems(
+      anchors: editable.contextMenuAnchors,
+      buttonItems: editable.contextMenuButtonItems
+          .where(
+            (item) => const {
+              ContextMenuButtonType.cut,
+              ContextMenuButtonType.copy,
+              ContextMenuButtonType.paste,
+              ContextMenuButtonType.selectAll,
+            }.contains(item.type),
+          )
+          .toList(),
+    );

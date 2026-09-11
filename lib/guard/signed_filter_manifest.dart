@@ -43,7 +43,7 @@ class SignedFilterManifest {
 class FilterManifestVerifier {
   FilterManifestVerifier({
     required Map<String, List<int>> trustedKeys,
-    this.appVersion = '0.3.0',
+    this.appVersion = '0.4.0',
     DateTime Function()? clock,
   }) : trustedKeys = Map.unmodifiable(
          trustedKeys.map(

@@ -1,3 +1,5 @@
+> Historical Phase 1–3A document. Optional Guard, live browsing, external search, Reader and ad behavior described here is superseded by [permanent protection 0.4](RELEASE_READINESS.md). It is not a current capability or release claim.
+
 # Local Guard PIN
 
 `lib/guard_pin/guard_pin_service.dart` provides an optional local settings lock. It protects Guard changes inside Wingman; it is not device management, remote parental control, database encryption or protection against an owner who can modify the app/device. It does not control Safari, Chrome, other apps or other devices.

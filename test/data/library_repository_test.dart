@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -82,21 +83,29 @@ void main() {
   }
 
   test(
-    'real v1 file migrates and preserves all existing categories across reopen',
+    'real v1 file migrates to quarantined URLs and preserves raw data across reopen',
     () async {
       await seedV1();
       var repo = open();
       var data = await repo.load();
       expect(data.tabs.single.id, 'normal');
       expect(data.tabs.single.desktopMode, true);
+      expect(data.tabs.single.isHome, true);
+      expect(data.tabs.single.title, 'New tab');
       expect(data.activeId, 'normal');
-      expect(data.bookmarks.single.id, 'saved');
-      expect(data.history.single.url, 'https://history.test');
+      expect(data.bookmarks, isEmpty);
+      expect(data.history, isEmpty);
+      expect(data.quarantined.bookmarks, 1);
+      expect(data.quarantined.history, 1);
+      expect(data.quarantined.archivedTabs, 1);
       expect(data.settings.themeMode, ThemeMode.dark);
-      expect(data.settings.searchProviderId, 'brave');
+      expect(data.settings.searchProviderId, 'approved-content');
       expect(data.settings.onboardingComplete, true);
       expect(data.settings.localSuggestions, false);
-      expect(data.settings.guardJson, '{"enabled":true}');
+      final guard = jsonDecode(data.settings.guardJson) as Map;
+      expect(guard['guardEnabled'], true);
+      expect(guard['overridesAllowed'], false);
+      expect(guard['customAllow'], isEmpty);
       expect(data.settings.guardStatsJson, '{"blocked":12}');
       expect(data.settings.pageScale, 100);
       expect(data.readingList, isEmpty);
@@ -117,26 +126,47 @@ void main() {
       await repo.close();
       repo = open();
       data = await repo.load();
-      expect(data.readingList.single.title, 'Read later');
-      expect(
-        data.readingList.single.readAt?.toUtc(),
-        now.add(const Duration(minutes: 1)),
-      );
+      expect(data.readingList, isEmpty);
+      expect(data.quarantined.readingList, 1);
       expect(data.settings.pageScale, 150);
       expect(data.settings.guardStatsJson, '{"blocked":12}');
       final raw = await databaseFactoryFfi.openDatabase(filePath);
-      expect(await raw.getVersion(), 2);
+      expect(await raw.getVersion(), 3);
+      expect(
+        (await raw.query('retired_tabs')).single['url'],
+        'https://normal.test',
+      );
+      expect((await raw.query('bookmarks')).single['id'], 'saved');
+      expect(
+        (await raw.query('history')).single['url'],
+        'https://history.test',
+      );
+      final storedReading = (await raw.query('reading_list')).single;
+      expect(storedReading['title'], 'Read later');
+      expect(
+        storedReading['read_at'],
+        now.add(const Duration(minutes: 1)).millisecondsSinceEpoch,
+      );
       await repo.setReadingListRead('read', null);
-      expect((await repo.load()).readingList.single.isRead, false);
+      expect((await raw.query('reading_list')).single['read_at'], isNull);
       await repo.clearHistory();
-      expect((await repo.load()).readingList, hasLength(1));
+      expect((await repo.load()).quarantined.readingList, 1);
+      expect(await raw.query('history'), isEmpty);
+      expect(await raw.query('reading_list'), hasLength(1));
       await repo.removeReadingListItem('read');
       await repo.close();
       repo = open();
       data = await repo.load();
       expect(data.readingList, isEmpty);
       expect(data.history, isEmpty);
-      expect(data.bookmarks.single.id, 'saved');
+      expect(data.bookmarks, isEmpty);
+      expect(data.quarantined.readingList, 0);
+      expect(data.quarantined.history, 0);
+      expect(data.quarantined.bookmarks, 1);
+      final reopened = await databaseFactoryFfi.openDatabase(filePath);
+      expect(await reopened.query('reading_list'), isEmpty);
+      expect(await reopened.query('history'), isEmpty);
+      expect((await reopened.query('bookmarks')).single['id'], 'saved');
       await repo.close();
     },
   );
@@ -225,7 +255,10 @@ void main() {
         ),
         true,
       );
-      expect((await repo.load()).readingList.length, 500);
+      final loaded = await repo.load();
+      expect(loaded.readingList, isEmpty);
+      expect(loaded.quarantined.readingList, 500);
+      expect(await db.query('reading_list'), hasLength(500));
       await repo.close();
     },
   );
@@ -260,7 +293,10 @@ void main() {
       ]),
       throwsA(isA<DatabaseException>()),
     );
-    expect((await repo.load()).bookmarks.single.id, 'old');
+    final loaded = await repo.load();
+    expect(loaded.bookmarks, isEmpty);
+    expect(loaded.quarantined.bookmarks, 1);
+    expect((await db.query('bookmarks')).single['id'], 'old');
     await repo.close();
   });
 
@@ -280,7 +316,21 @@ void main() {
         });
       }
       await batch.commit(noResult: true);
-      final items = (await repo.load()).bookmarks;
+      final loaded = await repo.load();
+      expect(loaded.bookmarks, isEmpty);
+      expect(loaded.quarantined.bookmarks, 5001);
+      final items = (await db.query('bookmarks'))
+          .map(
+            (row) => Bookmark(
+              id: row['id'] as String,
+              url: row['url'] as String,
+              title: row['title'] as String,
+              createdAt: DateTime.fromMillisecondsSinceEpoch(
+                row['created_at'] as int,
+              ),
+            ),
+          )
+          .toList();
       expect(items.length, 5001);
       await repo.saveBookmarks(items);
       await expectLater(
@@ -295,9 +345,11 @@ void main() {
         ]),
         throwsStateError,
       );
-      expect((await repo.load()).bookmarks.length, 5001);
+      expect((await repo.load()).quarantined.bookmarks, 5001);
+      expect(await db.query('bookmarks'), hasLength(5001));
       await repo.saveBookmarks(items.take(5000).toList());
-      expect((await repo.load()).bookmarks.length, 5000);
+      expect((await repo.load()).quarantined.bookmarks, 5000);
+      expect(await db.query('bookmarks'), hasLength(5000));
       await repo.close();
     },
   );

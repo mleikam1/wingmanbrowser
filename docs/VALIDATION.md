@@ -1,3 +1,5 @@
+> Historical Phase 1–3A document. Optional Guard, live browsing, external search, Reader and ad behavior described here is superseded by [permanent protection 0.4](RELEASE_READINESS.md). It is not a current capability or release claim.
+
 # Wingman validation record — 2026-09-10
 
 This record separates actual browser execution, host tests, source audits and

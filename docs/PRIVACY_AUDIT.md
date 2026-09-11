@@ -1,3 +1,5 @@
+> Historical Phase 1–3A document. Optional Guard, live browsing, external search, Reader and ad behavior described here is superseded by [permanent protection 0.4](RELEASE_READINESS.md). It is not a current capability or release claim.
+
 # Privacy and security implementation review
 
 Phase 2 adds local Guard controls and secure PIN storage. Its current data-flow, endpoint inventory, audit findings and verification scope are documented in [Privacy architecture](PRIVACY_ARCHITECTURE.md). The baseline review below remains the Phase 1 record.

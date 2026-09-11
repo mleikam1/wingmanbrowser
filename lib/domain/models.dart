@@ -84,12 +84,13 @@ class ReadingListItem {
 class BrowserSettings {
   const BrowserSettings({
     this.themeMode = ThemeMode.system,
-    this.searchProviderId = 'duckduckgo',
+    this.searchProviderId = 'approved-content',
     this.onboardingComplete = false,
     this.guardJson = '{}',
     this.guardStatsJson = '{}',
     this.localSuggestions = true,
     this.pageScale = 100,
+    this.protectedJson = '{}',
   });
 
   final ThemeMode themeMode;
@@ -99,6 +100,7 @@ class BrowserSettings {
   final String guardStatsJson;
   final bool localSuggestions;
   final int pageScale;
+  final String protectedJson;
 
   BrowserSettings copyWith({
     ThemeMode? themeMode,
@@ -108,6 +110,7 @@ class BrowserSettings {
     String? guardStatsJson,
     bool? localSuggestions,
     int? pageScale,
+    String? protectedJson,
   }) => BrowserSettings(
     themeMode: themeMode ?? this.themeMode,
     searchProviderId: searchProviderId ?? this.searchProviderId,
@@ -116,5 +119,6 @@ class BrowserSettings {
     guardStatsJson: guardStatsJson ?? this.guardStatsJson,
     localSuggestions: localSuggestions ?? this.localSuggestions,
     pageScale: (pageScale ?? this.pageScale).clamp(75, 200),
+    protectedJson: protectedJson ?? this.protectedJson,
   );
 }

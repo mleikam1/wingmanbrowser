@@ -1,5 +1,7 @@
 # Platform capability matrix — Phase 3A
 
+> Historical Phase 1–3A evidence. The mandatory bundled-content milestone removes live browsing, WebView plugins, live Reader extraction, authentication and downloads. The current boundary and tests are in [SECURITY_TEST_MATRIX.md](SECURITY_TEST_MATRIX.md); capabilities described below are retired, not available product features.
+
 Recorded on 2026-09-10. This matrix distinguishes the installed combination from API availability and future approval work. Emulator and simulator results do not establish physical-device, third-party password-provider or App Store acceptance.
 
 ## Installed and built combination

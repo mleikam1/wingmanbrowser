@@ -1,4 +1,5 @@
 import '../domain/models.dart';
+import '../policy/policy_models.dart';
 
 class BrowserData {
   const BrowserData({
@@ -8,6 +9,7 @@ class BrowserData {
     this.bookmarks = const [],
     this.readingList = const [],
     this.settings = const BrowserSettings(),
+    this.quarantined = const QuarantinedContentCounts(),
   });
   final List<BrowserTab> tabs;
   final String? activeId;
@@ -15,6 +17,7 @@ class BrowserData {
   final List<Bookmark> bookmarks;
   final List<ReadingListItem> readingList;
   final BrowserSettings settings;
+  final QuarantinedContentCounts quarantined;
 }
 
 /// Local-only contract. A future sync implementation must be a separate,

@@ -1,0 +1,251 @@
+{
+  "schema": 1,
+  "policyVersion": 1,
+  "version": "1.0.0",
+  "sequence": 1,
+  "reviewedAt": "2026-09-10T00:00:00Z",
+  "expiresAt": "2027-03-10T00:00:00Z",
+  "reviewer": "Wingman development editorial review",
+  "license": "CC0-1.0",
+  "resources": [
+    {
+      "id": "how-tides-work",
+      "title": "How tides work",
+      "summary": "Follow the rise and fall of the ocean.",
+      "collection": "science",
+      "assetPath": "assets/policy/articles/how-tides-work.txt",
+      "contexts": [
+        "general",
+        "student"
+      ],
+      "sourceUrls": [
+        "https://oceanservice.noaa.gov/facts/tides.html"
+      ],
+      "sha256": "8c3db008d8c7ee8c1264ad4c1db18b462afba15ebafd689cc7f7c042cab4b143",
+      "byteLength": 883,
+      "capability": "bundledPlainText"
+    },
+    {
+      "id": "moon-phases",
+      "title": "A month of moonlight",
+      "summary": "Understand crescents, quarters, and the full Moon.",
+      "collection": "science",
+      "assetPath": "assets/policy/articles/moon-phases.txt",
+      "contexts": [
+        "general",
+        "student"
+      ],
+      "sourceUrls": [
+        "https://science.nasa.gov/moon/moon-phases/"
+      ],
+      "sha256": "a7906394956d392b188726eff0c5eeb3ec74e0a9d4127ad24642106444c195a5",
+      "byteLength": 878,
+      "capability": "bundledPlainText"
+    },
+    {
+      "id": "why-seasons-change",
+      "title": "Why seasons change",
+      "summary": "Explore sunlight, tilt, and opposite seasons.",
+      "collection": "science",
+      "assetPath": "assets/policy/articles/why-seasons-change.txt",
+      "contexts": [
+        "general",
+        "student"
+      ],
+      "sourceUrls": [
+        "https://spaceplace.nasa.gov/seasons/en/"
+      ],
+      "sha256": "237727d8c46d20b28da8ef7168a88d88ce6b849cb238ce9fd67a5647e1aaf9ff",
+      "byteLength": 892,
+      "capability": "bundledPlainText"
+    },
+    {
+      "id": "water-on-the-move",
+      "title": "Water on the move",
+      "summary": "Trace water through air, land, and living things.",
+      "collection": "science",
+      "assetPath": "assets/policy/articles/water-on-the-move.txt",
+      "contexts": [
+        "general",
+        "student"
+      ],
+      "sourceUrls": [
+        "https://www.usgs.gov/faqs/what-earths-water-cycle"
+      ],
+      "sha256": "dfbc180cec23e9111de7bccd693b0331e3bd68d21c3c980f1bc8714f5e223215",
+      "byteLength": 880,
+      "capability": "bundledPlainText"
+    },
+    {
+      "id": "read-a-rock",
+      "title": "Read a rock",
+      "summary": "Look for clues to how a rock formed.",
+      "collection": "science",
+      "assetPath": "assets/policy/articles/read-a-rock.txt",
+      "contexts": [
+        "general",
+        "student"
+      ],
+      "sourceUrls": [
+        "https://pubs.usgs.gov/gip/collect1/collectgip.html"
+      ],
+      "sha256": "1898a1f36dbbcf1a60bc6b5639ff909f8350951521798ac0db39544aedb82731",
+      "byteLength": 894,
+      "capability": "bundledPlainText"
+    },
+    {
+      "id": "notice-nature",
+      "title": "A small nature notebook",
+      "summary": "Turn a familiar place into an observation project.",
+      "collection": "outdoors",
+      "assetPath": "assets/policy/articles/notice-nature.txt",
+      "contexts": [
+        "general",
+        "student"
+      ],
+      "sourceUrls": [
+        "https://www.nps.gov/articles/leave-no-trace-seven-principles.htm"
+      ],
+      "sha256": "143a24cb5599868beb965425a83057bb9ba000e183bf2f213aa939db6983f12d",
+      "byteLength": 896,
+      "capability": "bundledPlainText"
+    },
+    {
+      "id": "drawing-with-shapes",
+      "title": "Start a drawing with shapes",
+      "summary": "Build an everyday object from simple forms.",
+      "collection": "creative",
+      "assetPath": "assets/policy/articles/drawing-with-shapes.txt",
+      "contexts": [
+        "general",
+        "student"
+      ],
+      "sourceUrls": [
+        "https://www.nga.gov/artworks"
+      ],
+      "sha256": "33d8a3370b83396b5e12bf499c36e87faeb3f00353023b368cfa9d3f6aed5a17",
+      "byteLength": 848,
+      "capability": "bundledPlainText"
+    },
+    {
+      "id": "a-story-in-five-sentences",
+      "title": "A story in five sentences",
+      "summary": "Give a character a goal, a surprise, and a choice.",
+      "collection": "creative",
+      "assetPath": "assets/policy/articles/a-story-in-five-sentences.txt",
+      "contexts": [
+        "general",
+        "student"
+      ],
+      "sourceUrls": [
+        "https://www.loc.gov/programs/teachers/getting-started-with-primary-sources"
+      ],
+      "sha256": "cf7d04fd3de26959bf306efdf8f6991b9e3c8360be5bfffbf39f1394c9313d27",
+      "byteLength": 899,
+      "capability": "bundledPlainText"
+    },
+    {
+      "id": "ask-a-primary-source",
+      "title": "Ask a primary source",
+      "summary": "Separate observation, interpretation, and questions.",
+      "collection": "learning",
+      "assetPath": "assets/policy/articles/ask-a-primary-source.txt",
+      "contexts": [
+        "general",
+        "student"
+      ],
+      "sourceUrls": [
+        "https://www.loc.gov/static/programs/teachers/getting-started-with-primary-sources/documents/Analyzing_Primary_Sources.pdf"
+      ],
+      "sha256": "08a0b7ec01b89b104c69cdb11ab442a1796e1116db576ca32a434261d077a8fa",
+      "byteLength": 884,
+      "capability": "bundledPlainText"
+    },
+    {
+      "id": "measure-fairly",
+      "title": "Design a fair comparison",
+      "summary": "Change one thing and record what happens.",
+      "collection": "learning",
+      "assetPath": "assets/policy/articles/measure-fairly.txt",
+      "contexts": [
+        "general",
+        "student"
+      ],
+      "sourceUrls": [
+        "https://www.loc.gov/programs/teachers/getting-started-with-primary-sources"
+      ],
+      "sha256": "ba1a3d0a19c85ca6d1710523439472a827669234a2df954d69971e586f148f85",
+      "byteLength": 933,
+      "capability": "bundledPlainText"
+    },
+    {
+      "id": "break-a-project-into-steps",
+      "title": "Make a project less overwhelming",
+      "summary": "Turn a large assignment into a short next action.",
+      "collection": "learning",
+      "assetPath": "assets/policy/articles/break-a-project-into-steps.txt",
+      "contexts": [
+        "general",
+        "student"
+      ],
+      "sourceUrls": [
+        "https://www.loc.gov/programs/teachers/getting-started-with-primary-sources"
+      ],
+      "sha256": "1445655ef8fdb3e579a1d1b5690eaf2a4ef943268aeee5300ae606330d6472bf",
+      "byteLength": 853,
+      "capability": "bundledPlainText"
+    },
+    {
+      "id": "spot-a-suspicious-message",
+      "title": "Pause before a suspicious message",
+      "summary": "Notice pressure, unexpected requests, and risky links.",
+      "collection": "digital-life",
+      "assetPath": "assets/policy/articles/spot-a-suspicious-message.txt",
+      "contexts": [
+        "general",
+        "student"
+      ],
+      "sourceUrls": [
+        "https://www.cisa.gov/sites/default/files/2024-09/Secure-Our-World-Phishing-Tip-Sheet.pdf"
+      ],
+      "sha256": "58915a18d7c7c5db10e660365454b02865e63355dd8695c95b573f9175b08816",
+      "byteLength": 980,
+      "capability": "bundledPlainText"
+    },
+    {
+      "id": "accounts-have-more-than-one-lock",
+      "title": "Accounts can have more than one lock",
+      "summary": "Learn what an extra sign-in check can do.",
+      "collection": "digital-life",
+      "assetPath": "assets/policy/articles/accounts-have-more-than-one-lock.txt",
+      "contexts": [
+        "general",
+        "student"
+      ],
+      "sourceUrls": [
+        "https://www.cisa.gov/audiences/small-and-medium-businesses/secure-your-business/require-multifactor-authentication"
+      ],
+      "sha256": "d6d0dc0063ea22fd86ef6e58a6436d349433d12f4e2d9463c939351968299b3d",
+      "byteLength": 869,
+      "capability": "bundledPlainText"
+    },
+    {
+      "id": "finding-support",
+      "title": "You can ask for support",
+      "summary": "A calm starting point when you or someone else needs help.",
+      "collection": "support",
+      "assetPath": "assets/policy/articles/finding-support.txt",
+      "contexts": [
+        "general",
+        "student"
+      ],
+      "sourceUrls": [
+        "https://www.samhsa.gov/find-support/in-crisis"
+      ],
+      "sha256": "ae7ea9dd8af7d2d670bc4d1061403aea8cff21608a1e46f0f18b411cd473c2fb",
+      "byteLength": 914,
+      "capability": "bundledPlainText"
+    }
+  ],
+  "revokedIds": []
+}

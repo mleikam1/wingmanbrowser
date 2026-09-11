@@ -1,0 +1,7 @@
+A password is one way an account checks who is signing in. Multifactor authentication adds another kind of evidence. Depending on the service, that might involve a security key or an authenticator. The available methods are not equally resistant to every attack.
+
+Use your organization's approved setup instructions for an actual account. Never send someone a sign-in code because they claim to be helping you. An unexpected approval request deserves attention, not an automatic yes.
+
+For a paper exercise, draw an account as a room with two different checks at its entrance. Describe what each check can stop and what it cannot. Then add a recovery route for someone who loses access. Recovery needs protection too.
+
+This introduction does not ask you to enter credentials into Wingman. There are no account sign-ins or authentication pages in this offline milestone.

@@ -1,3 +1,5 @@
+> Historical Phase 1–3A document. Optional Guard, live browsing, external search, Reader and ad behavior described here is superseded by [permanent protection 0.4](RELEASE_READINESS.md). It is not a current capability or release claim.
+
 # Protection providers and boundaries
 
 Reviewed September 10, 2026. Wingman separates security threats, voluntary content categories, and tracking resources. A provider's coverage in one column does not establish coverage in another. Nothing here promises complete detection.

@@ -27,6 +27,9 @@ enum GuardCategory {
 }
 
 enum GuardAction {
+  blockUnsupported,
+  blockUnreviewed,
+  blockPolicyUnavailable,
   allow,
   blockCategory,
   blockMalware,
@@ -45,8 +48,8 @@ class GuardDecision {
     this.category,
     this.ruleId,
     this.packVersion,
-    this.overrideAllowed = false,
-  });
+    bool overrideAllowed = false,
+  }) : overrideAllowed = false;
 
   final GuardAction action;
   final String host;
@@ -54,8 +57,7 @@ class GuardDecision {
   final String? ruleId;
   final String? packVersion;
   final bool overrideAllowed;
-  bool get isBlocked =>
-      action != GuardAction.allow && action != GuardAction.errorAllow;
+  bool get isBlocked => action != GuardAction.allow;
   bool get isSecurityBlock =>
       action == GuardAction.blockMalware ||
       action == GuardAction.blockPhishing ||
@@ -111,18 +113,25 @@ class GuardRequest {
 /// selections. Mandatory threat/TLS protection has no disable switch here.
 class GuardConfiguration {
   GuardConfiguration({
-    this.guardEnabled = false,
+    bool guardEnabled = true,
     Set<GuardCategory> enabledCategories = const {},
     Set<String> customAllow = const {},
     Set<String> customBlock = const {},
     Set<GuardCategory> focusCategories = const {},
     Set<String> focusHosts = const {},
     this.focusExpiresAt,
-    this.overridesAllowed = true,
-    this.trackingProtection = true,
-    this.dangerousDownloadProtection = true,
-  }) : enabledCategories = UnmodifiableSetView(Set.of(enabledCategories)),
-       customAllow = UnmodifiableSetView(Set.of(customAllow)),
+    bool overridesAllowed = false,
+    bool trackingProtection = true,
+    bool dangerousDownloadProtection = true,
+  }) : guardEnabled = true,
+       overridesAllowed = false,
+       trackingProtection = true,
+       dangerousDownloadProtection = true,
+       enabledCategories = UnmodifiableSetView({
+         ...GuardCategory.values.where((c) => c.isLifestyle),
+         ...enabledCategories.where((c) => c.isFocus),
+       }),
+       customAllow = const {},
        customBlock = UnmodifiableSetView(Set.of(customBlock)),
        focusCategories = UnmodifiableSetView(Set.of(focusCategories)),
        focusHosts = UnmodifiableSetView(Set.of(focusHosts));

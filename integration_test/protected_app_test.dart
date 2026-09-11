@@ -1,0 +1,186 @@
+import 'dart:io';
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:integration_test/integration_test.dart';
+import 'package:wingman_browser/config/product_edition.dart';
+import 'package:wingman_browser/main.dart' as app;
+import 'package:wingman_browser/policy/policy_models.dart';
+
+void main() {
+  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+
+  Future<void> settleUntil(WidgetTester tester, bool Function() ready) async {
+    final limit = Stopwatch()..start();
+    while (!ready() && limit.elapsed < const Duration(seconds: 10)) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    expect(
+      ready(),
+      isTrue,
+      reason: 'Expected application state did not settle',
+    );
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> search(WidgetTester tester, String text) async {
+    final field = find.byKey(const ValueKey('protected-search'));
+    await tester.ensureVisible(field);
+    await tester.pumpAndSettle();
+    await tester.enterText(field, text);
+    await tester.testTextInput.receiveAction(TextInputAction.search);
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('real protected main startup, reviewed discovery, saves and denial', (
+    tester,
+  ) async {
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    var requests = 0;
+    server.listen((request) async {
+      requests++;
+      request.response.write('Unreviewed content must never be fetched.');
+      await request.response.close();
+    });
+    // Timing begins after the debug harness is running. It includes real policy
+    // assets/checkpoint, native cleanup, SQLite startup and the first settled UI;
+    // it excludes installation/process launch and is not a cold-start metric.
+    final started = Stopwatch()..start();
+    await app.main();
+    await tester.pumpAndSettle();
+    started.stop();
+    expect(find.byType(app.WingmanApp), findsOneWidget);
+    final application = tester.widget<app.WingmanApp>(
+      find.byType(app.WingmanApp),
+    );
+    final state = application.state;
+    final policy = application.policy;
+    expect(state.initialized, isTrue);
+    expect(policy.status.usable, isTrue);
+    expect(policy.status.resourceCount, 14);
+    expect(find.textContaining('Built for discovery.'), findsOneWidget);
+    expect(
+      find.textContaining('Protected startup could not finish.'),
+      findsNothing,
+    );
+    debugPrint(
+      'MANDATORY appMainToFirstSettledMs=${started.elapsedMilliseconds} platform=${Platform.operatingSystem} edition=${productEdition.name} mode=debug-integration NOT-cold-start',
+    );
+
+    final hadBookmark = state.protectedPreferences.bookmarkedIds.contains(
+      'moon-phases',
+    );
+    final hadReading = state.protectedPreferences.readingIds.contains(
+      'moon-phases',
+    );
+    final originalSettings = state.settings.protectedJson;
+    try {
+      await search(tester, 'moon');
+      expect(find.text('A month of moonlight'), findsOneWidget);
+      expect(find.text('Read a rock'), findsNothing);
+      await tester.ensureVisible(find.text('A month of moonlight'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('A month of moonlight'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('The Moon does not make'), findsOneWidget);
+      expect(find.byType(SelectableText), findsNothing);
+      if (!hadBookmark) {
+        await tester.ensureVisible(find.text('Bookmark'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Bookmark'));
+        await settleUntil(
+          tester,
+          () =>
+              state.protectedPreferences.bookmarkedIds.contains('moon-phases'),
+        );
+      }
+      if (!hadReading) {
+        await tester.ensureVisible(find.text('Read later'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Read later'));
+        await settleUntil(
+          tester,
+          () => state.protectedPreferences.readingIds.contains('moon-phases'),
+        );
+      }
+      expect(find.text('Bookmarked'), findsOneWidget);
+      expect(find.text('In reading list'), findsOneWidget);
+      if (productEdition != ProductEdition.consumer) {
+        expect(
+          state.settings.protectedJson,
+          originalSettings,
+          reason:
+              'Student/unknown reviewed saves must remain in session memory',
+        );
+      }
+      await tester.ensureVisible(find.text('Library'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Library'));
+      await tester.pumpAndSettle();
+      final address = 'http://127.0.0.1:${server.port}/unreviewed';
+      await search(tester, address);
+      expect(
+        find.textContaining('This destination is not approved.'),
+        findsOneWidget,
+      );
+      expect(find.text(address), findsNothing);
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        isEmpty,
+      );
+      expect(requests, 0);
+      expect(
+        tester
+            .state<EditableTextState>(find.byType(EditableText))
+            .widget
+            .focusNode
+            .hasFocus,
+        isFalse,
+        reason:
+            'Rejected addresses should dismiss editing before opening a sheet',
+      );
+
+      await tester.tap(find.byTooltip('Protection details'));
+      await tester.pumpAndSettle();
+      expect(find.text('Always protected'), findsOneWidget);
+      final coreLabel = find.text(MandatoryCategory.sexualExplicit.label);
+      expect(coreLabel.hitTestable(), findsOneWidget);
+      await tester.tap(coreLabel);
+      await tester.pumpAndSettle();
+      expect(find.text('Always protected'), findsOneWidget);
+      expect(
+        find.byIcon(Icons.lock_outline),
+        findsNWidgets(MandatoryCategory.values.length),
+      );
+      expect(find.text('Allow once'), findsNothing);
+      expect(find.text('Always allow'), findsNothing);
+      expect(find.byType(SwitchListTile), findsNothing);
+      final native = await const MethodChannel(
+        'wingman/browser',
+      ).invokeMapMethod<String, Object?>('capabilityState');
+      expect(native?['liveBrowsing'], isFalse);
+      expect(native?['contentViews'], 0);
+      expect(requests, 0);
+      debugPrint(
+        'MANDATORY app catalog=14 localSearch=true article=true saves=true coreLocks=true coreLockTapNoOverride=true rejectedUrl=true requests=0 views=0',
+      );
+    } finally {
+      // Restore only the reviewed IDs changed by this test; do not erase the
+      // real app's saved preferences, quarantine or completed user files.
+      if (!hadBookmark &&
+          state.protectedPreferences.bookmarkedIds.contains('moon-phases')) {
+        await state.setResourceBookmarked('moon-phases', false);
+      }
+      if (!hadReading &&
+          state.protectedPreferences.readingIds.contains('moon-phases')) {
+        await state.setResourceReading('moon-phases', false);
+      }
+      await state.flush();
+      await tester.pumpWidget(const SizedBox());
+      state.dispose();
+      policy.dispose();
+      await server.close(force: true);
+    }
+  });
+}

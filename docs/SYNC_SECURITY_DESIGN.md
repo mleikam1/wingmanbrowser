@@ -1,3 +1,5 @@
+> Historical Phase 1–3A document. Optional Guard, live browsing, external search, Reader and ad behavior described here is superseded by [permanent protection 0.4](RELEASE_READINESS.md). It is not a current capability or release claim.
+
 # Optional sync security gate
 
 **Status: Deferred; sync and browser-based decryption are disabled pending protocol, provider and security review.** Milestone 3A adds local reading-list metadata and a local database migration. It does not implement encrypted sync, account sign-in, a cloud queue or a mock backend.

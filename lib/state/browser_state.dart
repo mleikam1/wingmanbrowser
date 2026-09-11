@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
@@ -7,20 +8,31 @@ import '../data/sqlite_browser_repository.dart';
 import '../domain/models.dart';
 import '../domain/bookmark_transfer.dart';
 import '../domain/search.dart';
+import '../policy/policy_runtime.dart';
+import '../policy/legacy_settings_migration.dart';
+import '../config/product_edition.dart';
 
 /// Predictable metadata state; web controllers and site storage never enter
 /// this layer. Writes are serialized so a late save cannot resurrect a closed
 /// tab or a history record the user has just cleared.
 class BrowserState extends ChangeNotifier {
-  BrowserState({BrowserRepository? repository, DateTime Function()? clock})
-    : _repository = repository ?? SqliteBrowserRepository(),
-      _clock = clock ?? DateTime.now {
+  BrowserState({
+    BrowserRepository? repository,
+    DateTime Function()? clock,
+    this.policyRuntime,
+  }) : _repository = repository ?? SqliteBrowserRepository(),
+       _clock = clock ?? DateTime.now {
     final tab = BrowserTab(id: _nextId());
     _tabs = [tab];
     _activeId = tab.id;
   }
 
+  final PolicyRuntime? policyRuntime;
   final BrowserRepository _repository;
+  ProtectedPreferences _protectedPreferences = ProtectedPreferences();
+  ProtectedPreferences get protectedPreferences => _protectedPreferences;
+  QuarantinedContentCounts _quarantined = const QuarantinedContentCounts();
+  QuarantinedContentCounts get quarantined => _quarantined;
   final DateTime Function() _clock;
   final _parser = const OmniboxParser();
   late List<BrowserTab> _tabs;
@@ -58,21 +70,53 @@ class BrowserState extends ChangeNotifier {
       if (_disposed) return;
       // Defense against alternate repository implementations returning private
       // state. Private tabs are always new, temporary sessions.
-      final restored = data.tabs.where((tab) => !tab.isPrivate).toList();
+      final restored = data.tabs
+          .where((tab) => !tab.isPrivate)
+          .map((tab) => tab.copyWith(url: '', title: 'New tab'))
+          .toList();
       if (restored.isNotEmpty) {
         _tabs = restored.take(BrowserRepository.maximumTabs).toList();
         _activeId = _tabs.any((tab) => tab.id == data.activeId)
             ? data.activeId!
             : _tabs.first.id;
       }
-      _history = _retained(data.history);
-      _bookmarks = List.of(data.bookmarks);
-      _readingList = List.of(data.readingList);
+      _history = [];
+      _bookmarks = [];
+      _readingList = [];
+      _quarantined = QuarantinedContentCounts(
+        archivedTabs:
+            data.quarantined.archivedTabs +
+            data.tabs.where((t) => !t.isPrivate && !t.isHome).length,
+        bookmarks: data.quarantined.bookmarks + data.bookmarks.length,
+        history: data.quarantined.history + data.history.length,
+        readingList: data.quarantined.readingList + data.readingList.length,
+      );
       _settings = data.settings.copyWith(
+        guardJson: retireLegacyGuardSettings(data.settings.guardJson),
         searchProviderId: SearchProvider.byId(
           data.settings.searchProviderId,
         ).id,
       );
+      try {
+        _protectedPreferences = ProtectedPreferences.fromJson(
+          Map<String, Object?>.from(
+            jsonDecode(data.settings.protectedJson) as Map,
+          ),
+        );
+      } catch (_) {
+        _protectedPreferences = ProtectedPreferences();
+      }
+      bool reviewed(String id) =>
+          policyRuntime?.policy.evaluate(PolicyRequest.bundled(id)).isAllowed ==
+          true;
+      _protectedPreferences = _protectedPreferences.copyWith(
+        bookmarkedIds: _protectedPreferences.bookmarkedIds.where(reviewed),
+        readingIds: _protectedPreferences.readingIds.where(reviewed),
+        readIds: _protectedPreferences.readIds.where(reviewed),
+      );
+      if (productEdition != ProductEdition.consumer) {
+        _protectedPreferences = ProtectedPreferences();
+      }
     } catch (_) {
       // Never include database exception strings: they may contain SQL values,
       // titles or complete browsing URLs. Do not overwrite unreadable storage.
@@ -89,22 +133,16 @@ class BrowserState extends ChangeNotifier {
     if (_tabs.length >= BrowserRepository.maximumTabs) {
       throw StateError('Close a tab before opening another (50 tab limit).');
     }
-    final target = url == null || url.trim().isEmpty
-        ? null
-        : _parser.parse(
-            url,
-            provider: SearchProvider.byId(_settings.searchProviderId),
-          );
-    if (target?.isExternal ?? false) {
+    if (url != null && url.trim().isNotEmpty) {
       throw const FormatException(
-        'External links cannot be opened as browser tabs.',
+        'Live websites are unavailable. Explore approved resources.',
       );
     }
     final tab = BrowserTab(
       id: _nextId(),
       isPrivate: isPrivate,
-      url: target?.url ?? '',
-      title: target?.uri.host ?? (isPrivate ? 'Private tab' : 'New tab'),
+      url: '',
+      title: isPrivate ? 'Private tab' : 'New tab',
     );
     _tabs = [..._tabs, tab];
     _activeId = tab.id;
@@ -134,9 +172,10 @@ class BrowserState extends ChangeNotifier {
       input,
       provider: SearchProvider.byId(_settings.searchProviderId),
     );
-    if (!target.isExternal) {
-      _replace(activeTab.copyWith(url: target.url, title: target.uri.host));
-      _changed();
+    if (!target.isSearch) {
+      throw const FormatException(
+        'Live websites are unavailable. Explore approved resources.',
+      );
     }
     return target;
   }
@@ -147,44 +186,8 @@ class BrowserState extends ChangeNotifier {
     String? title,
     bool completed = false,
   }) {
-    if (_disposed) return;
-    final index = _tabs.indexWhere((tab) => tab.id == tabId);
-    if (index == -1) return; // Late callbacks from a closed engine are ignored.
-    final old = _tabs[index];
-    // Home removes an engine without changing the tab ID. Its late callbacks
-    // must not reopen a page the user has already left.
-    if (old.isHome) return;
-    Uri uri;
-    try {
-      uri = requireWebUri(url);
-    } on FormatException {
-      return;
-    }
-    final cleanTitle = title?.trim();
-    final tab = old.copyWith(
-      url: uri.toString(),
-      title: cleanTitle != null && cleanTitle.isNotEmpty
-          ? cleanTitle
-          : old.url == url && old.title.isNotEmpty
-          ? old.title
-          : uri.host,
-    );
-    if (!completed && tab.url == old.url && tab.title == old.title) return;
-    _replace(tab);
-    if (completed && !tab.isPrivate) {
-      final now = _clock();
-      _history = _retained([
-        HistoryEntry(
-          id: tab.url,
-          url: tab.url,
-          title: tab.title,
-          visitedAt: now,
-        ),
-        ..._history.where((entry) => entry.url != tab.url),
-      ]);
-      _enqueue(() => _repository.recordVisit(tab, now));
-    }
-    _changed();
+    // No live content is permitted by this milestone, including stale callbacks.
+    return;
   }
 
   void goHome() {
@@ -245,93 +248,19 @@ class BrowserState extends ChangeNotifier {
     if (!_disposed) notifyListeners();
   });
 
-  Future<int> importBookmarks(
-    BookmarkImportPreview preview,
-  ) => _durable(() async {
-    if (preview.entries.length > BookmarkTransferCodec.maximumEntries) {
-      throw const LibraryOperationException(
-        'Import up to 5,000 bookmarks at a time.',
-      );
-    }
-    final seen = _bookmarks
-        .map((item) => requireWebUri(item.url).toString())
-        .toSet();
-    final additions = <Bookmark>[];
-    for (final item in preview.entries) {
-      final uri = requireWebUri(item.url);
-      if (!seen.add(uri.toString())) continue;
-      additions.add(
-        Bookmark(
-          id: _nextId(),
-          url: uri.toString(),
-          title: BookmarkTransferCodec.cleanTitle(
-            item.title,
-            fallback: uri.host,
-          ),
-          createdAt: item.createdAt ?? _clock(),
-        ),
-      );
-    }
-    if (additions.isEmpty) return 0;
-    if (_bookmarks.length + additions.length >
-        BrowserRepository.maximumBookmarks) {
-      throw const LibraryOperationException(
-        'This import exceeds the 5,000 bookmark limit. Remove some bookmarks first.',
-      );
-    }
-    final next = [...additions, ..._bookmarks];
-    await _repository.saveBookmarks(next);
-    _bookmarks = next;
-    if (!_disposed) notifyListeners();
-    return additions.length;
-  });
+  Future<int> importBookmarks(BookmarkImportPreview preview) => Future.error(
+    const LibraryOperationException(
+      'Website bookmark import is unavailable. Save reviewed resources instead.',
+    ),
+  );
 
-  Future<bool> addToReadingList() async {
-    // Capture the explicit source before queuing, not a later selected tab.
-    final tab = activeTab;
-    if (tab.isPrivate || tab.isHome) return false;
-    return _saveReadingListSource(tab);
-  }
+  Future<bool> addToReadingList() async => false;
 
-  /// An explicit address is metadata only: no search, navigation or fetch.
-  Future<bool> addReadingListUrl(String url, {String? title}) async {
-    final source = activeTab;
-    if (source.isPrivate) return false;
-    return _saveReadingListSource(
-      BrowserTab(
-        id: source.id,
-        url: url.trim(),
-        title: title ?? '',
-        isPrivate: source.isPrivate,
-      ),
-    );
-  }
-
-  Future<bool> _saveReadingListSource(BrowserTab tab) => _durable(() async {
-    final uri = requireWebUri(tab.url);
-    if (_readingList.any((item) => item.url == uri.toString())) return false;
-    if (_readingList.length >= BrowserRepository.maximumReadingList) {
-      throw const LibraryOperationException(
-        'The reading list holds up to 500 pages. Remove one before saving more.',
-      );
-    }
-    final item = ReadingListItem(
-      id: _nextId(),
-      url: uri.toString(),
-      title: BookmarkTransferCodec.cleanTitle(tab.title, fallback: uri.host),
-      createdAt: _clock(),
-    );
-    final added = await _repository.addReadingListItem(
-      tab,
-      id: item.id,
-      createdAt: item.createdAt,
-    );
-    if (added) {
-      _readingList = [item, ..._readingList];
-      if (!_disposed) notifyListeners();
-    }
-    return added;
-  });
+  Future<bool> addReadingListUrl(String url, {String? title}) => Future.error(
+    const LibraryOperationException(
+      'Live website addresses cannot be added. Save a reviewed resource instead.',
+    ),
+  );
 
   Future<void> setReadingListRead(String id, bool read) => _durable(() async {
     final item = _readingList.where((item) => item.id == id).firstOrNull;
@@ -353,12 +282,152 @@ class BrowserState extends ChangeNotifier {
   });
 
   void saveSettings(BrowserSettings settings) {
+    final persistedProtectedJson = _settings.protectedJson;
     _settings = settings.copyWith(
+      protectedJson: persistedProtectedJson,
+      guardJson: retireLegacyGuardSettings(settings.guardJson),
       searchProviderId: SearchProvider.byId(settings.searchProviderId).id,
     );
     final snapshot = _settings;
-    _enqueue(() => _repository.saveSettings(snapshot));
+    _enqueue(
+      () => _repository.saveSettings(
+        snapshot.copyWith(
+          // A preceding durable resource mutation may have completed after this
+          // preference action was queued. Merge its committed IDs at write time.
+          protectedJson: productEdition == ProductEdition.consumer
+              ? jsonEncode(_protectedPreferences.toJson())
+              : persistedProtectedJson,
+        ),
+      ),
+    );
     notifyListeners();
+  }
+
+  bool get _canSaveProtected => !activeTab.isPrivate;
+
+  void _requireApproved(String id, {required bool isPrivate}) {
+    if (isPrivate ||
+        !_canSaveProtected ||
+        policyRuntime?.policy
+                .evaluate(
+                  PolicyRequest.bundled(
+                    id,
+                    context: productEdition == ProductEdition.consumer
+                        ? ContentContext.general
+                        : ContentContext.student,
+                  ),
+                  additional: _protectedPreferences.additional,
+                )
+                .isAllowed !=
+            true) {
+      throw const LibraryOperationException(
+        'This resource cannot be saved in this session.',
+      );
+    }
+  }
+
+  Future<void> _saveProtected(ProtectedPreferences value) async {
+    final next = _settings.copyWith(protectedJson: jsonEncode(value.toJson()));
+    if (productEdition == ProductEdition.consumer) {
+      await _repository.saveSettings(next);
+      // Preserve appearance changes made while this durable write awaited I/O.
+      _settings = _settings.copyWith(protectedJson: next.protectedJson);
+    }
+    _protectedPreferences = value;
+    if (!_disposed) notifyListeners();
+  }
+
+  Future<void> setResourceBookmarked(
+    String id,
+    bool saved, {
+    bool isPrivate = false,
+  }) => _protectedMutation(() async {
+    _requireApproved(id, isPrivate: isPrivate);
+    final ids = Set<String>.of(_protectedPreferences.bookmarkedIds);
+    if (saved && ids.length >= 5000 && !ids.contains(id)) {
+      throw const LibraryOperationException('The bookmark limit is 5,000.');
+    }
+    saved ? ids.add(id) : ids.remove(id);
+    await _saveProtected(_protectedPreferences.copyWith(bookmarkedIds: ids));
+  });
+  Future<void> setResourceReading(
+    String id,
+    bool saved, {
+    bool isPrivate = false,
+  }) => _protectedMutation(() async {
+    _requireApproved(id, isPrivate: isPrivate);
+    final ids = Set<String>.of(_protectedPreferences.readingIds);
+    if (saved && ids.length >= 500 && !ids.contains(id)) {
+      throw const LibraryOperationException('The reading-list limit is 500.');
+    }
+    saved ? ids.add(id) : ids.remove(id);
+    await _saveProtected(
+      _protectedPreferences.copyWith(
+        readingIds: ids,
+        readIds: _protectedPreferences.readIds.where(ids.contains),
+      ),
+    );
+  });
+  Future<void> setResourceRead(
+    String id,
+    bool read, {
+    bool isPrivate = false,
+  }) => _protectedMutation(() async {
+    _requireApproved(id, isPrivate: isPrivate);
+    if (!_protectedPreferences.readingIds.contains(id)) return;
+    final ids = Set<String>.of(_protectedPreferences.readIds);
+    read ? ids.add(id) : ids.remove(id);
+    await _saveProtected(_protectedPreferences.copyWith(readIds: ids));
+  });
+  Future<void> saveAdditionalRestrictions(
+    AdditionalRestrictions restrictions, {
+    bool isPrivate = false,
+  }) => _protectedMutation(() async {
+    if (isPrivate || !_canSaveProtected) {
+      throw const LibraryOperationException(
+        'These settings cannot be changed in this session.',
+      );
+    }
+    final supportIds =
+        policyRuntime?.catalog
+            .where((r) => r.collection == 'support')
+            .map((r) => r.id)
+            .toSet() ??
+        <String>{};
+    final safe = AdditionalRestrictions(
+      blockedCollections: restrictions.blockedCollections.where(
+        (c) => c != 'support',
+      ),
+      blockedResourceIds: restrictions.blockedResourceIds.where(
+        (id) => !supportIds.contains(id),
+      ),
+    );
+    await _saveProtected(_protectedPreferences.copyWith(additional: safe));
+  });
+
+  Future<void> resetProtectedSession({
+    bool isPrivate = false,
+  }) => _protectedMutation(() async {
+    if (isPrivate) return;
+    // Shared-session reset cannot delete legacy quarantine or lower policy trust.
+    await _saveProtected(
+      ProtectedPreferences(additional: _protectedPreferences.additional),
+    );
+    _tabs = [BrowserTab(id: _nextId())];
+    _activeId = _tabs.single.id;
+    _changed();
+  });
+
+  Future<void> _protectedMutation(Future<void> Function() operation) {
+    if (productEdition == ProductEdition.consumer) return _durable(operation);
+    if (_disposed) {
+      return Future.error(
+        const LibraryOperationException('This session has closed.'),
+      );
+    }
+    final result = _writes.then((_) => operation());
+    _writes = result.then<void>((_) {}, onError: (Object _, StackTrace _) {});
+    return result;
   }
 
   Future<void> clearHistory() async {
@@ -481,14 +550,6 @@ class BrowserState extends ChangeNotifier {
     });
     _writes = result.then<void>((_) {}, onError: (Object _, StackTrace _) {});
     return result;
-  }
-
-  List<HistoryEntry> _retained(Iterable<HistoryEntry> entries) {
-    final cutoff = _clock().subtract(BrowserRepository.historyRetention);
-    final retained =
-        entries.where((entry) => !entry.visitedAt.isBefore(cutoff)).toList()
-          ..sort((a, b) => b.visitedAt.compareTo(a.visitedAt));
-    return retained.take(BrowserRepository.maximumHistory).toList();
   }
 
   String _nextId() => '${_clock().microsecondsSinceEpoch}-${_sequence++}';

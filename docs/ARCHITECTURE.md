@@ -1,3 +1,5 @@
+> Historical Phase 1–3A document. Optional Guard, live browsing, external search, Reader and ad behavior described here is superseded by [permanent protection 0.4](RELEASE_READINESS.md). It is not a current capability or release claim.
+
 # Architecture
 
 Wingman shares Flutter product UI and browser metadata across targets. Mobile pages use platform engines. The web companion opens destinations in its host browser. There is no Chromium fork, browsing proxy, web-content backend or arbitrary iframe workaround.

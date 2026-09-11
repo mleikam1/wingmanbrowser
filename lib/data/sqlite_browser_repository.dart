@@ -1,9 +1,12 @@
+import 'dart:convert';
 import 'package:flutter/material.dart' show ThemeMode;
 import 'package:sqflite/sqflite.dart';
 
 import '../domain/models.dart';
 import '../domain/bookmark_transfer.dart';
 import '../domain/search.dart';
+import '../policy/policy_models.dart';
+import '../policy/legacy_settings_migration.dart';
 import 'browser_repository.dart';
 import 'database_native.dart' if (dart.library.js_interop) 'database_web.dart';
 
@@ -23,7 +26,7 @@ class SqliteBrowserRepository implements BrowserRepository {
 
   Future<Database> _open() async {
     final options = OpenDatabaseOptions(
-      version: 2,
+      version: 3,
       onConfigure: (db) async {
         // Reclaimed records are overwritten within SQLite. Platform backups,
         // browser eviction and filesystem snapshots remain OS/browser concerns.
@@ -51,9 +54,11 @@ class SqliteBrowserRepository implements BrowserRepository {
           key TEXT PRIMARY KEY, value TEXT NOT NULL
         )''');
         await _createReadingList(db);
+        await _createProtectionArchive(db);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) await _createReadingList(db);
+        if (oldVersion < 3) await _createProtectionArchive(db);
       },
     );
     return factory?.openDatabase(databasePath, options: options) ??
@@ -63,17 +68,17 @@ class SqliteBrowserRepository implements BrowserRepository {
   @override
   Future<BrowserData> load() async {
     final db = await _db;
-    await _pruneHistory(db);
+    await db.transaction(_migratePermanentProtection);
     final results = await Future.wait([
       db.query(
         'tabs',
         orderBy: 'position',
         limit: BrowserRepository.maximumTabs,
       ),
-      db.query('history', orderBy: 'visited_at DESC'),
-      db.query('bookmarks', orderBy: 'created_at DESC'),
+      db.rawQuery('SELECT COUNT(*) AS total FROM history'),
+      db.rawQuery('SELECT COUNT(*) AS total FROM bookmarks'),
       db.query('settings'),
-      db.query('reading_list', orderBy: 'created_at DESC, id'),
+      db.rawQuery('SELECT COUNT(*) AS total FROM reading_list'),
     ]);
     final prefs = {
       for (final row in results[3])
@@ -95,45 +100,16 @@ class SqliteBrowserRepository implements BrowserRepository {
     return BrowserData(
       tabs: tabs,
       activeId: prefs['active_tab'],
-      history: [
-        for (final row in results[1])
-          if (_safeUrl(row['url'] as String))
-            HistoryEntry(
-              id: row['url'] as String,
-              url: row['url'] as String,
-              title: row['title'] as String,
-              visitedAt: DateTime.fromMillisecondsSinceEpoch(
-                row['visited_at'] as int,
-              ),
-            ),
-      ],
-      bookmarks: [
-        for (final row in results[2])
-          if (_safeUrl(row['url'] as String))
-            Bookmark(
-              id: row['id'] as String,
-              url: row['url'] as String,
-              title: row['title'] as String,
-              createdAt: DateTime.fromMillisecondsSinceEpoch(
-                row['created_at'] as int,
-              ),
-            ),
-      ],
-      readingList: [
-        for (final row in results[4])
-          if (_safeUrl(row['url'] as String))
-            ReadingListItem(
-              id: row['id'] as String,
-              url: row['url'] as String,
-              title: row['title'] as String,
-              createdAt: DateTime.fromMillisecondsSinceEpoch(
-                row['created_at'] as int,
-              ),
-              readAt: row['read_at'] == null
-                  ? null
-                  : DateTime.fromMillisecondsSinceEpoch(row['read_at'] as int),
-            ),
-      ],
+      quarantined: QuarantinedContentCounts(
+        archivedTabs:
+            Sqflite.firstIntValue(
+              await db.rawQuery('SELECT COUNT(*) FROM retired_tabs'),
+            ) ??
+            0,
+        history: Sqflite.firstIntValue(results[1]) ?? 0,
+        bookmarks: Sqflite.firstIntValue(results[2]) ?? 0,
+        readingList: Sqflite.firstIntValue(results[4]) ?? 0,
+      ),
       settings: BrowserSettings(
         searchProviderId: SearchProvider.byId(
           prefs['search_provider'] ?? '',
@@ -144,6 +120,7 @@ class SqliteBrowserRepository implements BrowserRepository {
         ),
         onboardingComplete: prefs['onboarding_complete'] == 'true',
         guardJson: prefs['guard_configuration'] ?? '{}',
+        protectedJson: prefs['protected_preferences'] ?? '{}',
         guardStatsJson: prefs['guard_statistics'] ?? '{}',
         localSuggestions: prefs['local_suggestions'] != 'false',
         pageScale: (int.tryParse(prefs['page_scale'] ?? '') ?? 100).clamp(
@@ -152,6 +129,40 @@ class SqliteBrowserRepository implements BrowserRepository {
         ),
       ),
     );
+  }
+
+  Future<void> _createProtectionArchive(DatabaseExecutor db) async {
+    await db.execute(
+      'CREATE TABLE IF NOT EXISTS retired_tabs(id TEXT NOT NULL,url TEXT NOT NULL,title TEXT NOT NULL,position INTEGER NOT NULL,desktop_mode INTEGER NOT NULL,PRIMARY KEY(id,url))',
+    );
+  }
+
+  Future<void> _migratePermanentProtection(DatabaseExecutor db) async {
+    await _createProtectionArchive(db);
+    await db.execute(
+      "INSERT OR IGNORE INTO retired_tabs SELECT id,url,title,position,desktop_mode FROM tabs WHERE url<>'' OR title<>'New tab'",
+    );
+    await db.execute(
+      "UPDATE tabs SET url='',title='New tab' WHERE url<>'' OR title<>'New tab'",
+    );
+    final rows = await db.query(
+      'settings',
+      where: 'key=?',
+      whereArgs: ['guard_configuration'],
+    );
+    final guard = retireLegacyGuardSettings(
+      rows.firstOrNull?['value'] as String? ?? '{}',
+    );
+    for (final entry in {
+      'guard_configuration': guard,
+      'search_provider': 'approved-content',
+      'mandatory_policy_version': '1',
+    }.entries) {
+      await db.insert('settings', {
+        'key': entry.key,
+        'value': entry.value,
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+    }
   }
 
   @override
@@ -173,10 +184,19 @@ class SqliteBrowserRepository implements BrowserRepository {
       final batch = txn.batch()..delete('tabs');
       for (var index = 0; index < normal.length; index++) {
         final tab = normal[index];
+        if (!tab.isHome) {
+          batch.insert('retired_tabs', {
+            'id': tab.id,
+            'url': tab.url,
+            'title': tab.title,
+            'position': index,
+            'desktop_mode': tab.desktopMode ? 1 : 0,
+          }, conflictAlgorithm: ConflictAlgorithm.ignore);
+        }
         batch.insert('tabs', {
           'id': tab.id,
-          'url': tab.url,
-          'title': tab.title,
+          'url': '',
+          'title': 'New tab',
           'position': index,
           'desktop_mode': tab.desktopMode ? 1 : 0,
         });
@@ -337,10 +357,12 @@ class SqliteBrowserRepository implements BrowserRepository {
       'theme': settings.themeMode.name,
       'search_provider': SearchProvider.byId(settings.searchProviderId).id,
       'onboarding_complete': settings.onboardingComplete.toString(),
-      'guard_configuration': settings.guardJson,
+      'guard_configuration': retireLegacyGuardSettings(settings.guardJson),
       'guard_statistics': settings.guardStatsJson,
       'local_suggestions': settings.localSuggestions.toString(),
       'page_scale': settings.pageScale.clamp(75, 200).toString(),
+      'protected_preferences': _protectedJson(settings.protectedJson),
+      'mandatory_policy_version': '1',
     };
     for (final entry in prefs.entries) {
       batch.insert('settings', {
@@ -349,6 +371,19 @@ class SqliteBrowserRepository implements BrowserRepository {
       }, conflictAlgorithm: ConflictAlgorithm.replace);
     }
     await batch.commit(noResult: true);
+  }
+
+  String _protectedJson(String input) {
+    try {
+      if (input.length > 1024 * 1024) return '{}';
+      return jsonEncode(
+        ProtectedPreferences.fromJson(
+          Map<String, Object?>.from(jsonDecode(input) as Map),
+        ).toJson(),
+      );
+    } catch (_) {
+      return '{}';
+    }
   }
 
   @override

@@ -1,3 +1,5 @@
+> Historical Phase 1–3A document. Optional Guard, live browsing, external search, Reader and ad behavior described here is superseded by [permanent protection 0.4](RELEASE_READINESS.md). It is not a current capability or release claim.
+
 # Monetization foundation
 
 Wingman limits monetization to eligible owned surfaces. Browser pages are never ad inventory for Wingman. The current implementation has an optional real Google test-banner demo and empty sponsorship inventory. There is no production ad traffic, partnership revenue, fabricated impression count or pretend affiliate integration.
