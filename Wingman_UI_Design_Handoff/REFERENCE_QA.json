@@ -1,0 +1,190 @@
+{
+  "runtime_page_errors": [],
+  "screen_checks": [
+    {
+      "screen": "home",
+      "overflow": {
+        "app": 0,
+        "scroll": 0
+      }
+    },
+    {
+      "screen": "search",
+      "overflow": {
+        "app": 0,
+        "scroll": 0
+      }
+    },
+    {
+      "screen": "browser",
+      "overflow": {
+        "app": 0,
+        "scroll": 0
+      }
+    },
+    {
+      "screen": "menu",
+      "overflow": {
+        "app": 0,
+        "scroll": 0
+      }
+    },
+    {
+      "screen": "tabs",
+      "overflow": {
+        "app": 0,
+        "scroll": 0
+      }
+    },
+    {
+      "screen": "spaces",
+      "overflow": {
+        "app": 0,
+        "scroll": 0
+      }
+    },
+    {
+      "screen": "space-project",
+      "overflow": {
+        "app": 0,
+        "scroll": 0
+      }
+    },
+    {
+      "screen": "space-learning",
+      "overflow": {
+        "app": 0,
+        "scroll": 0
+      }
+    },
+    {
+      "screen": "space-sports",
+      "overflow": {
+        "app": 0,
+        "scroll": 0
+      }
+    },
+    {
+      "screen": "official",
+      "overflow": {
+        "app": 0,
+        "scroll": 0
+      }
+    },
+    {
+      "screen": "route",
+      "overflow": {
+        "app": 0,
+        "scroll": 0
+      }
+    },
+    {
+      "screen": "commit",
+      "overflow": {
+        "app": 0,
+        "scroll": 0
+      }
+    },
+    {
+      "screen": "finish",
+      "overflow": {
+        "app": 0,
+        "scroll": 0
+      }
+    },
+    {
+      "screen": "finished",
+      "overflow": {
+        "app": 0,
+        "scroll": 0
+      }
+    },
+    {
+      "screen": "guard",
+      "overflow": {
+        "app": 0,
+        "scroll": 0
+      }
+    },
+    {
+      "screen": "boundaries",
+      "overflow": {
+        "app": 0,
+        "scroll": 0
+      }
+    },
+    {
+      "screen": "blocked",
+      "overflow": {
+        "app": 0,
+        "scroll": 0
+      }
+    },
+    {
+      "screen": "help",
+      "overflow": {
+        "app": 0,
+        "scroll": 0
+      }
+    },
+    {
+      "screen": "receipt",
+      "overflow": {
+        "app": 0,
+        "scroll": 0
+      }
+    },
+    {
+      "screen": "handoff",
+      "overflow": {
+        "app": 0,
+        "scroll": 0
+      }
+    },
+    {
+      "screen": "library",
+      "overflow": {
+        "app": 0,
+        "scroll": 0
+      }
+    },
+    {
+      "screen": "reader",
+      "overflow": {
+        "app": 0,
+        "scroll": 0
+      }
+    },
+    {
+      "screen": "report",
+      "overflow": {
+        "app": 0,
+        "scroll": 0
+      }
+    },
+    {
+      "screen": "settings",
+      "overflow": {
+        "app": 0,
+        "scroll": 0
+      }
+    },
+    {
+      "screen": "appearance",
+      "overflow": {
+        "app": 0,
+        "scroll": 0
+      }
+    },
+    {
+      "screen": "welcome",
+      "overflow": {
+        "app": 0,
+        "scroll": 0
+      }
+    }
+  ],
+  "narrow_document_horizontal_overflow": 0,
+  "interaction_smoke": "passed",
+  "scope": "Static local HTML reference rendered in Chromium using supplied document content; no Flutter/native app testing."
+}
