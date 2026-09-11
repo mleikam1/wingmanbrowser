@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart' show ThemeMode;
 
 import '../data/browser_repository.dart';
 import '../data/sqlite_browser_repository.dart';
@@ -106,14 +107,9 @@ class BrowserState extends ChangeNotifier {
       } catch (_) {
         _protectedPreferences = ProtectedPreferences();
       }
-      bool reviewed(String id) =>
-          policyRuntime?.policy.evaluate(PolicyRequest.bundled(id)).isAllowed ==
-          true;
-      _protectedPreferences = _protectedPreferences.copyWith(
-        bookmarkedIds: _protectedPreferences.bookmarkedIds.where(reviewed),
-        readingIds: _protectedPreferences.readingIds.where(reviewed),
-        readIds: _protectedPreferences.readIds.where(reviewed),
-      );
+      // Keep validated, bounded saved IDs until an explicit deletion. A review
+      // expiring must hide content, not silently delete the owner's saved list.
+      // Render, routing and export boundaries independently require eligibility.
       if (productEdition != ProductEdition.consumer) {
         _protectedPreferences = ProtectedPreferences();
       }
@@ -305,6 +301,127 @@ class BrowserState extends ChangeNotifier {
 
   bool get _canSaveProtected => !activeTab.isPrivate;
 
+  /// Explicit preferences report durable completion to forms. No optimistic
+  /// success can hide a storage failure or replace concurrently saved IDs.
+  Future<void> saveSettingsDurably(BrowserSettings value) => _durable(() async {
+    final next = value.copyWith(
+      protectedJson: _settings.protectedJson,
+      guardJson: retireLegacyGuardSettings(value.guardJson),
+      searchProviderId: SearchProvider.byId(value.searchProviderId).id,
+    );
+    await _repository.saveSettings(next);
+    _settings = next;
+    if (!_disposed) notifyListeners();
+  });
+
+  /// Forms submit only fields they changed. Resolve the rest after earlier
+  /// queued writes finish, so a slow save cannot restore another form's values.
+  Future<void> saveSettingsPatch({
+    ThemeMode? themeMode,
+    bool? localSuggestions,
+    int? pageScale,
+    bool? onboardingComplete,
+  }) => _durable(() async {
+    final next = _settings.copyWith(
+      themeMode: themeMode,
+      localSuggestions: localSuggestions,
+      pageScale: pageScale,
+      onboardingComplete: onboardingComplete,
+      guardJson: retireLegacyGuardSettings(_settings.guardJson),
+      searchProviderId: SearchProvider.byId(_settings.searchProviderId).id,
+    );
+    await _repository.saveSettings(next);
+    _settings = next;
+    if (!_disposed) notifyListeners();
+  });
+
+  Future<void> clearReviewedLibrary({
+    bool bookmarks = false,
+    bool readingList = false,
+    bool isPrivate = false,
+  }) => _protectedMutation(() async {
+    if (isPrivate || !_canSaveProtected) {
+      throw const LibraryOperationException(
+        'Normal library data is unavailable in this session.',
+      );
+    }
+    await _saveProtected(
+      _protectedPreferences.copyWith(
+        bookmarkedIds: bookmarks ? const [] : null,
+        readingIds: readingList ? const [] : null,
+        readIds: readingList ? const [] : null,
+      ),
+    );
+  });
+
+  Future<int> importReviewedBookmarks(
+    Iterable<String> ids, {
+    bool isPrivate = false,
+  }) async {
+    // Capture and bound the submitted preview before queuing durable work.
+    final submitted = ids.take(5001).toList(growable: false);
+    if (submitted.length > 5000) {
+      throw const LibraryOperationException('The bookmark limit is 5,000.');
+    }
+    var added = 0;
+    await _protectedMutation(() async {
+      if (isPrivate || !_canSaveProtected) {
+        throw const LibraryOperationException(
+          'Normal library data is unavailable in this session.',
+        );
+      }
+      for (final id in submitted) {
+        _requireApproved(id, isPrivate: isPrivate);
+      }
+      final before = _protectedPreferences.bookmarkedIds;
+      final merged = {...before, ...submitted};
+      if (merged.length > 5000) {
+        throw const LibraryOperationException('The bookmark limit is 5,000.');
+      }
+      await _saveProtected(
+        _protectedPreferences.copyWith(bookmarkedIds: merged),
+      );
+      added = merged.length - before.length;
+    });
+    return added;
+  }
+
+  /// Deletes only the submitted saved IDs; this cannot add or approve content.
+  /// Resolving against current state preserves unrelated and newly saved items.
+  Future<void> removeReviewedLibraryItems(
+    Iterable<String> ids, {
+    bool readingList = false,
+    bool isPrivate = false,
+  }) async {
+    final submitted = ids.take(5001).toList(growable: false);
+    if (submitted.length > 5000 ||
+        submitted.any((id) => !validResourceId(id))) {
+      throw const LibraryOperationException('Invalid saved-item selection.');
+    }
+    final selected = submitted.toSet();
+    await _protectedMutation(() async {
+      if (isPrivate || !_canSaveProtected) {
+        throw const LibraryOperationException(
+          'Normal library data is unavailable in this session.',
+        );
+      }
+      final current = _protectedPreferences;
+      final remaining =
+          (readingList ? current.readingIds : current.bookmarkedIds).difference(
+            selected,
+          );
+      await _saveProtected(
+        current.copyWith(
+          bookmarkedIds: readingList ? null : remaining,
+          readingIds: readingList ? remaining : null,
+          readIds: readingList
+              ? current.readIds.where(remaining.contains)
+              : null,
+        ),
+      );
+    });
+  }
+
   void _requireApproved(String id, {required bool isPrivate}) {
     if (isPrivate ||
         !_canSaveProtected ||
@@ -382,7 +499,46 @@ class BrowserState extends ChangeNotifier {
   Future<void> saveAdditionalRestrictions(
     AdditionalRestrictions restrictions, {
     bool isPrivate = false,
+  }) => _protectedMutation(
+    () => _writeAdditionalRestrictions(restrictions, isPrivate: isPrivate),
+  );
+
+  /// Resolve a single user toggle after earlier saves finish. A second form
+  /// cannot replace a boundary saved while its predecessor awaited storage.
+  Future<void> setAdditionalBoundary({
+    String? collection,
+    String? resourceId,
+    required bool hidden,
+    bool isPrivate = false,
   }) => _protectedMutation(() async {
+    if ((collection == null) == (resourceId == null) ||
+        !validResourceId(collection ?? resourceId!)) {
+      throw const LibraryOperationException('Invalid boundary selection.');
+    }
+    final current = _protectedPreferences.additional;
+    final collections = {...current.blockedCollections};
+    final resources = {...current.blockedResourceIds};
+    final selected = collection == null ? resources : collections;
+    final value = collection ?? resourceId!;
+    hidden ? selected.add(value) : selected.remove(value);
+    if (collections.length > 50 || resources.length > 500) {
+      throw const LibraryOperationException(
+        'The additional-boundary limit is reached.',
+      );
+    }
+    await _writeAdditionalRestrictions(
+      AdditionalRestrictions(
+        blockedCollections: collections,
+        blockedResourceIds: resources,
+      ),
+      isPrivate: isPrivate,
+    );
+  });
+
+  Future<void> _writeAdditionalRestrictions(
+    AdditionalRestrictions restrictions, {
+    required bool isPrivate,
+  }) async {
     if (isPrivate || !_canSaveProtected) {
       throw const LibraryOperationException(
         'These settings cannot be changed in this session.',
@@ -403,7 +559,7 @@ class BrowserState extends ChangeNotifier {
       ),
     );
     await _saveProtected(_protectedPreferences.copyWith(additional: safe));
-  });
+  }
 
   Future<void> resetProtectedSession({
     bool isPrivate = false,
@@ -451,6 +607,13 @@ class BrowserState extends ChangeNotifier {
     if (failed) {
       throw StateError('Saved history could not be cleared. Please try again.');
     }
+    _quarantined = QuarantinedContentCounts(
+      archivedTabs: _quarantined.archivedTabs,
+      bookmarks: _quarantined.bookmarks,
+      readingList: _quarantined.readingList,
+      history: 0,
+    );
+    if (!_disposed) notifyListeners();
   }
 
   /// Await this on explicit data-clearing flows and in integration tests.

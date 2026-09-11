@@ -3,7 +3,7 @@ import 'dart:convert';
 /// Versioned feature documents share Wingman's existing local database. This
 /// contract is not a sync transport and accepts no arbitrary namespace.
 abstract interface class SignatureDocumentStore {
-  static const keys = {'workspace', 'privacy', 'compatibility'};
+  static const keys = {'workspace', 'privacy', 'compatibility', 'ui'};
   static const maximumBytes = 512 * 1024;
   Future<Map<String, Object?>?> readDocument(String key);
   Future<void> writeDocument(String key, Map<String, Object?> value);

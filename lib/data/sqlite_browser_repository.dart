@@ -8,6 +8,7 @@ import '../domain/search.dart';
 import '../policy/policy_models.dart';
 import '../policy/legacy_settings_migration.dart';
 import 'browser_repository.dart';
+import 'database_close_coordinator.dart';
 import '../signature/storage/document_store.dart';
 import 'database_native.dart' if (dart.library.js_interop) 'database_web.dart';
 
@@ -440,8 +441,10 @@ class SqliteBrowserRepository
 
   @override
   Future<void> close() async {
-    if (_database != null) await (await _database!).close();
-    _database = null;
+    final database = _database;
+    if (database == null) return;
+    await databaseCloseCoordinator.run(() async => (await database).close());
+    if (identical(_database, database)) _database = null;
   }
 
   bool _safeUrl(String value) {

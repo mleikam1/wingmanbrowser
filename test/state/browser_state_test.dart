@@ -7,6 +7,7 @@ import 'package:wingman_browser/data/browser_repository.dart';
 import 'package:wingman_browser/domain/bookmark_transfer.dart';
 import 'package:wingman_browser/domain/models.dart';
 import 'package:wingman_browser/policy/policy_runtime.dart';
+import 'package:wingman_browser/presentation/library/library_transfer.dart';
 import 'package:wingman_browser/state/browser_state.dart';
 import '../policy/policy_test_support.dart';
 
@@ -310,6 +311,58 @@ void main() {
     },
   );
   test(
+    'delayed ordinary preference patches preserve other queued changes and reviewed IDs',
+    () async {
+      await state.setResourceBookmarked('seed-science', true);
+      final protected = state.settings.protectedJson;
+      final gate = repository.saveGate = Completer<void>();
+      repository.saveStarted = Completer<void>();
+      final theme = state.saveSettingsPatch(themeMode: ThemeMode.dark);
+      await repository.saveStarted!.future;
+      // A different route can submit these before the first save completes.
+      final search = state.saveSettingsPatch(localSuggestions: false);
+      final reading = state.saveSettingsPatch(pageScale: 175);
+      final welcome = state.saveSettingsPatch(onboardingComplete: true);
+      try {
+        expect(state.settings.themeMode, ThemeMode.system);
+        expect(state.settings.localSuggestions, isTrue);
+        expect(state.settings.pageScale, 100);
+        expect(state.settings.onboardingComplete, isFalse);
+      } finally {
+        gate.complete();
+      }
+      await Future.wait([theme, search, reading, welcome]);
+      for (final value in [state.settings, repository.savedSettings!]) {
+        expect(value.themeMode, ThemeMode.dark);
+        expect(value.localSuggestions, isFalse);
+        expect(value.pageScale, 175);
+        expect(value.onboardingComplete, isTrue);
+        expect(value.protectedJson, protected);
+      }
+      expect(state.protectedPreferences.bookmarkedIds, {'seed-science'});
+    },
+  );
+  test(
+    'failed preference patch stays unpublished and later patches remain usable',
+    () async {
+      repository.failSave = true;
+      await expectLater(
+        state.saveSettingsPatch(themeMode: ThemeMode.dark),
+        throwsA(isA<LibraryOperationException>()),
+      );
+      expect(state.settings.themeMode, ThemeMode.system);
+      expect(repository.savedSettings, isNull);
+      repository.failSave = false;
+      await state.saveSettingsPatch(localSuggestions: false, pageScale: 300);
+      expect(state.settings.themeMode, ThemeMode.system);
+      expect(state.settings.localSuggestions, isFalse);
+      expect(state.settings.pageScale, 200);
+      expect(repository.savedSettings!.themeMode, ThemeMode.system);
+      expect(repository.savedSettings!.localSuggestions, isFalse);
+      expect(repository.savedSettings!.pageScale, 200);
+    },
+  );
+  test(
     'student and unknown editions cannot save a general-only signed resource',
     () async {
       final fixture = await PolicyFixture.create();
@@ -348,7 +401,7 @@ void main() {
     },
   );
   test(
-    'forged protected preferences cannot restore unreviewed IDs or relax policy',
+    'saved safe IDs may be retained without granting unreviewed content, search or export',
     () async {
       final source = RecordingRepository()
         ..stored = const BrowserData(
@@ -361,13 +414,34 @@ void main() {
       await restored.init();
       expect(
         restored.protectedPreferences.bookmarkedIds,
-        productEdition == ProductEdition.consumer ? {'seed-science'} : isEmpty,
+        productEdition == ProductEdition.consumer
+            ? {'seed-science', 'unreviewed'}
+            : isEmpty,
       );
       expect(
         runtime.policy
             .evaluate(const PolicyRequest.bundled('unreviewed'))
             .isAllowed,
         false,
+      );
+      expect(runtime.search('unreviewed'), isEmpty);
+      final exported = ReviewedLibraryTransfer.export(
+        restored.protectedPreferences.bookmarkedIds,
+        eligible: (id) => runtime.policy
+            .evaluate(
+              PolicyRequest.bundled(id),
+              additional: restored.protectedPreferences.additional,
+            )
+            .isAllowed,
+      );
+      expect(
+        jsonDecode(exported)['resourceIds'],
+        productEdition == ProductEdition.consumer ? ['seed-science'] : isEmpty,
+      );
+      expect(exported, isNot(contains('unreviewed')));
+      expect(
+        restored.protectedPreferences.additional.blockedResourceIds,
+        isEmpty,
       );
       restored.dispose();
     },

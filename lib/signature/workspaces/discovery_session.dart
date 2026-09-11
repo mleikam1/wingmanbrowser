@@ -1,4 +1,6 @@
 import '../signature_services.dart';
+import '../../presentation/settings/settings_actions.dart'
+    show DataClearOutcome;
 
 class DiscoveryTab {
   DiscoveryTab({this.isPrivate = false, String? id})
@@ -9,6 +11,8 @@ class DiscoveryTab {
   final List<String?> trail = [null];
   int position = 0;
   String? taskId;
+  // Bounded, memory-only positions; owner session survives isolated handoff UI.
+  final Map<String, double> scrollOffsets = {};
   String? get resourceId => trail[position];
   void visit(String? id) {
     if (id == resourceId) return;
@@ -30,7 +34,9 @@ class DiscoveryTab {
       ..taskId = taskId;
   }
 
-  void dispose() {}
+  void dispose() {
+    scrollOffsets.clear();
+  }
 }
 
 /// Owner session objects outlive the UI while static Hand It Over replaces its
@@ -41,6 +47,8 @@ class DiscoverySession {
   String query = '';
   String? collection, notice;
   SignatureServices? privateServices;
+  Future<DataClearOutcome>? pendingDataClear;
+  bool? pendingClearIsPrivate;
   List<DiscoveryTab> _taskUndo = [];
   DiscoveryTab get current => tabs[active];
   List<DiscoveryTab> closeTaskTabs(String taskId, {required bool private}) {

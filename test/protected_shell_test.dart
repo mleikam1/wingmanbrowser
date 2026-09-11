@@ -5,9 +5,61 @@ import 'package:wingman_browser/domain/models.dart';
 import 'package:wingman_browser/main.dart';
 import 'package:wingman_browser/policy/policy_runtime.dart';
 import 'package:wingman_browser/state/browser_state.dart';
+import 'package:wingman_browser/presentation/protection/policy_state_view.dart';
 import 'support/protected_test_support.dart';
 
 void main() {
+  Future<void> tapVisible(WidgetTester tester, Finder finder) async {
+    if (finder.evaluate().isEmpty) {
+      final scrollable = find
+          .byWidgetPredicate(
+            (w) => w is Scrollable && w.axisDirection == AxisDirection.down,
+          )
+          .last;
+      tester.state<ScrollableState>(scrollable).position.jumpTo(0);
+      await tester.pump();
+      await tester.scrollUntilVisible(
+        finder,
+        300,
+        scrollable: scrollable,
+        maxScrolls: 80,
+      );
+    }
+    await tester.ensureVisible(finder);
+    await tester.pumpAndSettle();
+    await tester.tap(finder);
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> focusSearch(WidgetTester tester) async {
+    if (find.byType(PolicyStateView).evaluate().isNotEmpty) {
+      await tapVisible(tester, find.widgetWithText(TextButton, 'Home'));
+    }
+    if (find.byKey(const ValueKey('protected-search')).evaluate().isNotEmpty) {
+      return;
+    }
+    if (find.byKey(const ValueKey('home-search-entry')).evaluate().isNotEmpty) {
+      await tapVisible(tester, find.byKey(const ValueKey('home-search-entry')));
+    } else {
+      await tapVisible(tester, find.byTooltip('Search'));
+    }
+  }
+
+  Future<void> search(WidgetTester tester, String query) async {
+    await focusSearch(tester);
+    await tester.enterText(
+      find.byKey(const ValueKey('protected-search')),
+      query,
+    );
+    await tester.testTextInput.receiveAction(TextInputAction.search);
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> menu(WidgetTester tester, String label) async {
+    await tapVisible(tester, find.byTooltip('Menu').last);
+    await tapVisible(tester, find.widgetWithText(ListTile, label));
+  }
+
   Future<(BrowserState, PolicyRuntime)> mount(
     WidgetTester tester, {
     MemoryBrowserRepository? repository,
@@ -21,20 +73,14 @@ void main() {
     await state.init();
     await tester.pumpWidget(WingmanApp(state: state, policy: policy));
     await tester.pumpAndSettle();
+    if (find.text('Get started').evaluate().isNotEmpty) {
+      await tapVisible(tester, find.text('Get started'));
+    }
     addTearDown(() {
       state.dispose();
       policy.dispose();
     });
     return (state, policy);
-  }
-
-  Future<void> search(WidgetTester tester, String query) async {
-    await tester.enterText(
-      find.byKey(const ValueKey('protected-search')),
-      query,
-    );
-    await tester.testTextInput.receiveAction(TextInputAction.search);
-    await tester.pumpAndSettle();
   }
 
   testWidgets(
@@ -62,7 +108,7 @@ void main() {
       final (state, _) = await mount(tester, repository: repo);
       expect(find.textContaining('UNREVIEWED'), findsNothing);
       expect(state.quarantined.total, 2);
-      expect(find.textContaining('Built for discovery.'), findsOneWidget);
+      expect(find.text('Where would you\nlike to go?'), findsOneWidget);
       await search(tester, 'moon');
       expect(find.text('A month of moonlight'), findsOneWidget);
       expect(find.text('Read a rock'), findsNothing);
@@ -71,17 +117,16 @@ void main() {
       await tester.tap(find.text('A month of moonlight'));
       await tester.pumpAndSettle();
       expect(find.textContaining('The Moon does not make'), findsOneWidget);
-      await tester.tap(find.text('Bookmark'));
+      await tapVisible(tester, find.text('Bookmark'));
       await tester.pumpAndSettle();
       expect(state.protectedPreferences.bookmarkedIds, contains('moon-phases'));
-      await tester.tap(find.text('Read later'));
+      await tapVisible(tester, find.text('Read later'));
       await tester.pumpAndSettle();
       expect(state.protectedPreferences.readingIds, contains('moon-phases'));
       expect(find.byType(SelectableText), findsNothing);
       expect(find.text('Allow once'), findsNothing);
-      await tester.tap(find.text('Bookmarks'));
-      await tester.pumpAndSettle();
-      expect(find.text('Your bookmarks'), findsOneWidget);
+      await menu(tester, 'Bookmarks');
+      expect(find.text('Bookmarks'), findsWidgets);
       expect(find.text('A month of moonlight'), findsOneWidget);
       expect(find.textContaining('no longer available'), findsNothing);
       await tester.pumpWidget(const SizedBox());
@@ -114,12 +159,17 @@ void main() {
         '%68%74%74%70%73%3A',
       ]) {
         await search(tester, value);
+        expect(find.byType(PolicyStateView), findsOneWidget);
         expect(
-          find.textContaining('This destination is not approved.'),
-          findsOneWidget,
+          tester
+              .widget<PolicyStateView>(find.byType(PolicyStateView))
+              .decision
+              .code,
+          PolicyDecisionCode.blockUnsupportedCapability,
         );
         expect(find.text(value), findsNothing);
       }
+      await focusSearch(tester);
       final field = tester.widget<TextField>(
         find.byKey(const ValueKey('protected-search')),
       );
@@ -159,22 +209,26 @@ void main() {
       await tester.tap(find.text('New private tab'));
       await tester.pumpAndSettle();
       await search(tester, 'private-marker');
+      await focusSearch(tester);
       await tester.enterText(
         find.byType(TextField),
         'UNSUBMITTED_PRIVATE_MARKER',
       );
+      tester.state<NavigatorState>(find.byType(Navigator).first).pop();
+      await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Tabs (2)'));
       await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Close tab 2'));
       await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(ListTile, 'Discover'));
-      await tester.pumpAndSettle();
+      await tapVisible(tester, find.text('Normal (1)'));
+      await tapVisible(tester, find.text('Home'));
+      await focusSearch(tester);
       expect(
         tester.widget<TextField>(find.byType(TextField)).controller!.text,
         isEmpty,
       );
       expect(find.textContaining('PRIVATE_MARKER'), findsNothing);
-      expect(find.text('Wingman'), findsOneWidget);
+      expect(find.text('Private session'), findsNothing);
       await tester.pumpWidget(const SizedBox());
     },
   );
@@ -204,10 +258,7 @@ void main() {
   ) async {
     final (_, policy) = await mount(tester, clock: () => DateTime.utc(2028));
     expect(policy.status.usable, isFalse);
-    expect(
-      find.textContaining('approved library is unavailable'),
-      findsOneWidget,
-    );
+    expect(find.text('Reviewed library unavailable'), findsOneWidget);
     expect(find.text('How tides work'), findsNothing);
     await tester.pumpWidget(const SizedBox());
   });
@@ -223,7 +274,7 @@ void main() {
       await tester.tap(find.text('A month of moonlight'));
       await tester.pumpAndSettle();
       repo.failSaves = true;
-      await tester.tap(find.text('Bookmark'));
+      await tapVisible(tester, find.text('Bookmark'));
       await tester.pumpAndSettle();
       expect(find.textContaining('could not be saved'), findsOneWidget);
       expect(find.textContaining('PRIVATE_SQL_DETAIL'), findsNothing);
@@ -255,8 +306,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
-      await tester.tap(find.byTooltip('Settings'));
-      await tester.pumpAndSettle();
+      await menu(tester, 'Settings');
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
     });

@@ -45,6 +45,9 @@ Future<shared.Harness> mountRace(
     policyRuntime: policy,
   );
   await state.init();
+  await state.saveSettingsDurably(
+    state.settings.copyWith(onboardingComplete: true),
+  );
   final services = SignatureServices(
     store: store,
     eligible: (id) => policy.policy

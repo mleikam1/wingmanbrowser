@@ -6,6 +6,9 @@ enum PrivacyActivity {
   localAnalysis,
   analysisSaved,
   analysisDeleted,
+  analysisExported,
+  reviewRequestPrepared,
+  reviewRequestExported,
   spaceChanged,
   finishChanged,
   handoffStarted,
@@ -112,6 +115,9 @@ extension PrivacyActivityLabel on PrivacyActivity {
     PrivacyActivity.localAnalysis => 'Before You Commit analysis',
     PrivacyActivity.analysisSaved => 'Analysis saved locally',
     PrivacyActivity.analysisDeleted => 'Saved analysis deleted',
+    PrivacyActivity.analysisExported => 'Analysis exported',
+    PrivacyActivity.reviewRequestPrepared => 'Content review request prepared',
+    PrivacyActivity.reviewRequestExported => 'Content review request exported',
     PrivacyActivity.spaceChanged => 'Space changed',
     PrivacyActivity.finishChanged => 'Finish workspace changed',
     PrivacyActivity.handoffStarted => 'Hand It Over opened',
@@ -164,6 +170,8 @@ bool validPrivacyDestination(
       destination == PrivacyDestination.diagnosticEndpoint ||
           destination == PrivacyDestination.unknown,
     PrivacyActivity.receiptExported ||
+    PrivacyActivity.analysisExported ||
+    PrivacyActivity.reviewRequestExported ||
     PrivacyActivity.compatibilityReportExported =>
       destination == PrivacyDestination.clipboard ||
           destination == PrivacyDestination.localFile,

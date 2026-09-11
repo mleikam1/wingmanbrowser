@@ -14,6 +14,18 @@ typedef BrowserGuardRequest = GuardRequest;
 /// Only local cleanup, incoming-address rejection and capture protection remain.
 /// There is no website JavaScript bridge or content WebView plugin.
 class NativeBrowserService {
+  /// Retained by the owning discovery session until actual native completion.
+  /// The caller can display pending without treating a timeout as deletion.
+  Future<void> clearLegacySiteData() async {
+    if (!kIsWeb) {
+      await _nativeChannel.invokeMethod<void>('clearData', {
+        'cookies': true,
+        'cache': true,
+        'storage': true,
+      });
+    }
+  }
+
   Future<void> setSensitiveContent(bool sensitive) async {
     if (!kIsWeb) {
       await _nativeChannel.invokeMethod<void>('setSensitiveContent', {

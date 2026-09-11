@@ -17,6 +17,21 @@ const expiredConfiguration = PrivacyConfiguration(
 );
 
 void main() {
+  Future<void> show(WidgetTester tester, Finder item) async {
+    await tester.scrollUntilVisible(
+      item,
+      250,
+      scrollable: find
+          .descendant(
+            of: find.byType(ListView),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    await Scrollable.ensureVisible(tester.element(item), alignment: .5);
+    await tester.pumpAndSettle();
+  }
+
   PrivacyJournal journal() {
     final value = PrivacyJournal(sessionKind: PrivacySessionKind.private);
     addTearDown(value.dispose);
@@ -132,6 +147,7 @@ void main() {
       );
       expect(find.text('Copy reviewed report'), findsNothing);
       expect(copied, isNull);
+      await show(tester, find.text('Preview report'));
       await tester.tap(find.text('Preview report'));
       await tester.pumpAndSettle();
       expect(
@@ -175,13 +191,15 @@ void main() {
           ),
         ),
       );
+      await show(tester, find.byType(CheckboxListTile));
       await tester.tap(find.byType(CheckboxListTile));
       await tester.pumpAndSettle();
       await tester.enterText(
         find.byKey(const ValueKey('compatibility-domain')),
         'https://secret.example/account?token=x',
       );
-      await tester.ensureVisible(find.text('Preview report'));
+      await show(tester, find.text('Preview report'));
+      await show(tester, find.text('Preview report'));
       await tester.tap(find.text('Preview report'));
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('compatibility-preview')), findsNothing);
@@ -190,7 +208,8 @@ void main() {
         find.byKey(const ValueKey('compatibility-domain')),
         'example.com',
       );
-      await tester.ensureVisible(find.text('Preview report'));
+      await show(tester, find.text('Preview report'));
+      await show(tester, find.text('Preview report'));
       await tester.tap(find.text('Preview report'));
       await tester.pumpAndSettle();
       expect(
@@ -229,6 +248,7 @@ void main() {
           ),
         ),
       );
+      await show(tester, find.text('Preview report'));
       await tester.tap(find.text('Preview report'));
       await tester.pumpAndSettle();
       await tester.scrollUntilVisible(find.text('Copy reviewed report'), 350);

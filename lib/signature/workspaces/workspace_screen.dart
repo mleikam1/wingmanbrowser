@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../policy/policy_runtime.dart';
+import '../../presentation/components/wingman_components.dart';
 import '../privacy/privacy_journal.dart';
 import 'workspace_controller.dart';
 import 'measurement.dart';
@@ -47,7 +48,7 @@ class WorkspaceScreen extends StatefulWidget {
 
 class _WorkspaceScreenState extends State<WorkspaceScreen> {
   String? _spaceId, _taskId;
-  bool _tasks = false, _busy = false;
+  bool _tasks = false, _busy = false, _showMeasurement = false;
   WorkspaceController get model => widget.controller;
   @override
   void initState() {
@@ -106,6 +107,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text(title),
+        scrollable: true,
         content: SizedBox(
           width: 520,
           child: TextField(
@@ -118,7 +120,9 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
             enableIMEPersonalizedLearning: false,
             autofillHints: const [],
             decoration: const InputDecoration(
-              labelText: 'Your text · stays on this device',
+              labelText: 'Your text',
+              helperText: 'Stays on this device.',
+              helperMaxLines: 3,
             ),
             contextMenuBuilder: _localMenu,
           ),
@@ -147,6 +151,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
         context: context,
         builder: (context) => AlertDialog(
           title: Text(title),
+          scrollable: true,
           content: Text(message),
           actions: [
             TextButton(
@@ -168,49 +173,48 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     builder: (context, _) {
       final space = _spaceId == null ? null : model.space(_spaceId!);
       final task = _taskId == null ? null : model.task(_taskId!);
-      return Scaffold(
-        appBar: AppBar(
-          leading: space != null || task != null
-              ? IconButton(
-                  tooltip: 'Workspaces',
-                  onPressed: () => setState(() {
-                    _spaceId = null;
-                    _taskId = null;
-                  }),
-                  icon: const Icon(Icons.arrow_back),
-                )
-              : null,
-          title: Text(
-            space?.name ?? (task != null ? 'Finish Mode' : 'Your workspaces'),
-          ),
-        ),
-        body: SafeArea(
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 860),
-              child: ListView(
-                padding: const EdgeInsets.all(20),
-                children: [
-                  if (widget.isPrivate || model.ephemeral)
-                    const Padding(
-                      padding: EdgeInsets.only(bottom: 16),
-                      child: Text(
-                        'Session only. These notes and choices do not enter your normal saved workspaces.',
-                      ),
-                    ),
-                  if (!model.initialized) const LinearProgressIndicator(),
-                  if (model.storageError != null) Text(model.storageError!),
-                  if (_busy) const LinearProgressIndicator(),
-                  if (space != null)
-                    ..._space(space)
-                  else if (task != null)
-                    ..._task(task)
-                  else
-                    ..._hub(),
-                ],
+      return WingmanPage(
+        key: ValueKey('workspace-${space?.id ?? task?.id ?? "hub"}'),
+        title:
+            space?.name ??
+            (task != null || _tasks ? 'Finish Mode' : 'Your Spaces'),
+        maxWidth: space != null || task != null ? 720 : 1120,
+        backTooltip: space != null || task != null ? 'Workspaces' : null,
+        onBack: space != null || task != null
+            ? () => setState(() {
+                _spaceId = null;
+                _taskId = null;
+              })
+            : null,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (widget.isPrivate || model.ephemeral) ...[
+              const WingmanStatus(
+                title: 'Session only',
+                message:
+                    'These notes and choices do not enter your normal saved workspaces.',
               ),
-            ),
-          ),
+              const SizedBox(height: 16),
+            ],
+            if (!model.initialized)
+              const _WorkspaceProgress(label: 'Opening your workspaces'),
+            if (model.storageError != null) ...[
+              WingmanStatus(
+                title: 'Your work could not be loaded',
+                message: model.storageError!,
+                tone: WingmanTone.caution,
+              ),
+              const SizedBox(height: 16),
+            ],
+            if (_busy) const _WorkspaceProgress(label: 'Saving your change'),
+            if (space != null)
+              ..._space(space)
+            else if (task != null)
+              ..._task(task)
+            else
+              ..._hub(),
+          ],
         ),
       );
     },
@@ -238,40 +242,71 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
       const Text(
         'Useful places you choose. No profile is inferred from your browsing.',
       ),
-      SwitchListTile(
-        contentPadding: EdgeInsets.zero,
+      const SizedBox(height: 20),
+      OutlinedButton.icon(
+        onPressed: _busy || model.snapshot.spaces.length >= 8
+            ? null
+            : _chooseTemplate,
+        icon: const Icon(Icons.add),
+        label: const Text('Create a Space'),
+      ),
+      const WingmanSection(title: 'Made yours'),
+      if (model.snapshot.spaces.isEmpty)
+        const WingmanEmptyState(
+          icon: Icons.dashboard_outlined,
+          title: 'A fresh place to start',
+          message:
+              'Choose a template below. Add only the resources, notes and plans you want to keep.',
+        ),
+      _responsiveCards([
+        for (var i = 0; i < model.snapshot.spaces.length; i++)
+          _spaceCard(model.snapshot.spaces[i], i),
+      ]),
+      const SizedBox(height: 16),
+      SwitchListTile.adaptive(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         title: const Text('Show Spaces on Home'),
         value: model.snapshot.spacesEnabled,
         onChanged: (v) => _run(() => model.setSpacesEnabled(v)),
       ),
-      for (var i = 0; i < model.snapshot.spaces.length; i++)
-        _spaceCard(model.snapshot.spaces[i], i),
       const SizedBox(height: 16),
       Text('Start a Space', style: Theme.of(context).textTheme.titleLarge),
       const SizedBox(height: 12),
-      for (final kind in SpaceKind.values)
-        Card(
-          child: ListTile(
-            leading: Icon(_spaceIcon(kind)),
-            title: Text(kind.label),
-            subtitle: Text(switch (kind) {
+      _responsiveCards([
+        for (final kind in SpaceKind.values)
+          _WorkspaceCard(
+            icon: _spaceIcon(kind),
+            title: kind.label,
+            subtitle: switch (kind) {
               SpaceKind.homeProjects =>
                 'Project notes, checklists and a measurement tool.',
               SpaceKind.learning =>
                 'Chosen topics, reviewed reading and your own notes.',
               SpaceKind.sports =>
                 'The sports you choose. Official-source evidence, no live scores or betting.',
-            }),
-            trailing: const Icon(Icons.add),
+            },
             onTap: _busy || model.snapshot.spaces.length >= 8
                 ? null
                 : () => _run(() async {
                     final id = await model.createSpace(kind);
                     if (mounted) setState(() => _spaceId = id);
                   }),
+            actionLabel: 'Create ${kind.label} Space',
+          ),
+      ]),
+      if (model.snapshot.spaces.length >= 8)
+        const Padding(
+          padding: EdgeInsets.only(top: 12),
+          child: Text(
+            'Your eight Spaces are ready. Remove a Space before adding another.',
           ),
         ),
     ] else ...[
+      Text(
+        'One thing at a time.',
+        style: Theme.of(context).textTheme.headlineMedium,
+      ),
+      const SizedBox(height: 8),
       const Text(
         'A goal, a few tabs, and a clear endpoint. Task groups organize browsing; they do not isolate website storage.',
       ),
@@ -297,50 +332,70 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
       ),
       const SizedBox(height: 16),
       if (model.snapshot.tasks.isEmpty)
-        const Text(
-          'Try “Read two articles” or “Plan a small project.” Nothing is inferred or reported.',
+        const WingmanEmptyState(
+          icon: Icons.task_alt,
+          title: 'Start with a small goal',
+          message:
+              'Try “Read two articles” or “Plan a small project.” Nothing is inferred or reported.',
         ),
-      for (final task in model.snapshot.tasks)
-        Card(
-          child: ListTile(
-            title: Text(task.goal),
-            subtitle: Text(
-              '${task.status.name} · ${task.tabs.length} associated tabs',
-            ),
-            trailing: const Icon(Icons.arrow_forward),
+      _responsiveCards([
+        for (final task in model.snapshot.tasks)
+          _WorkspaceCard(
+            icon: task.status == FinishStatus.finished
+                ? Icons.check_circle_outline
+                : Icons.task_alt,
+            title: task.goal,
+            subtitle:
+                '${_statusLabel(task.status)} · ${task.tabs.length} associated tabs · ${task.checklist.where((item) => item.done).length}/${task.checklist.length} checked',
             onTap: () => setState(() => _taskId = task.id),
+            actionLabel: 'Open task',
           ),
-        ),
+      ]),
     ],
   ];
-  Widget _spaceCard(UserSpace space, int index) => Card(
-    child: ListTile(
-      leading: Icon(_spaceIcon(space.kind)),
-      title: Text(space.name),
-      subtitle: Text(
-        '${space.kind.label} · ${space.savedIds.where(_eligible).length} eligible saved items',
-      ),
-      onTap: () => setState(() => _spaceId = space.id),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
+  Widget _responsiveCards(List<Widget> children) => LayoutBuilder(
+    builder: (context, constraints) {
+      final scale = MediaQuery.textScalerOf(context).scale(16) / 16;
+      final columns = constraints.maxWidth >= 840 && scale <= 1.4 ? 2 : 1;
+      final width = (constraints.maxWidth - 16 * (columns - 1)) / columns;
+      return Wrap(
+        spacing: 16,
+        runSpacing: 16,
         children: [
-          IconButton(
-            tooltip: 'Move ${space.name} up',
-            onPressed: index == 0 || _busy
-                ? null
-                : () => _run(() => model.moveSpace(space.id, -1)),
-            icon: const Icon(Icons.arrow_upward),
-          ),
-          IconButton(
-            tooltip: 'Move ${space.name} down',
-            onPressed: index == model.snapshot.spaces.length - 1 || _busy
-                ? null
-                : () => _run(() => model.moveSpace(space.id, 1)),
-            icon: const Icon(Icons.arrow_downward),
-          ),
+          for (final child in children) SizedBox(width: width, child: child),
         ],
+      );
+    },
+  );
+  String _statusLabel(FinishStatus status) => switch (status) {
+    FinishStatus.active => 'Active',
+    FinishStatus.paused => 'Paused',
+    FinishStatus.finished => 'Finished',
+  };
+  Widget _spaceCard(UserSpace space, int index) => _WorkspaceCard(
+    icon: _spaceIcon(space.kind),
+    compact: true,
+    title: space.name,
+    subtitle:
+        '${space.kind.label} · ${space.savedIds.where(_eligible).length} eligible saved items',
+    onTap: () => setState(() => _spaceId = space.id),
+    actionLabel: 'Open Space',
+    actions: [
+      IconButton(
+        tooltip: 'Move ${space.name} up',
+        onPressed: index == 0 || _busy
+            ? null
+            : () => _run(() => model.moveSpace(space.id, -1)),
+        icon: const Icon(Icons.arrow_upward),
       ),
-    ),
+      IconButton(
+        tooltip: 'Move ${space.name} down',
+        onPressed: index == model.snapshot.spaces.length - 1 || _busy
+            ? null
+            : () => _run(() => model.moveSpace(space.id, 1)),
+        icon: const Icon(Icons.arrow_downward),
+      ),
+    ],
   );
   IconData _spaceIcon(SpaceKind kind) => switch (kind) {
     SpaceKind.homeProjects => Icons.home_outlined,
@@ -349,9 +404,11 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
   };
 
   List<Widget> _space(UserSpace space) => [
+    Text(space.name, style: Theme.of(context).textTheme.headlineMedium),
+    const SizedBox(height: 16),
     Text(
       'Shown because you chose ${space.kind.label}.',
-      style: Theme.of(context).textTheme.titleMedium,
+      style: Theme.of(context).textTheme.bodySmall,
     ),
     const SizedBox(height: 12),
     Wrap(
@@ -440,7 +497,22 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
       ],
       const SizedBox(height: 16),
     ],
-    if (space.kind == SpaceKind.homeProjects) const MeasurementTool(),
+    if (space.kind == SpaceKind.homeProjects) ...[
+      OutlinedButton.icon(
+        onPressed: () => setState(() => _showMeasurement = !_showMeasurement),
+        icon: Icon(
+          _showMeasurement ? Icons.expand_less : Icons.calculate_outlined,
+        ),
+        label: Text(
+          _showMeasurement ? 'Hide measurement tool' : 'Measure & convert',
+        ),
+      ),
+      if (_showMeasurement) ...[
+        const SizedBox(height: 12),
+        const MeasurementTool(),
+      ],
+      const SizedBox(height: 24),
+    ],
     Text('Saved resources', style: Theme.of(context).textTheme.titleLarge),
     const SizedBox(height: 8),
     for (final id in space.savedIds)
@@ -506,7 +578,9 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
   List<Widget> _task(FinishWorkspace task) => [
     Text(task.goal, style: Theme.of(context).textTheme.headlineSmall),
     const SizedBox(height: 8),
-    Text('${task.status.name} · Your goal stays on this device.'),
+    Text('${_statusLabel(task.status)} · Your goal stays on this device.'),
+    const SizedBox(height: 16),
+    _TaskProgress(task: task),
     const SizedBox(height: 16),
     Wrap(
       spacing: 8,
@@ -599,14 +673,12 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     ),
   ];
   List<Widget> _notes(String id, String notes, bool task) => [
-    Row(
+    Wrap(
+      spacing: 16,
+      runSpacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        Expanded(
-          child: Text(
-            'Your notes',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-        ),
+        Text('Your notes', style: Theme.of(context).textTheme.titleLarge),
         TextButton(
           onPressed: () async {
             final value = await _edit('Your notes', notes);
@@ -682,17 +754,64 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
       label: const Text('Add checklist item'),
     ),
   ];
-  Widget _resourceTile(ApprovedResource resource, {Widget? trailing}) => Card(
-    child: ListTile(
-      leading: const Icon(Icons.offline_pin_outlined),
-      title: Text(resource.title),
-      subtitle: const Text('Reviewed Wingman guide · Available offline'),
-      trailing: trailing,
-      onTap: () {
-        if (_eligible(resource.id)) widget.onOpenResource(resource.id);
-      },
-    ),
-  );
+  Widget _resourceTile(ApprovedResource resource, {Widget? trailing}) =>
+      Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: _WorkspaceCard(
+          icon: Icons.offline_pin_outlined,
+          compact: true,
+          title: resource.title,
+          subtitle: 'Reviewed Wingman guide · Available offline',
+          onTap: () {
+            if (_eligible(resource.id)) widget.onOpenResource(resource.id);
+          },
+          actionLabel: 'Read guide',
+          actions: [?trailing],
+        ),
+      );
+  Future<void> _chooseTemplate() async {
+    final kind = await showWingmanSheet<SpaceKind>(
+      context: context,
+      builder: (context) => SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Create a Space',
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Choose a starting point. You can rename it and choose its eligible resources.',
+              ),
+              const SizedBox(height: 16),
+              for (final kind in SpaceKind.values) ...[
+                OutlinedButton.icon(
+                  onPressed: () => Navigator.pop(context, kind),
+                  icon: Icon(_spaceIcon(kind)),
+                  label: Text(kind.label),
+                ),
+                const SizedBox(height: 12),
+              ],
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (kind == null || !mounted) return;
+    await _run(() async {
+      final id = await model.createSpace(kind);
+      if (mounted) setState(() => _spaceId = id);
+    });
+  }
+
   Future<void> _pickResource(String spaceId) async {
     await showModalBottomSheet<void>(
       context: context,
@@ -742,6 +861,11 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
               const Text(
                 'You decide what finishing means. This action does not verify that the goal was accomplished.',
               ),
+              const SizedBox(height: 16),
+              Text(
+                '${task.tabs.length} associated tabs · ${task.checklist.where((item) => item.done).length} of ${task.checklist.length} checklist items checked',
+              ),
+              const SizedBox(height: 8),
               CheckboxListTile(
                 value: save,
                 onChanged: (v) => update(() => save = v ?? false),
@@ -830,6 +954,7 @@ class _MeasurementToolState extends State<MeasurementTool> {
           const SizedBox(height: 16),
           DropdownButtonFormField<MeasureDimension>(
             isExpanded: true,
+            itemHeight: null,
             initialValue: _dimension,
             decoration: const InputDecoration(labelText: 'Measurement'),
             items: MeasureDimension.values
@@ -869,12 +994,22 @@ class _MeasurementToolState extends State<MeasurementTool> {
             onChanged: (_) => setState(() => _result = null),
           ),
           const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(child: _unitField('From', _from, (v) => _from = v)),
-              const SizedBox(width: 12),
-              Expanded(child: _unitField('To', _to, (v) => _to = v)),
-            ],
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final from = _unitField('From', _from, (v) => _from = v);
+              final to = _unitField('To', _to, (v) => _to = v);
+              if (constraints.maxWidth < 420 ||
+                  MediaQuery.textScalerOf(context).scale(16) > 24) {
+                return Column(children: [from, const SizedBox(height: 16), to]);
+              }
+              return Row(
+                children: [
+                  Expanded(child: from),
+                  const SizedBox(width: 12),
+                  Expanded(child: to),
+                ],
+              );
+            },
           ),
           const SizedBox(height: 12),
           FilledButton(
@@ -912,6 +1047,7 @@ class _MeasurementToolState extends State<MeasurementTool> {
     void Function(MeasureUnit) change,
   ) => DropdownButtonFormField<MeasureUnit>(
     isExpanded: true,
+    itemHeight: null,
     key: ValueKey('$label-${_dimension.name}-${value.name}'),
     initialValue: value,
     decoration: InputDecoration(labelText: label),
@@ -927,5 +1063,193 @@ class _MeasurementToolState extends State<MeasurementTool> {
         });
       }
     },
+  );
+}
+
+class _WorkspaceCard extends StatelessWidget {
+  const _WorkspaceCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+    required this.actionLabel,
+    this.actions = const [],
+    this.compact = false,
+  });
+  final IconData icon;
+  final String title, subtitle, actionLabel;
+  final VoidCallback? onTap;
+  final List<Widget> actions;
+  final bool compact;
+  @override
+  Widget build(BuildContext context) => Card(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(20),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: compact
+                ? Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: WingmanTokens.of(context).raised,
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Icon(
+                          icon,
+                          color: WingmanTokens.of(context).action,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              title,
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              subtitle,
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      const Icon(Icons.chevron_right),
+                    ],
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        icon,
+                        size: 28,
+                        color: WingmanTokens.of(context).action,
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        title,
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(subtitle),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              actionLabel,
+                              style: Theme.of(context).textTheme.labelLarge
+                                  ?.copyWith(
+                                    color: onTap == null
+                                        ? Theme.of(context).disabledColor
+                                        : WingmanTokens.of(context).action,
+                                  ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Icon(
+                            Icons.arrow_forward,
+                            color: onTap == null
+                                ? Theme.of(context).disabledColor
+                                : WingmanTokens.of(context).action,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+          ),
+        ),
+        if (actions.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            child: Wrap(
+              alignment: WrapAlignment.end,
+              spacing: 8,
+              runSpacing: 8,
+              children: actions,
+            ),
+          ),
+      ],
+    ),
+  );
+}
+
+class _TaskProgress extends StatelessWidget {
+  const _TaskProgress({required this.task});
+  final FinishWorkspace task;
+  @override
+  Widget build(BuildContext context) {
+    final done = task.checklist.where((item) => item.done).length;
+    final count = task.checklist.length;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              count == 0
+                  ? 'Your next small step'
+                  : '$done of $count checklist items checked',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            if (count == 0)
+              const Text(
+                'Add a checklist item below. Progress comes only from what you check off.',
+              )
+            else ...[
+              LinearProgressIndicator(
+                value: done / count,
+                semanticsLabel: 'Checklist progress, $done of $count checked',
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Checked items track your choices, not automatic completion.',
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _WorkspaceProgress extends StatelessWidget {
+  const _WorkspaceProgress({required this.label});
+  final String label;
+  @override
+  Widget build(BuildContext context) => Semantics(
+    liveRegion: true,
+    child: Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Wrap(
+        spacing: 12,
+        runSpacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          if (MediaQuery.disableAnimationsOf(context))
+            const Icon(Icons.hourglass_top)
+          else
+            const SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          Text(label),
+        ],
+      ),
+    ),
   );
 }

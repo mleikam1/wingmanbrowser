@@ -3,10 +3,10 @@
     "short_name": "Wingman Browser",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#135f51",
-    "theme_color": "#135f51",
-    "description": "Wingman. We’ve got your back, not your data.",
-    "orientation": "portrait-primary",
+    "background_color": "#F5F8FF",
+    "theme_color": "#071B4D",
+    "description": "Wingman. We\u2019ve got your back, not your data.",
+    "orientation": "any",
     "prefer_related_applications": false,
     "icons": [
         {

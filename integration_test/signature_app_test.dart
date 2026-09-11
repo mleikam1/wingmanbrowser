@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:wingman_browser/main.dart' as app;
@@ -11,9 +12,18 @@ import 'package:wingman_browser/signature/privacy/trust_receipt_screen.dart';
 import 'package:wingman_browser/signature/compatibility/compatibility_report_screen.dart';
 import 'package:wingman_browser/signature/workspaces/workspace_screen.dart';
 import 'package:wingman_browser/signature/handoff/handoff_gate.dart';
+import 'package:wingman_browser/presentation/protection/policy_state_view.dart';
+import 'package:wingman_browser/policy/policy_models.dart';
 
 void main() {
-  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  var databaseStage = 'first-start';
+  final pendingDatabaseCalls = <int, String>{};
+  final recentDatabaseCalls = <String>[];
+  var databaseCallSequence = 0;
+  String databaseDiagnostic() =>
+      'stage=$databaseStage pending=${pendingDatabaseCalls.values.join(",")} '
+      'recent=${recentDatabaseCalls.join(",")}';
   Future<void> until(WidgetTester tester, bool Function() condition) async {
     final watch = Stopwatch()..start();
     while (!condition() && watch.elapsed < const Duration(seconds: 20)) {
@@ -28,6 +38,7 @@ void main() {
         'startupFailed=${startup.evaluate().isEmpty ? null : tester.widget<app.StartupSurface>(startup).failed} '
         'handoffStatus=${gate.evaluate().isEmpty ? null : tester.widget<HandoffGate>(gate).controller.status.name}',
       );
+      debugPrint('SIGNATURE_NATIVE database ${databaseDiagnostic()}');
     }
     expect(condition(), isTrue, reason: 'Bounded native state wait');
     await tester.pumpAndSettle();
@@ -35,10 +46,18 @@ void main() {
 
   Future<void> tap(WidgetTester tester, Finder target) async {
     if (target.evaluate().isEmpty) {
+      final scrollable = find
+          .byWidgetPredicate(
+            (w) => w is Scrollable && w.axisDirection == AxisDirection.down,
+          )
+          .last;
+      tester.state<ScrollableState>(scrollable).position.jumpTo(0);
+      await tester.pump();
       await tester.scrollUntilVisible(
         target,
         250,
-        scrollable: find.byType(Scrollable).last,
+        scrollable: scrollable,
+        maxScrolls: 80,
       );
     }
     await tester.ensureVisible(target);
@@ -57,6 +76,49 @@ void main() {
   testWidgets(
     'native local feature journey with real SQLite close and application-root reopen',
     (tester) async {
+      // Test-only transparent native-channel tracing. Only fixed operation
+      // names and lifecycle phases are retained: never SQL, paths or row data.
+      const channel = 'com.tekartik.sqflite';
+      const codec = StandardMethodCodec();
+      final messenger = binding.defaultBinaryMessenger;
+      messenger.setMockMessageHandler(channel, (message) async {
+        final method = message == null
+            ? 'empty'
+            : codec.decodeMethodCall(message).method;
+        final safeMethod =
+            const {
+              'openDatabase',
+              'closeDatabase',
+              'getDatabasesPath',
+              'query',
+              'execute',
+              'batch',
+              'insert',
+              'update',
+              'delete',
+              'options',
+            }.contains(method)
+            ? method
+            : 'other';
+        final serial = ++databaseCallSequence;
+        final label = '$databaseStage:$safeMethod#$serial';
+        pendingDatabaseCalls[serial] = label;
+        void note(String status) {
+          recentDatabaseCalls.add('$label:$status');
+          if (recentDatabaseCalls.length > 24) recentDatabaseCalls.removeAt(0);
+        }
+
+        note('start');
+        try {
+          // Delegate directly to the real engine messenger, bypassing this
+          // test wrapper without substituting any database response.
+          return await messenger.delegate.send(channel, message);
+        } finally {
+          pendingDatabaseCalls.remove(serial);
+          note('returned');
+        }
+      });
+      addTearDown(() => messenger.setMockMessageHandler(channel, null));
       final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
       var unexpectedRequests = 0;
       server.listen((request) async {
@@ -70,6 +132,9 @@ void main() {
         tester,
         () => find.byType(app.WingmanApp).evaluate().isNotEmpty,
       );
+      if (find.text('Get started').evaluate().isNotEmpty) {
+        await tap(tester, find.text('Get started'));
+      }
       var owner = tester.widget<app.WingmanApp>(find.byType(app.WingmanApp));
       await until(tester, () => owner.signatures!.initialized);
       debugPrint(
@@ -126,25 +191,27 @@ void main() {
         await services.flush();
         await tester.pumpAndSettle();
 
-        await tap(tester, find.text('Explore Official Routes'));
+        await tap(tester, find.byTooltip('Menu').last);
+        await tap(tester, find.widgetWithText(ListTile, 'Official Routes'));
         expect(find.byType(OfficialRoutesScreen), findsOneWidget);
         await root(tester);
-        await tap(tester, find.byTooltip('Page tools'));
+        await tap(tester, find.byTooltip('Menu').last);
         await tap(tester, find.text('Before You Commit'));
         expect(find.byType(CommitReviewScreen), findsOneWidget);
         await root(tester);
-        await tap(tester, find.byTooltip('Page tools'));
+        await tap(tester, find.byTooltip('Menu').last);
         await tap(tester, find.text('Spaces & Finish Mode'));
         expect(find.byType(WorkspaceScreen), findsOneWidget);
         await root(tester);
-        await tap(tester, find.byTooltip('Protection details'));
-        await tap(tester, find.text('Trust Receipt'));
+        await tap(tester, find.byTooltip('Menu').last);
+        await tap(tester, find.widgetWithText(ListTile, 'Trust Receipt'));
         expect(find.byType(TrustReceiptScreen), findsOneWidget);
         await root(tester);
-        await tap(tester, find.byTooltip('Page tools'));
+        await tap(tester, find.byTooltip('Menu').last);
         await tap(tester, find.text('Something isn’t working'));
         expect(find.byType(CompatibilityReportScreen), findsOneWidget);
         await root(tester);
+        await tap(tester, find.byKey(const ValueKey('home-search-entry')));
         final search = find.byKey(const ValueKey('protected-search'));
         await tester.ensureVisible(search);
         await tester.enterText(
@@ -153,19 +220,31 @@ void main() {
         );
         await tester.testTextInput.receiveAction(TextInputAction.search);
         await tester.pumpAndSettle();
+        expect(find.byType(PolicyStateView), findsOneWidget);
         expect(
-          find.textContaining('This destination is not approved'),
-          findsOneWidget,
+          tester
+              .widget<PolicyStateView>(find.byType(PolicyStateView))
+              .decision
+              .code,
+          PolicyDecisionCode.blockUnsupportedCapability,
         );
+        expect(
+          find.text('http://127.0.0.1:${server.port}/private-fixture'),
+          findsNothing,
+        );
+        expect(find.byType(EditableText), findsNothing);
         expect(unexpectedRequests, 0);
 
         // Exercise durable storage by disposing the actual owner/app controllers
         // and opening a fresh application root. Separate process-death gate tests
         // live in handoff_security_test; this is not labeled a process kill.
+        databaseStage = 'owner-teardown';
         await services.flush();
         await tester.pumpWidget(const SizedBox());
         await tester.pumpAndSettle();
         await Future<void>.delayed(const Duration(milliseconds: 300));
+        debugPrint('SIGNATURE_NATIVE database ${databaseDiagnostic()}');
+        databaseStage = 'owner-reopen';
         final restore = Stopwatch()..start();
         await app.main();
         await until(

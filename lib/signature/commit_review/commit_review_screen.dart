@@ -1,9 +1,12 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../policy/policy_runtime.dart';
 import '../../presentation/app_route_observer.dart';
+import '../../presentation/components/wingman_components.dart';
 import '../privacy/privacy_journal.dart';
 import 'commit_review.dart';
+import 'commit_review_export.dart';
 export 'commit_review.dart';
 
 class CommitReviewScreen extends StatefulWidget {
@@ -19,6 +22,8 @@ class CommitReviewScreen extends StatefulWidget {
     this.context = ContentContext.general,
     this.initialResource,
     this.analyzer = const CommitReviewAnalyzer(),
+    this.canContinue,
+    this.copyText,
   });
   final PolicyRuntime policy;
   final AdditionalRestrictions Function() additional;
@@ -30,6 +35,8 @@ class CommitReviewScreen extends StatefulWidget {
   final ContentContext context;
   final ApprovedResource? initialResource;
   final CommitReviewAnalyzer analyzer;
+  final bool Function()? canContinue;
+  final Future<void> Function(String)? copyText;
   @override
   State<CommitReviewScreen> createState() => _CommitReviewScreenState();
 }
@@ -38,7 +45,9 @@ class _CommitReviewScreenState extends State<CommitReviewScreen>
     with WidgetsBindingObserver, RouteAware {
   final _text = TextEditingController(),
       _label = TextEditingController(text: 'Pasted selection');
-  CommitReviewReport? _report;
+  CommitReviewReport? _report, _exportReport;
+  String? _exportPreview, _exportOutcome;
+  bool _copying = false;
   CommitSourceKind _kind = CommitSourceKind.pasted;
   String? _resourceId, _error;
   String _language = 'en';
@@ -112,6 +121,9 @@ class _CommitReviewScreenState extends State<CommitReviewScreen>
       setState(() {
         _busy = false;
         _report = null;
+        _exportReport = null;
+        _exportPreview = null;
+        _exportOutcome = null;
       });
     }
   }
@@ -133,7 +145,8 @@ class _CommitReviewScreenState extends State<CommitReviewScreen>
       mounted &&
       _visible &&
       generation == _generation &&
-      (_route?.isCurrent ?? true);
+      (_route?.isCurrent ?? true) &&
+      (widget.canContinue?.call() ?? true);
   @override
   void dispose() {
     _generation++;
@@ -186,6 +199,9 @@ class _CommitReviewScreenState extends State<CommitReviewScreen>
     setState(() {
       _busy = true;
       _report = null;
+      _exportReport = null;
+      _exportPreview = null;
+      _exportOutcome = null;
       _error = null;
     });
     try {
@@ -289,6 +305,13 @@ class _CommitReviewScreenState extends State<CommitReviewScreen>
     setState(() => _saving = true);
     try {
       await widget.onDelete(report.id);
+      if (mounted && _exportReport?.id == report.id) {
+        setState(() {
+          _exportReport = null;
+          _exportPreview = null;
+          _exportOutcome = null;
+        });
+      }
       widget.journal.finish(token, PrivacyOutcome.completed);
     } catch (_) {
       widget.journal.finish(token, PrivacyOutcome.failed);
@@ -297,6 +320,67 @@ class _CommitReviewScreenState extends State<CommitReviewScreen>
       }
     } finally {
       if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  void _prepareExport(CommitReviewReport report) {
+    if (!_current(_generation) || !_reportEligible(report) || _copying) return;
+    try {
+      final export = CommitReviewExport.fromReport(report);
+      setState(() {
+        _exportReport = report;
+        _exportPreview = export.text;
+        _exportOutcome = null;
+        _error = null;
+      });
+    } on FormatException {
+      setState(
+        () => _error = 'These findings could not be prepared for export.',
+      );
+    }
+  }
+
+  Future<void> _copyExport() async {
+    final report = _exportReport, text = _exportPreview;
+    final generation = _generation;
+    if (_copying ||
+        report == null ||
+        text == null ||
+        !_current(generation) ||
+        !_reportEligible(report)) {
+      return;
+    }
+    final token = widget.journal.begin(
+      PrivacyActivity.analysisExported,
+      destination: PrivacyDestination.clipboard,
+    );
+    setState(() {
+      _copying = true;
+      _exportOutcome = null;
+    });
+    try {
+      await (widget.copyText ??
+          (text) => Clipboard.setData(ClipboardData(text: text)))(text);
+      final current = _current(generation) && _reportEligible(report);
+      widget.journal.finish(
+        token,
+        current ? PrivacyOutcome.completed : PrivacyOutcome.interrupted,
+      );
+      if (current) {
+        setState(
+          () => _exportOutcome =
+              'Findings copied to the device clipboard. Nothing was submitted.',
+        );
+      }
+    } catch (_) {
+      widget.journal.finish(token, PrivacyOutcome.failed);
+      if (_current(generation)) {
+        setState(
+          () => _error = 'Copy could not be confirmed. Nothing was submitted.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _copying = false);
     }
   }
 
@@ -352,16 +436,31 @@ class _CommitReviewScreenState extends State<CommitReviewScreen>
                     finding.field.label,
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
-                  Text(switch (finding.status) {
-                    FindingStatus.stated => 'Directly stated text',
-                    FindingStatus.conflicting => 'Potential conflict',
-                    FindingStatus.unavailable => 'Not confirmed',
-                  }),
+                  const SizedBox(height: 8),
+                  WingmanStatus(
+                    title: findingStatusLabel(finding.status),
+                    message: finding.status == FindingStatus.unavailable
+                        ? 'Missing wording is not an assurance.'
+                        : finding.status == FindingStatus.conflicting
+                        ? 'Compare the scope of each statement.'
+                        : 'Supported by the selected text below.',
+                    tone: finding.status == FindingStatus.stated
+                        ? WingmanTone.info
+                        : WingmanTone.caution,
+                  ),
                   const SizedBox(height: 8),
                   Text(finding.explanation),
                   for (final evidence in finding.evidence) ...[
                     const SizedBox(height: 12),
-                    Text('“${evidence.excerpt}”'),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: WingmanTokens.of(context).raised,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text('“${evidence.excerpt}”'),
+                    ),
                     Text(
                       evidence.section,
                       style: Theme.of(context).textTheme.bodySmall,
@@ -376,7 +475,7 @@ class _CommitReviewScreenState extends State<CommitReviewScreen>
   );
   @override
   Widget build(BuildContext context) {
-    if (!_visible) {
+    if (!_visible || !(widget.canContinue?.call() ?? true)) {
       return const Scaffold(
         body: SafeArea(
           child: Center(
@@ -387,168 +486,258 @@ class _CommitReviewScreenState extends State<CommitReviewScreen>
     }
     final report = _report;
     final saved = _saved();
-    return Scaffold(
-      appBar: AppBar(title: const Text('Before You Commit')),
-      body: SafeArea(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 900),
-            child: ListView(
-              padding: const EdgeInsets.all(20),
-              children: [
-                Text(
-                  'Make the small print easier to inspect.',
-                  style: Theme.of(context).textTheme.headlineSmall,
+    return WingmanPage(
+      title: 'Before You Commit',
+      scrollable: false,
+      child: ListView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        children: [
+          Text(
+            'A closer look at the details.',
+            style: Theme.of(context).textTheme.headlineMedium,
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Paste visible terms you choose. Wingman looks for directly stated wording locally, without visiting a website, using AI, or taking any action.',
+          ),
+          const SizedBox(height: 8),
+          WingmanStatus(
+            title: widget.isPrivate
+                ? 'Temporary private analysis'
+                : 'Checked on this device',
+            message: widget.isPrivate
+                ? 'Private analysis stays temporary. Saving and saved analyses are unavailable. Clipboard export is an explicit action outside this private view.'
+                : 'Findings stay temporary until you explicitly save. Leave out passwords, payment details, tokens, and personal information.',
+          ),
+          const WingmanSection(title: 'Choose the text to inspect'),
+          const SizedBox(height: 20),
+          TextField(
+            controller: _label,
+            maxLength: 120,
+            autocorrect: false,
+            enableSuggestions: false,
+            enableIMEPersonalizedLearning: false,
+            contextMenuBuilder: _localMenu,
+            decoration: const InputDecoration(
+              labelText: 'Source label (not a web address)',
+            ),
+            onChanged: (_) => _invalidate(),
+          ),
+          const SizedBox(height: 8),
+          DropdownButtonFormField<String>(
+            initialValue: _language,
+            decoration: const InputDecoration(
+              labelText: 'Language of selection',
+            ),
+            items: const [
+              DropdownMenuItem(value: 'en', child: Text('English')),
+              DropdownMenuItem(value: 'other', child: Text('Other / unsure')),
+            ],
+            onChanged: (value) {
+              if (value != null) {
+                _invalidate();
+                setState(() => _language = value);
+              }
+            },
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            key: const Key('commit-selection'),
+            controller: _text,
+            minLines: 7,
+            maxLines: 14,
+            maxLength: CommitReviewAnalyzer.maximumBytes,
+            autocorrect: false,
+            enableSuggestions: false,
+            enableIMEPersonalizedLearning: false,
+            contextMenuBuilder: _localMenu,
+            decoration: const InputDecoration(
+              labelText: 'Visible text to analyze',
+              alignLabelWithHint: true,
+            ),
+            onChanged: (_) => _edited(),
+          ),
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            children: [
+              FilledButton.icon(
+                onPressed: _busy ? null : _analyze,
+                icon: _busy
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.manage_search),
+                label: Text(
+                  _busy ? 'Checking locally…' : 'Check this selection',
                 ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Paste visible terms you choose. Wingman looks for directly stated wording locally, without visiting a website, using AI, or taking any action.',
+              ),
+              if (_busy)
+                TextButton(
+                  onPressed: _invalidate,
+                  child: const Text('Cancel check'),
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  widget.isPrivate
-                      ? 'Private analysis stays temporary. Saving and saved analyses are unavailable.'
-                      : 'Findings stay temporary until you explicitly save. Leave out passwords, payment details, tokens, and personal information.',
+              TextButton(
+                onPressed: _busy ? null : _practice,
+                child: const Text('Use a practice example'),
+              ),
+            ],
+          ),
+          if (_error != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 16),
+              child: WingmanStatus(
+                key: const Key('commit-error'),
+                title: 'Check unavailable',
+                message: _error!,
+                tone: WingmanTone.caution,
+              ),
+            ),
+          if (report != null) ...[
+            const Divider(height: 40),
+            if (_reportEligible(report)) ...[
+              _findings(report),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: OutlinedButton.icon(
+                  onPressed: _copying ? null : () => _prepareExport(report),
+                  icon: const Icon(Icons.ios_share_outlined),
+                  label: const Text('Preview findings export'),
                 ),
-                const SizedBox(height: 20),
-                TextField(
-                  controller: _label,
-                  maxLength: 120,
-                  autocorrect: false,
-                  enableSuggestions: false,
-                  enableIMEPersonalizedLearning: false,
-                  decoration: const InputDecoration(
-                    labelText: 'Source label (not a web address)',
-                  ),
-                  onChanged: (_) => _invalidate(),
+              ),
+              if (!widget.isPrivate)
+                FilledButton.tonal(
+                  onPressed: _saving ? null : _save,
+                  child: const Text('Save analysis locally'),
                 ),
-                const SizedBox(height: 8),
-                DropdownButtonFormField<String>(
-                  initialValue: _language,
-                  decoration: const InputDecoration(
-                    labelText: 'Language of selection',
-                  ),
-                  items: const [
-                    DropdownMenuItem(value: 'en', child: Text('English')),
-                    DropdownMenuItem(
-                      value: 'other',
-                      child: Text('Another language / unsure'),
-                    ),
-                  ],
-                  onChanged: (value) {
-                    if (value != null) {
-                      _invalidate();
-                      setState(() => _language = value);
-                    }
-                  },
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  key: const Key('commit-selection'),
-                  controller: _text,
-                  minLines: 7,
-                  maxLines: 14,
-                  maxLength: CommitReviewAnalyzer.maximumBytes,
-                  autocorrect: false,
-                  enableSuggestions: false,
-                  enableIMEPersonalizedLearning: false,
-                  decoration: const InputDecoration(
-                    labelText: 'Visible text to analyze',
-                    alignLabelWithHint: true,
-                  ),
-                  onChanged: (_) => _edited(),
-                ),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 8,
-                  children: [
-                    FilledButton.icon(
-                      onPressed: _busy ? null : _analyze,
-                      icon: _busy
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.manage_search),
-                      label: Text(
-                        _busy ? 'Checking locally…' : 'Check this selection',
-                      ),
-                    ),
-                    TextButton(
-                      onPressed: _busy ? null : _practice,
-                      child: const Text('Use a practice example'),
-                    ),
-                  ],
-                ),
-                if (_error != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 16),
-                    child: Text(_error!, key: const Key('commit-error')),
-                  ),
-                if (report != null) ...[
-                  const Divider(height: 40),
-                  if (_reportEligible(report)) ...[
-                    _findings(report),
-                    if (!widget.isPrivate)
-                      FilledButton.tonal(
-                        onPressed: _saving ? null : _save,
-                        child: const Text('Save analysis locally'),
-                      ),
-                  ] else
-                    const Text(
-                      'This article is no longer eligible. Its saved excerpts are hidden.',
-                    ),
-                ],
-                if (!widget.isPrivate) ...[
-                  const Divider(height: 40),
-                  Text(
-                    'Saved analyses',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  if (saved.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.only(top: 8),
-                      child: Text('No saved analyses.'),
-                    ),
-                  for (final item in saved)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 12),
-                      child: Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              if (_reportEligible(item))
-                                ExpansionTile(
-                                  tilePadding: EdgeInsets.zero,
-                                  title: Text(item.sourceLabel),
-                                  subtitle: Text(
-                                    'Snapshot · ${item.checkedAt.toUtc().toIso8601String().split('T').first}',
-                                  ),
-                                  children: [_findings(item, saved: true)],
-                                )
-                              else
-                                const Text(
-                                  'Saved article analysis unavailable: its source is no longer eligible.',
-                                ),
-                              TextButton.icon(
-                                onPressed: _saving ? null : () => _delete(item),
-                                icon: const Icon(Icons.delete_outline),
-                                label: const Text('Delete analysis'),
-                              ),
-                            ],
+            ] else
+              const Text(
+                'This article is no longer eligible. Its saved excerpts are hidden.',
+              ),
+          ],
+          if (!widget.isPrivate) ...[
+            const Divider(height: 40),
+            Text(
+              'Saved analyses',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            if (saved.isEmpty)
+              const Padding(
+                padding: EdgeInsets.only(top: 8),
+                child: Text('No saved analyses.'),
+              ),
+            for (final item in saved)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (_reportEligible(item))
+                          ExpansionTile(
+                            tilePadding: EdgeInsets.zero,
+                            title: Text(item.sourceLabel),
+                            subtitle: Text(
+                              'Snapshot · ${item.checkedAt.toUtc().toIso8601String().split('T').first}',
+                            ),
+                            children: [_findings(item, saved: true)],
+                          )
+                        else
+                          const Text(
+                            'Saved article analysis unavailable: its source is no longer eligible.',
                           ),
+                        if (_reportEligible(item))
+                          TextButton.icon(
+                            onPressed: _copying
+                                ? null
+                                : () => _prepareExport(item),
+                            icon: const Icon(Icons.ios_share_outlined),
+                            label: const Text('Preview saved findings export'),
+                          ),
+                        TextButton.icon(
+                          onPressed: _saving ? null : () => _delete(item),
+                          icon: const Icon(Icons.delete_outline),
+                          label: const Text('Delete analysis'),
                         ),
-                      ),
+                      ],
                     ),
-                ],
+                  ),
+                ),
+              ),
+          ],
+          if (_exportPreview != null &&
+              _exportReport != null &&
+              _reportEligible(_exportReport!)) ...[
+            const WingmanSection(title: 'Exact export preview'),
+            const WingmanStatus(
+              title: 'Review before copying',
+              message:
+                  'This includes source labels and excerpts. Recognizable sensitive strings are omitted, but not every personal detail can be detected. Other apps or device clipboard sync may access copied text.',
+            ),
+            const SizedBox(height: 16),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Text(
+                  _exportPreview!,
+                  key: const Key('commit-export-preview'),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 12,
+              runSpacing: 8,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: _copying ? null : _copyExport,
+                  icon: const Icon(Icons.copy_outlined),
+                  label: Text(_copying ? 'Copying…' : 'Copy reviewed findings'),
+                ),
+                TextButton(
+                  onPressed: () => setState(() {
+                    _generation++;
+                    _exportReport = null;
+                    _exportPreview = null;
+                    _exportOutcome = null;
+                  }),
+                  child: const Text('Close preview'),
+                ),
               ],
             ),
-          ),
-        ),
+          ],
+          if (_exportOutcome != null) ...[
+            const SizedBox(height: 16),
+            Semantics(
+              liveRegion: true,
+              child: WingmanStatus(
+                title: 'Export complete',
+                message: _exportOutcome!,
+              ),
+            ),
+          ],
+          const SizedBox(height: 24),
+        ],
       ),
     );
   }
 }
+
+Widget _localMenu(BuildContext context, EditableTextState state) =>
+    AdaptiveTextSelectionToolbar.buttonItems(
+      anchors: state.contextMenuAnchors,
+      buttonItems: state.contextMenuButtonItems
+          .where(
+            (item) => const {
+              ContextMenuButtonType.cut,
+              ContextMenuButtonType.copy,
+              ContextMenuButtonType.paste,
+              ContextMenuButtonType.selectAll,
+            }.contains(item.type),
+          )
+          .toList(),
+    );

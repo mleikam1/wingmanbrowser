@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:sqflite/sqflite.dart';
+import '../data/database_close_coordinator.dart';
 import 'checkpoint_database_native.dart'
     if (dart.library.js_interop) 'checkpoint_database_web.dart';
 import 'signed_policy_repository.dart';
@@ -74,8 +75,10 @@ class SqlitePolicyCheckpointStore implements PolicyCheckpointStore {
 
   @override
   Future<void> close() async {
-    await (await _database)?.close();
-    _database = null;
+    final database = _database;
+    if (database == null) return;
+    await databaseCloseCoordinator.run(() async => (await database).close());
+    if (identical(_database, database)) _database = null;
   }
 }
 

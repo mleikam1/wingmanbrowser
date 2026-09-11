@@ -4,13 +4,17 @@
 
 **Built for discovery. Designed with boundaries.**
 
-Version 0.5 adds seven connected consumer experiences to permanent protection: Official Routes, Before You Commit, Your Spaces, Finish Mode, Hand It Over, Trust Receipt, and Compatibility Repair. The offline library contains 18 original reviewed articles; the separate Official Routes catalog contains 18 reviewed organizational destinations. Local search, session tabs, bookmarks, reading lists, themes and text sizing remain available. There is no advertising SDK or account requirement.
+Version 0.6 implements the consumer UI handoff across Home, navigation, Library, Settings and seven connected local experiences: Official Routes, Before You Commit, Your Spaces, Finish Mode, Hand It Over, Trust Receipt, and Compatibility Repair. The offline library contains 18 original reviewed articles; the separate Official Routes catalog contains 18 reviewed organizational destinations. Local search, session tabs, bookmarks, reading lists, themes and text sizing remain available. There is no advertising SDK or account requirement.
 
 **Live websites and external navigation are disabled.** The previous native engines could not establish positive eligibility for every response and resource before rendering. Their plugins and launch paths have been removed. This useful bounded milestone is not a production whole-web classifier, managed-school deployment, or store release.
 
 Core restrictions have no switches, exceptions, PIN bypasses, or private-mode exemptions. Unknown, expired, corrupted, or unsupported content stays closed. Additional restrictions can hide optional collections; they cannot approve new content. A source citation never grants website access.
 
 Previous tabs, history, bookmarks, and reading-list metadata are quarantined before UI startup. Raw titles, addresses, previews, and external-search suggestions are hidden; original records remain in local storage. Reviewed saves use separate resource IDs. Normal reviewed saves persist, private activity does not, and the student/unknown editions keep reviewed-session saves in memory. Reset semantics and external-file limits are explained in Settings.
+
+## UI handoff review
+
+See the [complete screen registry](docs/ui/SCREEN_REGISTRY.md), [design system](docs/ui/DESIGN_SYSTEM.md), [navigation boundaries](docs/ui/NAVIGATION.md) and [fresh QA evidence and exact preview commands](docs/ui/QA_REPORT.md). The implementation is on `ui-handoff/implementation`; the HTML in `Wingman_UI_Design_Handoff/` is reference material, while `lib/main.dart` is the application. The separate debug gallery uses synthetic memory fixtures.
 
 ## Preview
 
@@ -44,9 +48,9 @@ Open [the local preview](http://127.0.0.1:8791/). The web build is a catalog app
 
 ## Use the new experiences
 
-Home offers an explicit Library/Official search choice and your selected Spaces. Use **Page tools** for Before You Commit, Spaces & Finish Mode, and compatibility reporting. Open an approved article to find **Share with Hand It Over**. **Protection details → Trust Receipt** shows actual recorded feature events separately from configuration.
+Home has one search entry, approved-resource shortcuts, an optional current task and your selected Spaces. The focused search has an explicit Official choice. Use **Menu → Wingman tools** for Before You Commit, Spaces & Finish Mode, and Hand It Over. **Menu → Protection & settings** contains Trust Receipt and compatibility reporting. Settings, Reader and feature pages return to their originating session.
 
-Create Home Projects, Learning and Sports yourself; nothing is inferred. Spaces contain notes/checklists and reviewed resources. Home Projects includes unit conversion; Sports uses your choices and reviewed official-source evidence, without a live score feed. Finish Mode owns only explicitly associated companion tabs. Finishing previews save/close choices; ordinary closure offers undo, private closure does not.
+Create Home Projects, Learning and Sports yourself; nothing is inferred. Spaces contain notes/checklists and reviewed resources. Home Projects includes unit conversion; Sports uses your choices and reviewed official-source evidence, without a live score feed. Finish Mode owns only explicitly associated companion tabs. Finishing previews save/close choices and offers safe undo for normal task closure; private closure never restores destroyed data.
 
 Before You Commit accepts bounded pasted English text and the current signed article. Its clearly labeled practice example uses invented terms. Evidence is transient until an explicit local save; private analyses cannot be saved. Clipboard exports show their exact contents before copying and say that nothing was submitted.
 

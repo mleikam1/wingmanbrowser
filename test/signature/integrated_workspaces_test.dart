@@ -44,6 +44,9 @@ Future<Harness> mount(
     policyRuntime: policy,
   );
   await state.init();
+  await state.saveSettingsDurably(
+    state.settings.copyWith(onboardingComplete: true),
+  );
   final store = MemorySignatureDocumentStore();
   final services = SignatureServices(
     store: store,
@@ -83,7 +86,7 @@ Future<void> tap(WidgetTester tester, Finder target) async {
 }
 
 Future<void> workspaces(WidgetTester tester) async {
-  await tap(tester, find.byTooltip('Page tools'));
+  await tap(tester, find.byTooltip('Menu'));
   await tap(tester, find.text('Spaces & Finish Mode'));
 }
 
@@ -279,7 +282,7 @@ void main() {
     'contextual local analysis reaches an actual receipt; policy invalidation hides saved resource previews',
     (tester) async {
       final h = await mount(tester);
-      await tap(tester, find.byTooltip('Page tools'));
+      await tap(tester, find.byTooltip('Menu'));
       await tap(tester, find.text('Before You Commit'));
       await tap(tester, find.text('Use a practice example'));
       await tester.ensureVisible(find.text('Check this selection'));
@@ -298,7 +301,7 @@ void main() {
         isTrue,
       );
       await home(tester);
-      await tap(tester, find.byTooltip('Protection details'));
+      await tap(tester, find.text('Protection overview'));
       await tap(tester, find.text('Trust Receipt'));
       await tester.scrollUntilVisible(
         find.textContaining('Wingman analyzed this selection on your device.'),

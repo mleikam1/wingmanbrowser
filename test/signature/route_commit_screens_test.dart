@@ -62,6 +62,8 @@ void main() {
             matching: find.byType(Scrollable),
           )
           .first;
+      tester.state<ScrollableState>(scrollable).position.jumpTo(0);
+      await tester.pump();
       await tester.scrollUntilVisible(
         finder,
         300,
@@ -139,8 +141,9 @@ void main() {
       );
       await tester.enterText(find.byType(TextField), 'Apple');
       await tester.pumpAndSettle();
+      await ensureVisible(tester, find.textContaining('1 identity records'));
       expect(find.textContaining('1 identity records'), findsOneWidget);
-      await tester.tap(find.textContaining('Apple ·'));
+      await tapVisible(tester, find.textContaining('Apple ·'));
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('official-destination')), findsOneWidget);
       expect(
@@ -154,8 +157,13 @@ void main() {
       expect(opened, isEmpty);
       expect(find.byIcon(Icons.verified), findsNothing);
       await tapVisible(tester, find.text('Done'));
+      await ensureVisible(tester, find.byType(TextField));
       await tester.enterText(find.byType(TextField), 'unreviewed-example');
       await tester.pumpAndSettle();
+      await ensureVisible(
+        tester,
+        find.textContaining('No reviewed route matches.'),
+      );
       expect(find.textContaining('No reviewed route matches.'), findsOneWidget);
     },
   );
@@ -377,6 +385,8 @@ void main() {
         license: article.license,
       );
       await mountReview(tester, policy, journal, resource: forged);
+      await ensureVisible(tester, find.byKey(const Key('commit-selection')));
+      await tester.pump();
       expect(
         tester
             .widget<TextField>(find.byKey(const Key('commit-selection')))

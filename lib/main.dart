@@ -8,6 +8,8 @@ import 'state/browser_state.dart';
 import 'presentation/app_route_observer.dart';
 import 'presentation/browser_shell.dart';
 import 'presentation/theme.dart';
+import 'presentation/components/wingman_components.dart';
+import 'presentation/home/welcome_screen.dart';
 import 'signature/handoff/handoff_gate.dart';
 import 'signature/privacy/privacy_journal.dart';
 import 'signature/signature_services.dart';
@@ -144,6 +146,8 @@ class StartupSurface extends StatelessWidget {
   Widget build(BuildContext context) => MaterialApp(
     debugShowCheckedModeBanner: false,
     theme: WingmanTheme.make(Brightness.light),
+    darkTheme: WingmanTheme.make(Brightness.dark),
+    themeMode: ThemeMode.system,
     home: Scaffold(
       body: SafeArea(
         child: Center(
@@ -153,7 +157,16 @@ class StartupSurface extends StatelessWidget {
                 ? const Text(
                     'Protected startup could not finish.\n\nClose and reopen Wingman to try again. Your existing saved data has not been opened.',
                   )
-                : const CircularProgressIndicator(),
+                : const Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      WingmanBrand(),
+                      SizedBox(height: 24),
+                      CircularProgressIndicator(),
+                      SizedBox(height: 16),
+                      Text('Opening your protected session…'),
+                    ],
+                  ),
           ),
         ),
       ),
@@ -185,13 +198,19 @@ class WingmanApp extends StatelessWidget {
       theme: WingmanTheme.make(Brightness.light),
       darkTheme: WingmanTheme.make(Brightness.dark),
       themeMode: state.settings.themeMode,
-      home: BrowserShell(
-        state: state,
-        policy: policy,
-        signatures: signatures,
-        session: session,
-        handoff: handoff,
-      ),
+      themeAnimationDuration: Duration.zero,
+      home: !state.settings.onboardingComplete
+          ? WelcomeScreen(
+              onComplete: () =>
+                  state.saveSettingsPatch(onboardingComplete: true),
+            )
+          : BrowserShell(
+              state: state,
+              policy: policy,
+              signatures: signatures,
+              session: session,
+              handoff: handoff,
+            ),
     ),
   );
 }

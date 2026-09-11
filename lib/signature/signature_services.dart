@@ -5,6 +5,7 @@ import '../policy/policy_runtime.dart';
 import 'privacy/privacy_journal.dart';
 import 'storage/document_store.dart';
 import 'workspaces/workspace_controller.dart';
+import '../presentation/design_system/ui_preferences.dart';
 
 class SignatureServices extends ChangeNotifier {
   SignatureServices({
@@ -12,6 +13,10 @@ class SignatureServices extends ChangeNotifier {
     required bool Function(String) eligible,
     this.isPrivate = false,
   }) : ephemeral = isPrivate || productEdition != ProductEdition.consumer,
+       ui = UiPreferencesController(
+         store: store,
+         ephemeral: isPrivate || productEdition != ProductEdition.consumer,
+       ),
        _store = SessionSignatureDocumentStore(
          store,
          ephemeral: isPrivate || productEdition != ProductEdition.consumer,
@@ -31,6 +36,7 @@ class SignatureServices extends ChangeNotifier {
   final bool isPrivate, ephemeral;
   final SignatureDocumentStore _store;
   final WorkspaceController workspaces;
+  final UiPreferencesController ui;
   late final PrivacyJournal journal;
   bool initialized = false;
   bool _closed = false;
@@ -39,6 +45,7 @@ class SignatureServices extends ChangeNotifier {
     Map<String, Object?>? saved;
     var failed = false;
     await Future.wait([
+      ui.initialize(),
       workspaces.initialize(),
       (() async {
         try {
@@ -75,7 +82,7 @@ class SignatureServices extends ChangeNotifier {
             : PrivacyPolicyFreshness.unavailable,
       );
   Future<void> flush() async {
-    await Future.wait([journal.flush(), workspaces.flush()]);
+    await Future.wait([journal.flush(), workspaces.flush(), ui.flush()]);
   }
 
   @override
@@ -83,6 +90,7 @@ class SignatureServices extends ChangeNotifier {
     _closed = true;
     journal.dispose();
     workspaces.dispose();
+    ui.dispose();
     super.dispose();
   }
 }

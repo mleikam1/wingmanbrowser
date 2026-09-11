@@ -1,6 +1,12 @@
 import 'package:flutter/material.dart';
 import 'handoff_controller.dart';
-import 'handoff_gate.dart' show HandoffKeypad, handoffAttemptMessage;
+import 'handoff_gate.dart'
+    show
+        HandoffKeypad,
+        HandoffScopeNote,
+        HandoffProgress,
+        handoffAppBarHeight,
+        handoffAttemptMessage;
 
 /// Owner-only page. Root passes a freshly minted preview containing only exact
 /// eligible bundled records. It cannot accept URLs or arbitrary page state.
@@ -44,35 +50,70 @@ class _HandoffSetupPageState extends State<HandoffSetupPage>
   Widget build(BuildContext context) => PopScope(
     canPop: !_busy,
     child: Scaffold(
-      appBar: AppBar(title: const Text('Hand It Over')),
+      appBar: AppBar(
+        title: const Text('Hand It Over', maxLines: 2),
+        toolbarHeight: handoffAppBarHeight(context),
+      ),
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 760),
+            constraints: const BoxConstraints(maxWidth: 720),
             child: ListView(
-              padding: const EdgeInsets.all(24),
+              key: ValueKey('handoff-setup-step-$_step'),
+              padding: EdgeInsets.all(
+                MediaQuery.sizeOf(context).width < 360 ? 16 : 24,
+              ),
               children: [
+                Text(
+                  'STEP ${_step + 1} OF 3 · ${_step == 0
+                      ? 'REVIEW'
+                      : _step == 1
+                      ? 'OWNER CODE'
+                      : 'CONFIRM'}',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 12),
                 if (_step == 0) ...[
                   Text(
-                    'Preview exactly what you will share',
-                    style: Theme.of(context).textTheme.headlineSmall,
+                    'Share a little.\nKeep the rest yours.',
+                    style: Theme.of(context).textTheme.headlineMedium,
                   ),
                   const SizedBox(height: 12),
                   const Text(
-                    'This version shares only the reviewed text below. It does '
-                    'not open a website or copy a login, form, cookie, note, '
-                    'bookmark, history item or other tab. The guest can read '
-                    'these articles and ask to return to the owner.',
-                  ),
-                  const SizedBox(height: 12),
-                  const Text(
-                    'You will create a fresh 8–12 digit owner-return code. Keep '
-                    'it to yourself. Restarting, going back or opening a link '
-                    'will not end the session. There is no forgotten-code '
-                    'bypass inside Wingman. This is not a device-wide kiosk; '
-                    'other apps remain outside Wingman’s control.',
+                    'Give someone the reviewed text below in a separate, '
+                    'read-only view. Your other tabs, notes and saved items stay out of reach.',
                   ),
                   const SizedBox(height: 24),
+                  HandoffScopeNote(
+                    icon: Icons.article_outlined,
+                    title:
+                        '${widget.preview.resources.length} reviewed ${widget.preview.resources.length == 1 ? 'article' : 'articles'} · static text only',
+                    message:
+                        'No website, login, form or cookie is copied. '
+                        'The guest can read this exact selection and request return to the owner.',
+                  ),
+                  const SizedBox(height: 16),
+                  const HandoffScopeNote(
+                    icon: Icons.lock_outline_rounded,
+                    title: 'Your code brings you back',
+                    message:
+                        'Create a fresh 8–12 digit owner-return code and keep it to yourself. '
+                        'Restarting, going back or opening a link does not end sharing. '
+                        'There is no forgotten-code bypass inside Wingman.',
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'This does not lock the device or other apps.',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: 32),
+                  Text(
+                    'Preview exactly what you will share',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 20),
                   for (final resource in widget.preview.resources) ...[
                     Text(
                       resource.title,
@@ -122,12 +163,16 @@ class _HandoffSetupPageState extends State<HandoffSetupPage>
                     }),
                   ),
                   if (_message.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    Text(_message),
+                    const SizedBox(height: 16),
+                    HandoffScopeNote(
+                      icon: Icons.info_outline_rounded,
+                      title: 'Check the owner-return code',
+                      message: _message,
+                    ),
                   ],
                   const SizedBox(height: 16),
                   if (_busy)
-                    const Center(child: CircularProgressIndicator())
+                    const HandoffProgress(message: 'Securing the shared view…')
                   else
                     FilledButton(
                       key: const ValueKey('handoff-code-confirm'),

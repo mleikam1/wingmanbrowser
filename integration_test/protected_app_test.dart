@@ -7,6 +7,7 @@ import 'package:integration_test/integration_test.dart';
 import 'package:wingman_browser/config/product_edition.dart';
 import 'package:wingman_browser/main.dart' as app;
 import 'package:wingman_browser/policy/policy_models.dart';
+import 'package:wingman_browser/presentation/protection/policy_state_view.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -24,11 +25,52 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  Future<void> search(WidgetTester tester, String text) async {
-    final field = find.byKey(const ValueKey('protected-search'));
-    await tester.ensureVisible(field);
+  Future<void> tap(WidgetTester tester, Finder finder) async {
+    if (finder.evaluate().isEmpty) {
+      final scrollable = find
+          .byWidgetPredicate(
+            (w) => w is Scrollable && w.axisDirection == AxisDirection.down,
+          )
+          .last;
+      tester.state<ScrollableState>(scrollable).position.jumpTo(0);
+      await tester.pump();
+      await tester.scrollUntilVisible(
+        finder,
+        250,
+        scrollable: scrollable,
+        maxScrolls: 80,
+      );
+    }
+    await tester.ensureVisible(finder);
     await tester.pumpAndSettle();
-    await tester.enterText(field, text);
+    await tester.tap(finder);
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> focusSearch(WidgetTester tester) async {
+    if (find.byType(PolicyStateView).evaluate().isNotEmpty) {
+      await tap(tester, find.widgetWithText(TextButton, 'Home'));
+    }
+    if (find.byKey(const ValueKey('protected-search')).evaluate().isNotEmpty) {
+      return;
+    }
+    final home = find.byKey(const ValueKey('home-search-entry'));
+    if (home.evaluate().isNotEmpty) {
+      await tap(tester, home);
+    } else if (find.byTooltip('Search').evaluate().isNotEmpty) {
+      await tap(tester, find.byTooltip('Search'));
+    } else {
+      await tap(tester, find.byTooltip('Home').last);
+      await tap(tester, find.byKey(const ValueKey('home-search-entry')));
+    }
+  }
+
+  Future<void> search(WidgetTester tester, String text) async {
+    await focusSearch(tester);
+    await tester.enterText(
+      find.byKey(const ValueKey('protected-search')),
+      text,
+    );
     await tester.testTextInput.receiveAction(TextInputAction.search);
     await tester.pumpAndSettle();
   }
@@ -63,7 +105,10 @@ void main() {
     expect(state.initialized, isTrue);
     expect(policy.status.usable, isTrue);
     expect(policy.status.resourceCount, 18);
-    expect(find.textContaining('Built for discovery.'), findsOneWidget);
+    if (find.text('Get started').evaluate().isNotEmpty) {
+      await tap(tester, find.text('Get started'));
+    }
+    expect(find.text('Where would you\nlike to go?'), findsOneWidget);
     expect(
       find.textContaining('Protected startup could not finish.'),
       findsNothing,
@@ -136,7 +181,7 @@ void main() {
       );
       await tester.tap(find.byTooltip('Tabs (2)'));
       await tester.pumpAndSettle();
-      final moonTab = find.widgetWithText(ListTile, 'A month of moonlight');
+      final moonTab = find.text('A month of moonlight');
       expect(moonTab.hitTestable(), findsOneWidget);
       final switching = Stopwatch()..start();
       await tester.tap(moonTab);
@@ -149,41 +194,39 @@ void main() {
         'MANDATORY catalogTabSwitchMs=${(switching.elapsedMicroseconds / 1000).toStringAsFixed(1)} tabs=2 platform=${Platform.operatingSystem} edition=${productEdition.name} mode=debug-integration single-observation NOT-performance-guarantee',
       );
 
-      await tester.ensureVisible(find.text('Library'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Library'));
-      await tester.pumpAndSettle();
+      await tap(tester, find.byTooltip('Home').last);
       final address = 'http://127.0.0.1:${server.port}/unreviewed';
       await search(tester, address);
+      expect(find.byType(PolicyStateView), findsOneWidget);
       expect(
-        find.textContaining('This destination is not approved.'),
-        findsOneWidget,
+        tester
+            .widget<PolicyStateView>(find.byType(PolicyStateView))
+            .decision
+            .code,
+        PolicyDecisionCode.blockUnsupportedCapability,
       );
       expect(find.text(address), findsNothing);
       expect(
-        tester.widget<TextField>(find.byType(TextField)).controller!.text,
-        isEmpty,
+        find.byType(EditableText),
+        findsNothing,
+        reason: 'Rejected addresses must leave the focused input route',
       );
       expect(requests, 0);
+      await focusSearch(tester);
       expect(
         tester
-            .state<EditableTextState>(find.byType(EditableText))
-            .widget
-            .focusNode
-            .hasFocus,
-        isFalse,
-        reason:
-            'Rejected addresses should dismiss editing before opening a sheet',
+            .widget<TextField>(find.byKey(const ValueKey('protected-search')))
+            .controller!
+            .text,
+        isEmpty,
       );
-
-      await tester.tap(find.byTooltip('Protection details'));
+      tester.state<NavigatorState>(find.byType(Navigator).first).pop();
       await tester.pumpAndSettle();
-      expect(find.text('Always protected'), findsOneWidget);
+      await tap(tester, find.text('Protection overview'));
+      await tap(tester, find.text('Always-on protections'));
       final coreLabel = find.text(MandatoryCategory.sexualExplicit.label);
-      expect(coreLabel.hitTestable(), findsOneWidget);
-      await tester.tap(coreLabel);
-      await tester.pumpAndSettle();
-      expect(find.text('Always protected'), findsOneWidget);
+      await tap(tester, coreLabel);
+      expect(find.text('Always-on protections'), findsOneWidget);
       expect(
         find.byIcon(Icons.lock_outline),
         findsNWidgets(MandatoryCategory.values.length),

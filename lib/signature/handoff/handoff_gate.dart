@@ -107,44 +107,48 @@ class _GuestPageState extends State<_GuestPage> {
         key: const ValueKey('handoff-guest'),
         appBar: AppBar(
           automaticallyImplyLeading: false,
-          title: const Text('Hand It Over'),
-          actions: [
-            if (controller.canAuthenticate && !_returning)
-              TextButton(
-                key: const ValueKey('handoff-return'),
-                onPressed: () => setState(() => _returning = true),
-                child: const Text('Return to owner'),
-              ),
-          ],
+          title: Text(_returning ? 'Owner return' : 'Shared view', maxLines: 2),
+          toolbarHeight: handoffAppBarHeight(context),
         ),
         body: SafeArea(
           child: Center(
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 760),
+              constraints: const BoxConstraints(maxWidth: 720),
               child: ListView(
-                padding: const EdgeInsets.all(24),
+                padding: EdgeInsets.all(
+                  MediaQuery.sizeOf(context).width < 360 ? 16 : 24,
+                ),
                 children: [
-                  const Text(
-                    'Static read-only sharing',
-                    style: TextStyle(fontWeight: FontWeight.bold),
+                  HandoffScopeNote(
+                    icon: Icons.lock_outline_rounded,
+                    title: 'Static read-only sharing',
+                    message:
+                        'Only the owner-selected reviewed text is available. '
+                        'Other Wingman content stays out of reach. '
+                        'This does not lock the device or other apps.',
                   ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Only the owner-selected reviewed text is available. '
-                    'Other Wingman content and controls are inaccessible. '
-                    'This does not lock the device or other apps.',
-                  ),
-                  const SizedBox(height: 24),
-                  if (controller.status == HandoffStatus.loading) ...[
-                    const Center(child: CircularProgressIndicator()),
+                  if (controller.canAuthenticate && !_returning) ...[
                     const SizedBox(height: 16),
-                    const Text('Securing the handoff…'),
+                    OutlinedButton.icon(
+                      key: const ValueKey('handoff-return'),
+                      onPressed: () => setState(() => _returning = true),
+                      icon: const Icon(Icons.lock_open_rounded),
+                      label: const Text('Return to owner'),
+                    ),
+                  ],
+                  const SizedBox(height: 28),
+                  if (controller.status == HandoffStatus.loading) ...[
+                    const HandoffProgress(message: 'Securing the handoff…'),
                   ] else if (_returning && controller.canAuthenticate) ...[
                     Text(
                       'Enter the owner-return code',
                       style: Theme.of(context).textTheme.headlineSmall,
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Enter your fresh 8–12 digit code. The shared view stays locked until return is confirmed.',
+                    ),
+                    const SizedBox(height: 24),
                     HandoffKeypad(
                       count: _code.length,
                       enabled: !controller.busy,
@@ -164,9 +168,11 @@ class _GuestPageState extends State<_GuestPage> {
                     if (_message.isNotEmpty)
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 12),
-                        child: Text(
-                          _message,
+                        child: HandoffScopeNote(
                           key: const ValueKey('handoff-error'),
+                          icon: Icons.info_outline_rounded,
+                          title: 'Owner content stays locked',
+                          message: _message,
                         ),
                       ),
                     FilledButton(
@@ -187,15 +193,16 @@ class _GuestPageState extends State<_GuestPage> {
                       child: const Text('Keep sharing'),
                     ),
                   ] else if (controller.busy) ...[
-                    const Center(child: CircularProgressIndicator()),
-                    Text(
-                      controller.returnAuthorized
+                    HandoffProgress(
+                      message: controller.returnAuthorized
                           ? 'Finishing authenticated return…'
                           : 'Checking the owner-return code…',
                     ),
                   ] else if (resource == null) ...[
-                    Text(
-                      controller.status == HandoffStatus.unavailable
+                    HandoffScopeNote(
+                      icon: Icons.lock_outline_rounded,
+                      title: 'Shared view unavailable',
+                      message: controller.status == HandoffStatus.unavailable
                           ? controller.returnUnconfirmed
                                 ? 'Your code was verified, but storage did not '
                                       'confirm the return. Owner content is hidden '
@@ -210,6 +217,13 @@ class _GuestPageState extends State<_GuestPage> {
                       key: const ValueKey('handoff-unavailable'),
                     ),
                   ] else ...[
+                    Text(
+                      'REVIEWED TEXT · ${_index + 1} OF ${resources.length}',
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
                     Text(
                       resource.title,
                       key: ValueKey('handoff-title-${resource.id}'),
@@ -238,7 +252,10 @@ class _GuestPageState extends State<_GuestPage> {
                                 : null,
                             child: const Text('Previous article'),
                           ),
-                          Text('${_index + 1} of ${resources.length}'),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            child: Text('${_index + 1} of ${resources.length}'),
+                          ),
                           OutlinedButton(
                             onPressed: _index < resources.length - 1
                                 ? () => setState(() => ++_index)
@@ -301,11 +318,41 @@ class HandoffKeypad extends StatelessWidget {
           Semantics(
             label: '$count digits entered',
             child: ExcludeSemantics(
-              child: Text(
-                count == 0
-                    ? 'Enter 8–12 digits'
-                    : List.filled(count, '•').join(),
-                style: Theme.of(context).textTheme.titleLarge,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 20,
+                ),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainerLow,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: Theme.of(context).colorScheme.outlineVariant,
+                  ),
+                ),
+                child: count == 0
+                    ? Text(
+                        'Enter 8–12 digits',
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.titleMedium,
+                      )
+                    : Wrap(
+                        alignment: WrapAlignment.center,
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: List.generate(
+                          count,
+                          (_) => Container(
+                            width: 10,
+                            height: 10,
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.onSurface,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        ),
+                      ),
               ),
             ),
           ),
@@ -326,7 +373,11 @@ class HandoffKeypad extends StatelessWidget {
                         : OutlinedButton(
                             key: ValueKey('handoff-key-$digit'),
                             style: OutlinedButton.styleFrom(
-                              minimumSize: const Size(56, 56),
+                              minimumSize: const Size(56, 60),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
                             ),
                             onPressed: !enabled
                                 ? null
@@ -338,12 +389,88 @@ class HandoffKeypad extends StatelessWidget {
                                     Icons.backspace_outlined,
                                     semanticLabel: 'Delete digit',
                                   )
-                                : Text(digit),
+                                : Text(
+                                    digit,
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.titleLarge,
+                                  ),
                           ),
                   ),
                 );
               }).toList(),
             ),
+        ],
+      ),
+    ),
+  );
+}
+
+double handoffAppBarHeight(BuildContext context) =>
+    (MediaQuery.textScalerOf(context).scale(28) *
+            (MediaQuery.sizeOf(context).width < 400 ? 2 : 1.5))
+        .clamp(kToolbarHeight, double.infinity);
+
+/// Local, opaque explanatory surface. It contains no owner data or actions.
+class HandoffScopeNote extends StatelessWidget {
+  const HandoffScopeNote({
+    super.key,
+    required this.icon,
+    required this.title,
+    required this.message,
+  });
+  final IconData icon;
+  final String title, message;
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(20),
+    decoration: BoxDecoration(
+      color: Theme.of(context).colorScheme.surfaceContainerLow,
+      borderRadius: BorderRadius.circular(20),
+      border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+    ),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ExcludeSemantics(
+          child: Icon(icon, color: Theme.of(context).colorScheme.primary),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 8),
+              Text(message, style: Theme.of(context).textTheme.bodyMedium),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class HandoffProgress extends StatelessWidget {
+  const HandoffProgress({super.key, required this.message});
+  final String message;
+  @override
+  Widget build(BuildContext context) => Semantics(
+    liveRegion: true,
+    child: Padding(
+      padding: const EdgeInsets.symmetric(vertical: 24),
+      child: Column(
+        children: [
+          if (MediaQuery.disableAnimationsOf(context))
+            const Icon(Icons.hourglass_empty_rounded)
+          else
+            const SizedBox(
+              width: 28,
+              height: 28,
+              child: CircularProgressIndicator(),
+            ),
+          const SizedBox(height: 16),
+          Text(message, textAlign: TextAlign.center),
         ],
       ),
     ),
