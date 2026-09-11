@@ -3,11 +3,6 @@ analyzer:
   exclude:
     # Flutter's Swift Package Manager copies dependency source into build/.
     - build/**
-    # Upstream package tests/examples require their own dev dependencies.
-    # Its shipped Dart/native implementation is still analyzed and compiled.
-    - third_party/*/example/**
-    - third_party/*/test/**
-    - third_party/*/pigeons/**
 linter:
   rules:
     avoid_print: true

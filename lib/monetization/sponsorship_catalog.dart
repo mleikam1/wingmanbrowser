@@ -1,41 +1,41 @@
-import 'ad_policy_service.dart';
+import 'commerce_policy.dart';
 
-/// Future direct-sold inventory is editorial input, never derived from history.
-/// Commercial destinations are opened only after an explicit user action.
-class SponsoredShortcut {
-  SponsoredShortcut({
-    required this.title,
-    required this.sponsor,
-    required this.destination,
-  }) {
-    if (title.trim().isEmpty || sponsor.trim().isEmpty) {
-      throw ArgumentError(
-        'A sponsored placement requires a title and sponsor.',
-      );
-    }
-    if (!destination.hasAuthority ||
-        destination.host.isEmpty ||
-        !{'https', 'http'}.contains(destination.scheme) ||
-        destination.userInfo.isNotEmpty) {
-      throw ArgumentError('A sponsored destination must be an HTTP(S) URL.');
-    }
-  }
+/// References for a future static consumer placement, not approval tokens.
+/// A future renderer must resolve the creative, destination and review record
+/// through the authoritative signed policy, including expiry and revocation.
+/// Constructing this record never authorizes fetching, display or navigation.
+class CommercialPlacementReference {
+  const CommercialPlacementReference({
+    required this.creativeAssetId,
+    required this.destinationApprovalId,
+    required this.reviewRecordId,
+    required this.policyVersion,
+    required this.reviewedAt,
+    required this.expiresAt,
+    required this.disclosure,
+  });
 
-  final String title;
-  final String sponsor;
-  final Uri destination;
-  String get disclosure => 'Sponsored by $sponsor';
+  final String creativeAssetId;
+  final String destinationApprovalId;
+  final String reviewRecordId;
+  final String policyVersion;
+  final DateTime reviewedAt;
+  final DateTime expiresAt;
+  final String disclosure;
 }
 
 abstract interface class SponsorshipCatalog {
-  Future<List<SponsoredShortcut>> forPlacement(AdPlacement placement);
+  Future<List<CommercialPlacementReference>> forContext(
+    CommerceContext context,
+  );
 }
 
-/// There are no commercial contracts or pretend revenue integrations in V1.
+/// No commercial contracts, remote requests, telemetry or inventory.
 class EmptySponsorshipCatalog implements SponsorshipCatalog {
   const EmptySponsorshipCatalog();
 
   @override
-  Future<List<SponsoredShortcut>> forPlacement(AdPlacement placement) async =>
-      const [];
+  Future<List<CommercialPlacementReference>> forContext(
+    CommerceContext context,
+  ) async => const [];
 }

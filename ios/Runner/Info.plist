@@ -68,21 +68,6 @@
 	</array>
 	<key>FlutterDeepLinkingEnabled</key>
 	<false/>
-	<key>GADApplicationIdentifier</key>
-	<string>ca-app-pub-3940256099942544~1458002511</string>
-	<key>GADDelayAppMeasurementInit</key>
-	<true/>
-	<key>NSCameraUsageDescription</key>
-	<string>A website you approve can use your camera while you browse.</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>A website you approve can use your microphone while you browse.</string>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>A website may ask for your location. Access is requested only when a website needs it.</string>
-	<key>NSAppTransportSecurity</key>
-	<dict>
-		<key>NSAllowsArbitraryLoadsInWebContent</key>
-		<true/>
-	</dict>
 	<key>UIFileSharingEnabled</key>
 	<true/>
 	<key>LSSupportsOpeningDocumentsInPlace</key>

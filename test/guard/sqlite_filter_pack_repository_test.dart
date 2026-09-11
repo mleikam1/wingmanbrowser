@@ -266,7 +266,7 @@ void main() {
         GuardRequest(uri: Uri.parse('https://example.test'), tabId: 'one'),
         GuardConfiguration(),
       );
-      expect(decision.action, GuardAction.errorAllow);
+      expect(decision.action, GuardAction.blockPolicyUnavailable);
       final inspect = await databaseFactoryFfi.openDatabase(getPath());
       expect(await inspect.query('guard_releases'), hasLength(1));
     },

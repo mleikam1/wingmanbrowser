@@ -32,7 +32,7 @@ void main() {
     }
   });
 
-  group('queries are encoded and sent directly to selected provider', () {
+  group('queries are encoded for the reviewed local catalog only', () {
     for (final query in [
       'hello world',
       'C++ & Flutter',
@@ -43,7 +43,8 @@ void main() {
       test(query, () {
         final target = parse(query);
         expect(target.isSearch, isTrue);
-        expect(target.uri.host, 'duckduckgo.com');
+        expect(target.uri.scheme, 'wingman');
+        expect(target.uri.host, 'search');
         expect(target.uri.queryParameters['q'], query);
       });
     }
@@ -52,24 +53,22 @@ void main() {
         'something',
         provider: SearchProvider.byId('google'),
       );
-      expect(target.uri.host, 'www.google.com');
-      expect(SearchProvider.byId('deleted-provider').id, 'duckduckgo');
+      expect(target.uri.scheme, 'wingman');
+      expect(target.uri.host, 'search');
+      expect(SearchProvider.byId('deleted-provider').id, 'approved-content');
       expect(
         SearchProvider.available.map((p) => p.id).toSet().length,
         SearchProvider.available.length,
       );
     });
-    test('partnership configuration is centralized and query encoded', () {
+    test('forged partner provider cannot transmit queries', () {
       const custom = SearchProvider(
         id: 'partner',
         name: 'Partner',
         endpoint: 'https://search.example.com/search',
         parameters: {'source': 'wingman'},
       );
-      expect(custom.search('a&b').queryParameters, {
-        'source': 'wingman',
-        'q': 'a&b',
-      });
+      expect(() => custom.search('a&b'), throwsStateError);
     });
     test('insecure provider rejected', () {
       const insecure = SearchProvider(
@@ -125,14 +124,14 @@ void main() {
   });
 
   test(
-    'explicit external links returned for a user-confirmed platform flow',
+    'explicit external links cannot escape the reviewed-content boundary',
     () {
       for (final address in [
         'mailto:hello@example.com',
         'tel:+18005551234',
         'sms:+18005551234',
       ]) {
-        expect(parse(address).isExternal, isTrue);
+        expect(() => parse(address), throwsFormatException);
       }
     },
   );

@@ -1,0 +1,17 @@
+Measure before you plan
+
+A useful measurement note lets someone understand what you measured without standing beside you. For an ordinary organizing task, such as choosing a tray for a desk drawer, write the object, the dimension, and the unit together: “inside drawer width: 32 cm.” Keep inside and outside dimensions separate.
+
+Sketch the outline first. Label width, depth, and height on the sketch rather than relying on a remembered order of numbers. Note anything that takes up space, such as a handle or curved corner. Measure the same distance again from the same reference points. If the readings differ, investigate rather than averaging away an obvious mistake.
+
+Keep one unit system throughout a comparison. NIST identifies one inch as exactly 25.4 millimeters; the international foot is exactly 0.3048 meters. Thus 12 inches equals 30.48 centimeters. A conversion can be exact even when a ruler reading is approximate. Extra decimal places do not improve the original measurement.
+
+A compact note can contain four lines:
+Object and purpose.
+Dimension and reference points.
+Reading with unit.
+Questions still to check.
+
+Before choosing an item, compare its published dimensions with the space it needs to fit, including clearance. Mark estimates as estimates. This is an everyday recording exercise, not a plan for construction, lifting, wiring, or changing a building.
+
+Reflection: could another person repeat your measurement from the note alone?

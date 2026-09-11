@@ -1,3 +1,5 @@
+> Historical Phase 1–3A document. Optional Guard, live browsing, external search, Reader and ad behavior described here is superseded by [permanent protection 0.4](RELEASE_READINESS.md). It is not a current capability or release claim.
+
 # Dependency decisions
 
 Use `pubspec.lock` and native resolution files for the exact resolved versions. Keep upgrades deliberate and rerun browser, storage and privacy checks after changes.

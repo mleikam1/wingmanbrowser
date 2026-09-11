@@ -19,39 +19,23 @@ class SearchProvider {
   final String? commercialDisclosure;
 
   Uri search(String query) {
-    final uri = Uri.parse(endpoint);
-    if (uri.scheme != 'https' || uri.host.isEmpty || uri.userInfo.isNotEmpty) {
-      throw StateError('Search providers must use a secure, direct endpoint.');
+    if (id != 'approved-content' || endpoint != 'wingman://search') {
+      throw StateError(
+        'External search is unavailable under the mandatory policy.',
+      );
     }
-    return uri.replace(
-      queryParameters: {
-        ...uri.queryParameters,
-        ...parameters,
-        queryParameter: query,
-      },
+    return Uri(
+      scheme: 'wingman',
+      host: 'search',
+      queryParameters: {'q': query},
     );
   }
 
   static const available = [
     SearchProvider(
-      id: 'duckduckgo',
-      name: 'DuckDuckGo',
-      endpoint: 'https://duckduckgo.com/',
-    ),
-    SearchProvider(
-      id: 'google',
-      name: 'Google',
-      endpoint: 'https://www.google.com/search',
-    ),
-    SearchProvider(
-      id: 'bing',
-      name: 'Bing',
-      endpoint: 'https://www.bing.com/search',
-    ),
-    SearchProvider(
-      id: 'brave',
-      name: 'Brave Search',
-      endpoint: 'https://search.brave.com/search',
+      id: 'approved-content',
+      name: 'Approved resources',
+      endpoint: 'wingman://search',
     ),
   ];
 
@@ -101,16 +85,6 @@ class OmniboxParser {
       final name = scheme.group(1)!.toLowerCase();
       if (name == 'http' || name == 'https') {
         return NavigationTarget(uri: requireWebUri(value));
-      }
-      if ({'mailto', 'tel', 'sms'}.contains(name)) {
-        final uri = Uri.tryParse(value);
-        if (uri == null ||
-            uri.path.isEmpty ||
-            uri.hasAuthority ||
-            RegExp(r'%0[ad]', caseSensitive: false).hasMatch(value)) {
-          throw const FormatException('This external link is not valid.');
-        }
-        return NavigationTarget(uri: uri, isExternal: true);
       }
       throw const FormatException('Wingman does not open this address type.');
     }

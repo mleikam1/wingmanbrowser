@@ -1,62 +1,215 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
-import 'guard/guard_runtime.dart';
-import 'guard_pin/guard_pin_service.dart';
-import 'guard_ui/guard_controller.dart';
-import 'monetization/ad_route_observer.dart';
+import 'browser/browser_engine.dart';
+import 'config/product_edition.dart';
+import 'data/sqlite_browser_repository.dart';
+import 'policy/policy_runtime.dart';
 import 'state/browser_state.dart';
+import 'presentation/app_route_observer.dart';
 import 'presentation/browser_shell.dart';
-import 'presentation/screens/onboarding_screen.dart';
 import 'presentation/theme.dart';
+import 'presentation/components/wingman_components.dart';
+import 'presentation/home/welcome_screen.dart';
+import 'signature/handoff/handoff_gate.dart';
+import 'signature/privacy/privacy_journal.dart';
+import 'signature/signature_services.dart';
+import 'signature/workspaces/discovery_session.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final state = BrowserState();
-  await state.init();
-  final guard = GuardController(
-    state: state,
-    runtime: await GuardRuntime.initialize(),
-    pin: GuardPinService(),
-  );
-  await guard.initialize();
-  LicenseRegistry.addLicense(() async* {
-    yield LicenseEntryWithLineBreaks(
-      ['EasyPrivacy tracking starter data'],
-      '${await rootBundle.loadString('assets/guard_tracking/ATTRIBUTION.md')}\n\n${await rootBundle.loadString('assets/guard_tracking/CC-BY-SA-3.0.txt')}',
+  try {
+    // This secure marker is read before constructing or loading owner state.
+    final journal = PrivacyJournal(sessionKind: PrivacySessionKind.handoff);
+    final handoff = HandoffController(
+      onStarted: () {
+        journal.clear();
+        journal.record(
+          PrivacyActivity.handoffStarted,
+          PrivacyOutcome.completed,
+        );
+      },
+      onEnded: () => journal.record(
+        PrivacyActivity.handoffEnded,
+        PrivacyOutcome.completed,
+      ),
     );
+    await handoff.initialize();
+    final policy = await PolicyRuntime.initialize();
+    handoff.attachPolicy(policy);
+    await NativeBrowserService().quarantineLegacyContent();
+    runApp(
+      SignatureApplicationRoot(
+        policy: policy,
+        handoff: handoff,
+        handoffJournal: journal,
+      ),
+    );
+  } catch (_) {
+    runApp(const StartupSurface(failed: true));
+  }
+}
+
+/// Controllers live above the gate. Guest UI replaces the entire owner tree,
+/// while these owner objects remain inaccessible and intact for authenticated return.
+class SignatureApplicationRoot extends StatefulWidget {
+  const SignatureApplicationRoot({
+    super.key,
+    required this.policy,
+    required this.handoff,
+    required this.handoffJournal,
   });
-  runApp(WingmanApp(state: state, guard: guard));
+  final PolicyRuntime policy;
+  final HandoffController handoff;
+  final PrivacyJournal handoffJournal;
+  @override
+  State<SignatureApplicationRoot> createState() =>
+      _SignatureApplicationRootState();
+}
+
+class _SignatureApplicationRootState extends State<SignatureApplicationRoot> {
+  Future<_OwnerContext>? _owner;
+  Future<_OwnerContext> _loadOwner() async {
+    final repository = SqliteBrowserRepository();
+    final state = BrowserState(
+      repository: repository,
+      policyRuntime: widget.policy,
+    );
+    await state.init();
+    final signatures = SignatureServices(
+      store: repository,
+      eligible: (id) => widget.policy.policy
+          .evaluate(
+            PolicyRequest.bundled(
+              id,
+              context: productEdition == ProductEdition.consumer
+                  ? ContentContext.general
+                  : ContentContext.student,
+            ),
+            additional: state.protectedPreferences.additional,
+          )
+          .isAllowed,
+    );
+    // Optional tools don't hold the ordinary Home startup gate.
+    unawaited(signatures.initialize());
+    return _OwnerContext(state, signatures, DiscoverySession());
+  }
+
+  @override
+  Widget build(BuildContext context) => HandoffGate(
+    controller: widget.handoff,
+    ownerBuilder: (_) => FutureBuilder<_OwnerContext>(
+      future: _owner ??= _loadOwner(),
+      builder: (context, result) {
+        if (result.hasError) return const StartupSurface(failed: true);
+        final owner = result.data;
+        if (owner == null) return const StartupSurface();
+        return WingmanApp(
+          state: owner.state,
+          policy: widget.policy,
+          signatures: owner.signatures,
+          session: owner.session,
+          handoff: widget.handoff,
+        );
+      },
+    ),
+  );
+  @override
+  void dispose() {
+    final owner = _owner;
+    if (owner != null) {
+      unawaited(owner.then((value) => value.close()).catchError((Object _) {}));
+    }
+    widget.handoff.dispose();
+    widget.handoffJournal.dispose();
+    widget.policy.dispose();
+    super.dispose();
+  }
+}
+
+class _OwnerContext {
+  _OwnerContext(this.state, this.signatures, this.session);
+  final BrowserState state;
+  final SignatureServices signatures;
+  final DiscoverySession session;
+  Future<void> close() async {
+    await signatures.flush();
+    session.dispose();
+    signatures.dispose();
+    state.dispose();
+  }
+}
+
+class StartupSurface extends StatelessWidget {
+  const StartupSurface({super.key, this.failed = false});
+  final bool failed;
+  @override
+  Widget build(BuildContext context) => MaterialApp(
+    debugShowCheckedModeBanner: false,
+    theme: WingmanTheme.make(Brightness.light),
+    darkTheme: WingmanTheme.make(Brightness.dark),
+    themeMode: ThemeMode.system,
+    home: Scaffold(
+      body: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: failed
+                ? const Text(
+                    'Protected startup could not finish.\n\nClose and reopen Wingman to try again. Your existing saved data has not been opened.',
+                  )
+                : const Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      WingmanBrand(),
+                      SizedBox(height: 24),
+                      CircularProgressIndicator(),
+                      SizedBox(height: 16),
+                      Text('Opening your protected session…'),
+                    ],
+                  ),
+          ),
+        ),
+      ),
+    ),
+  );
 }
 
 class WingmanApp extends StatelessWidget {
-  const WingmanApp({super.key, required this.state, this.guard});
+  const WingmanApp({
+    super.key,
+    required this.state,
+    required this.policy,
+    this.signatures,
+    this.session,
+    this.handoff,
+  });
   final BrowserState state;
-  final GuardController? guard;
+  final PolicyRuntime policy;
+  final SignatureServices? signatures;
+  final DiscoverySession? session;
+  final HandoffController? handoff;
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: state,
     builder: (context, _) => MaterialApp(
       title: 'Wingman Browser',
       debugShowCheckedModeBanner: false,
-      navigatorObservers: [adRouteObserver],
+      navigatorObservers: [appRouteObserver],
       theme: WingmanTheme.make(Brightness.light),
       darkTheme: WingmanTheme.make(Brightness.dark),
       themeMode: state.settings.themeMode,
-      home: state.settings.onboardingComplete
-          ? BrowserShell(state: state, guard: guard)
-          : OnboardingScreen(
-              onContinue: () => state.saveSettings(
-                state.settings.copyWith(onboardingComplete: true),
-              ),
-              onSetUpGuard: guard == null
-                  ? null
-                  : () {
-                      guard!.requestSetup = true;
-                      state.saveSettings(
-                        state.settings.copyWith(onboardingComplete: true),
-                      );
-                    },
+      themeAnimationDuration: Duration.zero,
+      home: !state.settings.onboardingComplete
+          ? WelcomeScreen(
+              onComplete: () =>
+                  state.saveSettingsPatch(onboardingComplete: true),
+            )
+          : BrowserShell(
+              state: state,
+              policy: policy,
+              signatures: signatures,
+              session: session,
+              handoff: handoff,
             ),
     ),
   );

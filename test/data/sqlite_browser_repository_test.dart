@@ -21,7 +21,7 @@ void main() {
   tearDown(() => repository.close());
 
   test(
-    'real SQLite stores normal metadata; private data excluded at boundary',
+    'normal URL metadata is quarantined; private data excluded at SQL boundary',
     () async {
       const normal = BrowserTab(
         id: 'normal',
@@ -41,14 +41,21 @@ void main() {
       expect(stored.tabs, hasLength(1));
       expect(stored.tabs.single.id, normal.id);
       expect(stored.tabs.single.desktopMode, isTrue);
+      expect(stored.tabs.single.isHome, isTrue);
+      expect(stored.tabs.single.title, 'New tab');
+      expect(stored.quarantined.archivedTabs, 1);
       expect(stored.activeId, normal.id);
       expect(stored.history, isEmpty);
       await repository.recordVisit(normal, now);
       stored = await repository.load();
-      expect(stored.history.single.url, normal.url);
+      expect(stored.history, isEmpty);
+      expect(stored.quarantined.history, 1);
       final db = await databaseFactoryFfi.openDatabase(inMemoryDatabasePath);
+      expect((await db.query('history')).single['url'], normal.url);
+      expect((await db.query('retired_tabs')).single['url'], normal.url);
       final raw = [
         await db.query('tabs'),
+        await db.query('retired_tabs'),
         await db.query('history'),
         await db.query('settings'),
       ].toString();
@@ -79,40 +86,66 @@ void main() {
       now,
     );
     final data = await repository.load();
-    expect(data.history, hasLength(1));
-    expect(data.history.single.title, 'New');
-    expect(data.history.single.visitedAt, now);
+    expect(data.history, isEmpty);
+    expect(data.quarantined.history, 1);
+    final db = await databaseFactoryFfi.openDatabase(inMemoryDatabasePath);
+    final raw = (await db.query('history')).single;
+    expect(raw['title'], 'New');
+    expect(raw['visited_at'], now.millisecondsSinceEpoch);
     await repository.clearHistory();
-    expect((await repository.load()).history, isEmpty);
+    expect((await repository.load()).quarantined.history, 0);
+    expect(await db.query('history'), isEmpty);
   });
 
-  test('retention expires old visits and caps at 5000 newest URLs', () async {
-    await repository.load();
-    final db = await databaseFactoryFfi.openDatabase(inMemoryDatabasePath);
-    final batch = db.batch();
-    for (var index = 0; index < BrowserRepository.maximumHistory + 2; index++) {
+  test(
+    'load preserves quarantine; explicit legacy writes retain 5000 recent URLs',
+    () async {
+      await repository.load();
+      final db = await databaseFactoryFfi.openDatabase(inMemoryDatabasePath);
+      final batch = db.batch();
+      for (
+        var index = 0;
+        index < BrowserRepository.maximumHistory + 2;
+        index++
+      ) {
+        batch.insert('history', {
+          'url': 'https://example.com/$index',
+          'title': 'Page',
+          'visited_at': now
+              .subtract(Duration(seconds: index))
+              .millisecondsSinceEpoch,
+        });
+      }
       batch.insert('history', {
-        'url': 'https://example.com/$index',
-        'title': 'Page',
+        'url': 'https://old.example.com',
+        'title': 'Expired',
         'visited_at': now
-            .subtract(Duration(seconds: index))
+            .subtract(const Duration(days: 91))
             .millisecondsSinceEpoch,
       });
-    }
-    batch.insert('history', {
-      'url': 'https://old.example.com',
-      'title': 'Expired',
-      'visited_at': now
-          .subtract(const Duration(days: 91))
-          .millisecondsSinceEpoch,
-    });
-    await batch.commit(noResult: true);
-    final data = await repository.load();
-    expect(data.history, hasLength(BrowserRepository.maximumHistory));
-    expect(data.history.first.url, 'https://example.com/0');
-    expect(data.history.any((entry) => entry.title == 'Expired'), isFalse);
-    expect(data.history.any((entry) => entry.url.endsWith('/5001')), isFalse);
-  });
+      await batch.commit(noResult: true);
+      final data = await repository.load();
+      expect(data.history, isEmpty);
+      expect(data.quarantined.history, BrowserRepository.maximumHistory + 3);
+      expect(
+        (await db.query('history')).length,
+        BrowserRepository.maximumHistory + 3,
+      );
+      await repository.recordVisit(
+        const BrowserTab(id: 'legacy-write', url: 'https://example.com/newest'),
+        now.add(const Duration(seconds: 1)),
+      );
+      final retained = await db.query('history', orderBy: 'visited_at DESC');
+      expect(retained, hasLength(BrowserRepository.maximumHistory));
+      expect(retained.first['url'], 'https://example.com/newest');
+      expect(retained.any((entry) => entry['title'] == 'Expired'), isFalse);
+      expect(
+        retained.any((entry) => entry['url'] == 'https://example.com/5001'),
+        isFalse,
+      );
+      expect((await repository.load()).history, isEmpty);
+    },
+  );
 
   test('bookmarks and settings round trip independently', () async {
     final bookmark = Bookmark(
@@ -130,15 +163,21 @@ void main() {
       ),
     );
     var data = await repository.load();
-    expect(data.bookmarks.single.title, bookmark.title);
-    expect(data.bookmarks.single.createdAt, now);
+    expect(data.bookmarks, isEmpty);
+    expect(data.quarantined.bookmarks, 1);
+    final db = await databaseFactoryFfi.openDatabase(inMemoryDatabasePath);
+    final raw = (await db.query('bookmarks')).single;
+    expect(raw['title'], bookmark.title);
+    expect(raw['created_at'], now.millisecondsSinceEpoch);
     expect(data.settings.themeMode, ThemeMode.dark);
-    expect(data.settings.searchProviderId, 'brave');
+    expect(data.settings.searchProviderId, 'approved-content');
     expect(data.settings.onboardingComplete, isTrue);
     await repository.saveBookmarks([]);
     data = await repository.load();
     expect(data.bookmarks, isEmpty);
-    expect(data.settings.searchProviderId, 'brave');
+    expect(data.quarantined.bookmarks, 0);
+    expect(await db.query('bookmarks'), isEmpty);
+    expect(data.settings.searchProviderId, 'approved-content');
   });
 
   test(
@@ -168,10 +207,13 @@ void main() {
     await repository.load();
     final db = await databaseFactoryFfi.openDatabase(inMemoryDatabasePath);
     await db.insert('settings', {'key': 'theme', 'value': 'broken'});
-    await db.insert('settings', {'key': 'search_provider', 'value': 'missing'});
+    await db.insert('settings', {
+      'key': 'search_provider',
+      'value': 'missing',
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
     final data = await repository.load();
     expect(data.settings.themeMode, ThemeMode.system);
-    expect(data.settings.searchProviderId, 'duckduckgo');
+    expect(data.settings.searchProviderId, 'approved-content');
   });
 
   test('session and deletion survive closing and reopening disk DB', () async {
@@ -203,16 +245,27 @@ void main() {
     try {
       final data = await second.load();
       expect(data.tabs.single.id, tab.id);
+      expect(data.tabs.single.isHome, true);
       expect(data.activeId, tab.id);
-      expect(data.history.single.url, tab.url);
-      expect(data.settings.searchProviderId, 'google');
+      expect(data.history, isEmpty);
+      expect(data.quarantined.history, 1);
+      expect(data.quarantined.archivedTabs, 1);
+      final raw = await databaseFactoryFfi.openDatabase(databasePath);
+      expect((await raw.query('history')).single['url'], tab.url);
+      expect((await raw.query('retired_tabs')).single['url'], tab.url);
+      expect(data.settings.searchProviderId, 'approved-content');
       await second.clearHistory();
     } finally {
       await second.close();
     }
     final third = diskRepository();
     try {
-      expect((await third.load()).history, isEmpty);
+      final data = await third.load();
+      expect(data.history, isEmpty);
+      expect(data.quarantined.history, 0);
+      expect(data.quarantined.archivedTabs, 1);
+      final raw = await databaseFactoryFfi.openDatabase(databasePath);
+      expect(await raw.query('history'), isEmpty);
     } finally {
       await third.close();
       await directory.delete(recursive: true);

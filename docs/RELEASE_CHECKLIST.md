@@ -1,3 +1,5 @@
+> Historical Phase 1–3A document. Optional Guard, live browsing, external search, Reader and ad behavior described here is superseded by [permanent protection 0.4](RELEASE_READINESS.md). It is not a current capability or release claim.
+
 # Release checklist and external actions
 
 This is an engineering handoff, not evidence of store approval. Local builds cannot enroll the operator, approve entitlements, configure real advertising or secure distribution signing. The validation report records completed checks.

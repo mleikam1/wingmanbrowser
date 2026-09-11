@@ -1,7 +1,7 @@
 name: wingman_browser
 description: "Wingman Browser. We've got your back, not your data."
 publish_to: none
-version: 0.3.0+3
+version: 0.6.0+6
 
 environment:
   sdk: ^3.12.2
@@ -10,17 +10,10 @@ dependencies:
   flutter:
     sdk: flutter
   cupertino_icons: ^1.0.8
-  webview_flutter: ^4.14.1
-  webview_flutter_android: ^4.14.1
-  webview_flutter_wkwebview: ^3.26.1
   sqflite: ^2.4.4
   sqflite_common_ffi_web: ^1.1.3
   path: ^1.9.1
-  url_launcher: ^6.3.2
-  share_plus: ^13.3.0
-  file_selector: ^1.1.0
   html: ^0.15.7
-  google_mobile_ads: ^9.1.0
   cryptography: ^2.9.0
   flutter_secure_storage: ^11.1.0
 
@@ -35,8 +28,12 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - assets/guard_tracking/
-    - assets/guard/
+    - assets/brand/wingman-mark.png
+    - assets/signature/official_routes.json
+    - assets/policy/manifest.json
+    - assets/policy/catalog.json
+    - assets/policy/public_keys.json
+    - assets/policy/articles/
     - assets/fonts/Roboto_LICENSE.txt
     - assets/fonts/NotoSansSymbols_OFL.txt
   # Flutter's default family name prevents its default remote Roboto download.
@@ -51,9 +48,3 @@ flutter:
     - family: Noto Sans Symbols
       fonts:
         - asset: assets/fonts/NotoSansSymbols.ttf
-
-# Exposes WK configuration for assigning private storage before construction.
-# Scope and upstream provenance: third_party/.../WINGMAN_PATCH.md.
-dependency_overrides:
-  webview_flutter_wkwebview:
-    path: third_party/webview_flutter_wkwebview

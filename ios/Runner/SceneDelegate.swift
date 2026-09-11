@@ -44,13 +44,6 @@ class SceneDelegate: FlutterSceneDelegate {
     privacyWindow = nil
   }
 
-  #if DEBUG
-  func setPrivacyShieldForTesting(_ scene: UIScene, visible: Bool) {
-    if visible { cover(scene) }
-    else { privacyWindow?.isHidden = true; privacyWindow = nil }
-  }
-  #endif
-
   override func scene(_ scene: UIScene, willConnectTo session: UISceneSession,
     options connectionOptions: UIScene.ConnectionOptions) {
     super.scene(scene, willConnectTo: session, options: connectionOptions)

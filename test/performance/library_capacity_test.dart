@@ -11,7 +11,7 @@ import 'package:wingman_browser/domain/models.dart';
 /// A repeatable host capacity sample, not a release/physical-device benchmark.
 void main() {
   test(
-    'maximum supported library decodes, persists and suggests bounded results',
+    'legacy maximum-size codec stays bounded and stored URL metadata remains quarantined',
     () async {
       sqfliteFfiInit();
       final now = DateTime.now();
@@ -47,7 +47,9 @@ void main() {
       final saveClock = Stopwatch()..start();
       await repo.saveBookmarks(bookmarks);
       saveClock.stop();
-      expect((await repo.load()).bookmarks.length, 5000);
+      final stored = await repo.load();
+      expect(stored.bookmarks, isEmpty);
+      expect(stored.quarantined.bookmarks, 5000);
       const suggestions = LocalSuggestionService();
       final samples = <int>[];
       for (var i = 0; i < 60; i++) {
@@ -74,7 +76,7 @@ void main() {
               enabled: true,
             )
             .length,
-        5,
+        0,
       );
       expect(
         suggestions.suggest(
@@ -88,7 +90,7 @@ void main() {
       );
       // ignore: avoid_print
       print(
-        'LIBRARY_CAPACITY ${jsonEncode({'bookmarks': bookmarks.length, 'history': history.length, 'fileBytes': bytes.length, 'parseMicros': parseClock.elapsedMicroseconds, 'sqliteSaveMicros': saveClock.elapsedMicroseconds, 'suggestNoMatchP50Micros': samples[25], 'suggestNoMatchP95Micros': samples[47], 'processRssBeforeBytes': rssBefore, 'processRssAfterBytes': ProcessInfo.currentRss, 'environment': 'Flutter host test/debug, no physical-device claim'})}',
+        'LIBRARY_CAPACITY ${jsonEncode({'bookmarks': bookmarks.length, 'history': history.length, 'fileBytes': bytes.length, 'parseMicros': parseClock.elapsedMicroseconds, 'sqliteSaveMicros': saveClock.elapsedMicroseconds, 'disabledLegacySuggestionP50Micros': samples[25], 'disabledLegacySuggestionP95Micros': samples[47], 'processRssBeforeBytes': rssBefore, 'processRssAfterBytes': ProcessInfo.currentRss, 'environment': 'Retired codec/quarantine host sample only; no active importer or remote suggestions, no physical-device claim'})}',
       );
       await repo.close();
     },

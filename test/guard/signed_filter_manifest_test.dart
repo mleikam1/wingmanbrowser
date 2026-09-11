@@ -37,7 +37,7 @@ void main() {
     {'sequence': 0},
     {'sequence': 2147483648},
     {'version': '1.0'},
-    {'minimumAppVersion': '0.4.0'},
+    {'minimumAppVersion': '0.5.0'},
     {'createdAt': '2026-09-13T00:00:00Z'},
     {'createdAt': '2026-09-10T00:00:00-05:00'},
   ]) {

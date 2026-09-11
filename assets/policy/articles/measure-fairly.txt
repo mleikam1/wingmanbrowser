@@ -1,0 +1,7 @@
+Suppose you want to compare two paper airplane designs. If you change the paper, the throwing place, and the way you launch them at the same time, it becomes hard to know why their distances differ.
+
+Start with a question you can measure. Pick one feature to change. Keep other conditions as similar as practical, and write them down. Use the same measurement method for every attempt. Make several attempts rather than choosing only the best result.
+
+A simple table might have columns for design, attempt number, and distance. Record unsuccessful attempts too. Describe any change in conditions, such as a gust of wind. Use a clear indoor space with permission and never aim at a person.
+
+Your conclusion should fit the evidence: these designs behaved this way under these conditions. This is an original Wingman reasoning exercise. The source reference offers related practice in evaluating evidence, not this specific experiment.

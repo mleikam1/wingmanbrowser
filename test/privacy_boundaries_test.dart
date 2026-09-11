@@ -1,6 +1,4 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:wingman_browser/monetization/home_ad_slot.dart';
 import 'package:wingman_browser/privacy/diagnostic_sanitizer.dart';
 import 'package:wingman_browser/privacy/product_analytics.dart';
 
@@ -46,31 +44,5 @@ void main() {
     expect(() => counters.counts.clear(), throwsUnsupportedError);
     counters.clear();
     expect(counters.counts, isEmpty);
-  });
-
-  testWidgets('ads disabled by default reserve no space or call native SDK', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      const MaterialApp(
-        home: Column(
-          children: [
-            HomeAdSlot(isPrivate: false),
-            Text('Browser content is immediately below'),
-          ],
-        ),
-      ),
-    );
-    expect(find.text('Load test advertisement'), findsNothing);
-    expect(tester.getSize(find.byType(HomeAdSlot)).height, 0);
-    expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('private Home never displays the ad demo', (tester) async {
-    await tester.pumpWidget(
-      const MaterialApp(home: HomeAdSlot(isPrivate: true)),
-    );
-    expect(find.text('Load test advertisement'), findsNothing);
-    expect(tester.takeException(), isNull);
   });
 }
