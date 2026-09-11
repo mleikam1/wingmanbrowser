@@ -125,7 +125,29 @@ void main() {
         ),
       );
     }
+    if (Platform.isIOS) {
+      final fresh = await channel.invokeMapMethod<String, Object?>(
+        'capabilityState',
+      );
+      expect(fresh?['quarantineCompletedInProcess'], isFalse);
+      expect(fresh?['quarantinePurgeCount'], 0);
+    }
     await NativeBrowserService().quarantineLegacyContent();
+    if (Platform.isIOS) {
+      final first = await channel.invokeMapMethod<String, Object?>(
+        'capabilityState',
+      );
+      expect(first?['quarantineCompletedInProcess'], isTrue);
+      expect(first?['quarantinePurgeCount'], 1);
+      await NativeBrowserService().quarantineLegacyContent();
+      final repeated = await channel.invokeMapMethod<String, Object?>(
+        'capabilityState',
+      );
+      expect(repeated?['quarantineCompletedInProcess'], isTrue);
+      expect(repeated?['quarantinePurgeCount'], 1);
+    }
+    // Explicit owner deletion always executes and awaits its own operation;
+    // the process-only startup receipt never bypasses this capability.
     await channel.invokeMethod<void>('clearData', {
       'cookies': true,
       'cache': true,

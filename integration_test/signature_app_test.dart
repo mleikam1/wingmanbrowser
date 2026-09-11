@@ -21,6 +21,12 @@ void main() {
   final pendingDatabaseCalls = <int, String>{};
   final recentDatabaseCalls = <String>[];
   var databaseCallSequence = 0;
+  final pendingNativeCalls = <int, String>{};
+  final recentNativeCalls = <String>[];
+  var nativeCallSequence = 0;
+  String nativeDiagnostic() =>
+      'stage=$databaseStage pending=${pendingNativeCalls.values.join(",")} '
+      'recent=${recentNativeCalls.join(",")}';
   String databaseDiagnostic() =>
       'stage=$databaseStage pending=${pendingDatabaseCalls.values.join(",")} '
       'recent=${recentDatabaseCalls.join(",")}';
@@ -39,6 +45,7 @@ void main() {
         'handoffStatus=${gate.evaluate().isEmpty ? null : tester.widget<HandoffGate>(gate).controller.status.name}',
       );
       debugPrint('SIGNATURE_NATIVE database ${databaseDiagnostic()}');
+      debugPrint('SIGNATURE_NATIVE bridge ${nativeDiagnostic()}');
     }
     expect(condition(), isTrue, reason: 'Bounded native state wait');
     await tester.pumpAndSettle();
@@ -119,6 +126,70 @@ void main() {
         }
       });
       addTearDown(() => messenger.setMockMessageHandler(channel, null));
+      const nativeChannel = 'wingman/browser';
+      messenger.setMockMessageHandler(nativeChannel, (message) async {
+        final method = message == null
+            ? 'empty'
+            : codec.decodeMethodCall(message).method;
+        final safeMethod =
+            const {
+              'handoffCapabilities',
+              'localDataDirectory',
+              'quarantineLegacyContent',
+              'clearData',
+              'initialize',
+              'setSensitiveContent',
+              'discardHandoffIncoming',
+              'capabilityState',
+            }.contains(method)
+            ? method
+            : 'other';
+        final serial = ++nativeCallSequence;
+        final label = '$databaseStage:$safeMethod#$serial';
+        final watch = Stopwatch()..start();
+        pendingNativeCalls[serial] = label;
+        void note(String outcome) {
+          recentNativeCalls.add(
+            '$label:$outcome:${watch.elapsedMilliseconds}ms',
+          );
+          if (recentNativeCalls.length > 24) recentNativeCalls.removeAt(0);
+        }
+
+        note('start');
+        try {
+          final response = await messenger.delegate.send(
+            nativeChannel,
+            message,
+          );
+          var outcome = 'returned';
+          if (response != null) {
+            try {
+              codec.decodeEnvelope(response);
+            } on PlatformException catch (error) {
+              outcome =
+                  const {
+                    'cleanup_pending',
+                    'local_storage_unavailable',
+                    'bundled_content_only',
+                  }.contains(error.code)
+                  ? 'error-${error.code}'
+                  : 'platform-error';
+            } catch (_) {
+              outcome = 'invalid-envelope';
+            }
+          } else {
+            outcome = 'missing-plugin';
+          }
+          note(outcome);
+          return response;
+        } catch (_) {
+          note('transport-error');
+          rethrow;
+        } finally {
+          pendingNativeCalls.remove(serial);
+        }
+      });
+      addTearDown(() => messenger.setMockMessageHandler(nativeChannel, null));
       final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
       var unexpectedRequests = 0;
       server.listen((request) async {
@@ -137,6 +208,13 @@ void main() {
       }
       var owner = tester.widget<app.WingmanApp>(find.byType(app.WingmanApp));
       await until(tester, () => owner.signatures!.initialized);
+      if (Platform.isIOS) {
+        final first = await const MethodChannel(
+          'wingman/browser',
+        ).invokeMapMethod<String, Object?>('capabilityState');
+        expect(first?['quarantineCompletedInProcess'], isTrue);
+        expect(first?['quarantinePurgeCount'], 1);
+      }
       debugPrint(
         'SIGNATURE_NATIVE mainToHomeToolsMs=${startup.elapsedMilliseconds} platform=${Platform.operatingSystem} mode=debug-integration samples=1 NOT-cold-start',
       );
@@ -247,12 +325,24 @@ void main() {
         databaseStage = 'owner-reopen';
         final restore = Stopwatch()..start();
         await app.main();
+        debugPrint(
+          'SIGNATURE_NATIVE bridge ${nativeDiagnostic()} mainAwaitMs=${restore.elapsedMilliseconds}',
+        );
         await until(
           tester,
           () => find.byType(app.WingmanApp).evaluate().isNotEmpty,
         );
         owner = tester.widget<app.WingmanApp>(find.byType(app.WingmanApp));
         await until(tester, () => owner.signatures!.initialized);
+        if (Platform.isIOS) {
+          final reopened = await const MethodChannel(
+            'wingman/browser',
+          ).invokeMapMethod<String, Object?>('capabilityState');
+          expect(reopened?['quarantineCompletedInProcess'], isTrue);
+          expect(reopened?['quarantinePurgeCount'], 1);
+          expect(reopened?['contentViews'], 0);
+          expect(reopened?['liveBrowsing'], isFalse);
+        }
         final restored = owner.signatures!.workspaces;
         for (final id in createdSpaces) {
           expect(

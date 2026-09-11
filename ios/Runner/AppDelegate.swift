@@ -37,6 +37,8 @@ final class BrowserNativeBridge {
   var initialized = false
   var discardingHandoffLinks = false
   private var clearing = false
+  private var quarantineCompletedInProcess = false
+  private var quarantinePurgeCount = 0
 
   init(registrar: FlutterPluginRegistrar) {
     channel = FlutterMethodChannel(name: "wingman/browser", binaryMessenger: registrar.messenger())
@@ -82,6 +84,8 @@ final class BrowserNativeBridge {
       let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
       result(["capability": "bundledPlainTextOnly", "liveBrowsing": false,
         "contentViews": scenes.flatMap { $0.windows }.reduce(0) { $0 + contentViewCount($1) },
+        "quarantineCompletedInProcess": quarantineCompletedInProcess,
+        "quarantinePurgeCount": quarantinePurgeCount,
         "handoffIncomingDiscarded": discardingHandoffLinks, "incomingReady": initialized,
         "activeTextInputs": scenes.flatMap { $0.windows }.reduce(0) { $0 + activeTextInputCount($1) },
         "shieldVisible": scenes.contains { ($0.delegate as? SceneDelegate)?.privacyShieldVisible == true }])
@@ -99,7 +103,12 @@ final class BrowserNativeBridge {
         result(FlutterError(code: "local_storage_unavailable", message: "Local storage could not be opened.", details: nil))
       }
     case "quarantineLegacyContent":
-      clearData(types: WKWebsiteDataStore.allWebsiteDataTypes(), result: result)
+      // This process has no renderer, authentication, SDK web view or other
+      // website-store writer. A completed upgrade purge therefore stays valid
+      // for a second Flutter root in this process. Never persist this receipt:
+      // the first request in every native process must await actual removal.
+      if quarantineCompletedInProcess { result(nil); return }
+      clearData(types: WKWebsiteDataStore.allWebsiteDataTypes(), quarantine: true, result: result)
     case "clearData":
       var types = Set<String>()
       if args["cookies"] as? Bool == true { types.insert(WKWebsiteDataTypeCookies) }
@@ -122,15 +131,20 @@ final class BrowserNativeBridge {
     }
   }
 
-  private func clearData(types: Set<String>, result: @escaping FlutterResult) {
+  private func clearData(types: Set<String>, quarantine: Bool = false, result: @escaping FlutterResult) {
     guard !clearing else {
       result(FlutterError(code: "cleanup_pending", message: "Legacy site-data cleanup is still pending.", details: nil)); return
     }
     guard !types.isEmpty else { result(nil); return }
     clearing = true
+    if quarantine { quarantinePurgeCount += 1 }
     // No WKWebView is constructed. Nonpersistent stores from the previous
     // process cannot be restored; remove the prior persistent default store.
     WKWebsiteDataStore.default().removeData(ofTypes: types, modifiedSince: .distantPast) {
+      // Only WebKit's completion acknowledges the purge. Pending, rejected or
+      // timed-out Dart waits cannot set this flag; explicit clearData requests
+      // always perform their requested deletion and never consult this receipt.
+      if quarantine { self.quarantineCompletedInProcess = true }
       self.clearing = false
       result(nil)
     }
