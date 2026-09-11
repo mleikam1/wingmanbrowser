@@ -1,6 +1,8 @@
 # Release readiness
 
-Status: **not release-ready**. This is the first tested local foundation milestone, not the complete product-policy roadmap. Final test/build/native/artifact observations and ending commit are recorded in the handoff section below.
+Status: **not release-ready**. Version 0.5 adds the consumer signature milestone locally on `signature-features/consumer`: 326 host tests pass, analysis is clean, Android debug/iOS simulator/web builds pass, and native static handoff start/restart checks pass. Official Routes remains identity-only and Compatibility Repair has a tested fixture/empty production registry. Live browsing and Android release packaging remain unavailable. The initial Android same-process root reopen timeout and slow iOS reopen require further hardening. See [current signature status](SIGNATURE_FEATURES_STATUS.md) for exact results, limits and runtime evidence.
+
+The sections below retain the **historical 0.4 foundation evidence**, including its 14-article count, old branch/commits, tool stall and then-current manual-review limitations. They do not supersede the 0.5 status (18 approved articles, 18 separate official identities).
 
 ## Implemented scope
 

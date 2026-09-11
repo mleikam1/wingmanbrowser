@@ -4,7 +4,7 @@ Status: a bounded reviewed offline catalog, with unsupported capabilities closed
 
 | Path | Current behavior | Remaining limitation |
 | --- | --- | --- |
-| Bundled article/title/summary | Signed exact-byte approval, context/review/expiry/revocation checks | 14 short development-reviewed articles only |
+| Bundled article/title/summary | Signed exact-byte approval, context/review/expiry/revocation checks | 18 short development-reviewed articles only |
 | HTTP(S), unknown/mixed domains, redirectors, POST, new windows | No content engine or live load method | Live browsing unavailable |
 | Scripts, images, media, frames, CSS/font remote URLs, workers, service workers, prefetch | No live document, resource loader, or WebView plugin | Not an implementation of native resource classification |
 | Authentication, uploads, downloads, blob/data/file/intent/custom schemes | Unsupported; native direct calls reject | Cannot use ordinary browser site workflows |
