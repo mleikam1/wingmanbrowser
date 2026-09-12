@@ -56,6 +56,10 @@ final class ProtectedWebBridge: NSObject, FlutterPlatformViewFactory {
     super.init()
     channel.setMethodCallHandler { [weak self] call, result in self?.handle(call, result) }
   }
+  func testDocumentIdentity(_ viewId: Int64) -> (url: String, generation: Int)? {
+    guard let view = views[viewId]?.value else { return nil }
+    return (view.currentURL, view.documentGeneration)
+  }
   #endif
   func createArgsCodec() -> FlutterMessageCodec & NSObjectProtocol { FlutterStandardMessageCodec.sharedInstance() }
   func create(withFrame frame: CGRect, viewIdentifier viewId: Int64, arguments args: Any?) -> FlutterPlatformView {
@@ -354,7 +358,7 @@ private final class ProtectedWebView: NSObject, FlutterPlatformView, WKNavigatio
   private var blockedDomains = Set<String>()
   private var blockedSearch = false
   private var blockedURLs = Set<String>()
-  private var documentGeneration = 0
+  private(set) var documentGeneration = 0
   private var uploadGeneration = -1
   private weak var uploadRenderer: WKWebView?
   private var uploadOrigin: String?
@@ -493,11 +497,31 @@ private final class ProtectedWebView: NSObject, FlutterPlatformView, WKNavigatio
       renderer.observe(\.estimatedProgress, options: [.new]) { [weak self] _, _ in self?.emit() },
       renderer.observe(\.isLoading, options: [.new]) { [weak self] _, _ in self?.emit() },
       renderer.observe(\.title, options: [.new]) { [weak self] _, _ in self?.emit() },
+      renderer.observe(\.url, options: [.new]) { [weak self] renderer, _ in self?.observedURL(renderer) },
       renderer.observe(\.canGoBack, options: [.new]) { [weak self] _, _ in self?.emit() },
       renderer.observe(\.canGoForward, options: [.new]) { [weak self] _, _ in self?.emit() },
     ]
     container.addSubview(renderer)
     return renderer
+  }
+  private func observedURL(_ renderer: WKWebView, committed: Bool = false) {
+    guard renderer === web, !awaitingWindowAdoption, let raw = renderer.url?.absoluteString,
+      raw != "about:blank" else { return }
+    // KVO can also expose a provisional redirect. Only the committed history
+    // item describes the interactive document; navigation delegates own pending
+    // network loads and preserve that document when a redirect is cancelled.
+    guard committed || renderer.backForwardList.currentItem?.url.absoluteString == raw else { return }
+    let decision = checked(raw)
+    guard bridge?.mayOpen == true, decision.url != nil else {
+      // History APIs can expose a newly denied path without a network navigation
+      // delegate callback. Retire that document instead of leaving it interactive.
+      renderer.stopLoading(); blocked(raw, decision.reason); release(); emit(); return
+    }
+    currentURL = raw
+    committedURL = raw
+    // URL observation includes pushState/replaceState and fragment/history moves.
+    // It must not load again or invalidate a still-owned document's callbacks.
+    emit()
   }
   func open(_ url: URL, request: Int64) {
     requestId = request; errorText = nil
@@ -634,8 +658,8 @@ private final class ProtectedWebView: NSObject, FlutterPlatformView, WKNavigatio
     }
     decisionHandler(.allow)
   }
-  func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) { if webView === web { currentURL = webView.url?.absoluteString ?? currentURL; committedURL = currentURL; emit() } }
-  func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { if webView === web { currentURL = webView.url?.absoluteString ?? currentURL; committedURL = currentURL; errorText = nil; emit() } }
+  func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) { observedURL(webView, committed: true) }
+  func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { if webView === web { errorText = nil; observedURL(webView, committed: true) } }
   private func failed(_ error: Error) {
     if consumerExpectedNavigationCancellation(error as NSError, policyCancellationExpected: Date() < policyCancellationUntil) { return }
     // Deliberately avoid URLs and provider/query contents in logs and errors.

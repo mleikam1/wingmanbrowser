@@ -135,6 +135,88 @@ final class RunnerTests: XCTestCase {
   }
 
   @MainActor
+  func testHistoryAPIUpdatesNativeAddressWithoutReloadOrNewDocument() throws {
+    let ready = expectation(description: "History fixture server starts")
+    let server = try ContentRuleFixtureServer(png: Data(), ready: ready)
+    defer { server.stop() }
+    wait(for: [ready], timeout: 5)
+    let origin = "http://127.0.0.1:\(try XCTUnwrap(server.port))"
+    let compiled = expectation(description: "History fixture rule compiles")
+    var rule: WKContentRuleList?
+    WKContentRuleListStore.default().compileContentRuleList(forIdentifier: "wingman-history-test-" + UUID().uuidString,
+      encodedContentRuleList: "[{\"trigger\":{\"url-filter\":\"^https://blocked.invalid/\"},\"action\":{\"type\":\"block\"}}]") { value, error in
+      XCTAssertNil(error); rule = value; compiled.fulfill()
+    }
+    wait(for: [compiled], timeout: 10)
+    let messenger = PopupTestMessenger()
+    let bridge = ProtectedWebBridge(testPolicy: try consumerPolicy(), rules: [try XCTUnwrap(rule)], messenger: messenger)
+    defer { bridge.closeAll() }
+    let view = bridge.create(withFrame: CGRect(x: 0, y: 0, width: 430, height: 700), viewIdentifier: 810,
+      arguments: ["tabId": "history", "private": true, "edition": "consumer", "blockedUrls": [origin + "/denied-history"]])
+    messenger.invoke("open", ["viewId": 810, "requestId": 1, "url": origin + "/popup-parent"])
+    // Additional rules compile asynchronously before the renderer is created.
+    let mounted = expectation(description: "History renderer exists")
+    let rendererDeadline = Date().addingTimeInterval(9)
+    func waitForRenderer() {
+      if !view.view().subviews.isEmpty { mounted.fulfill() }
+      else if Date() >= rendererDeadline { XCTFail("History renderer was not created"); mounted.fulfill() }
+      else { DispatchQueue.main.asyncAfter(deadline: .now() + 0.05, execute: waitForRenderer) }
+    }
+    waitForRenderer(); wait(for: [mounted], timeout: 10)
+    let web = try XCTUnwrap(view.view().subviews.compactMap { $0 as? WKWebView }.first)
+    let window = UIWindow(frame: view.view().frame); let controller = UIViewController()
+    window.rootViewController = controller; controller.view.addSubview(view.view()); window.isHidden = false
+    defer { window.isHidden = true }
+    waitForJavaScript(web, "document.title === 'Popup parent'")
+    let generation = try XCTUnwrap(bridge.testDocumentIdentity(810)).generation
+    var publishedURLs: [String] = [], blocked: [String] = []
+    messenger.onEvent = { call in
+      guard let event = call.arguments as? [String: Any], let url = event["url"] as? String else { return }
+      if call.method == "pageState" { publishedURLs.append(url) }
+      if call.method == "navigationBlocked" { blocked.append(url) }
+    }
+    func change(_ script: String, suffix: String) {
+      let changed = expectation(description: "History mutation completes")
+      web.evaluateJavaScript(script) { _, error in XCTAssertNil(error); changed.fulfill() }
+      wait(for: [changed], timeout: 5)
+      waitForJavaScript(web, "location.href === '\(origin + suffix)' && window.historyMarker === 'kept'")
+      XCTAssertEqual(bridge.testDocumentIdentity(810)?.url, origin + suffix)
+      XCTAssertTrue(publishedURLs.contains(origin + suffix), "Native pageState must expose the current same-document URL")
+      XCTAssertEqual(bridge.testDocumentIdentity(810)?.generation, generation, "Same-document history must keep its document lease")
+      XCTAssertTrue(view.view().subviews.contains { $0 === web })
+    }
+    change("window.historyMarker='kept'; history.pushState({}, '', '/history-results?q=pencils')", suffix: "/history-results?q=pencils")
+    change("history.replaceState({}, '', '/history-results?q=colored-pencils')", suffix: "/history-results?q=colored-pencils")
+    change("history.pushState({}, '', '#details')", suffix: "/history-results?q=colored-pencils#details")
+    change("history.back()", suffix: "/history-results?q=colored-pencils")
+    change("history.forward()", suffix: "/history-results?q=colored-pencils#details")
+    XCTAssertEqual(server.counts["/popup-parent"], 1)
+    XCTAssertNil(server.counts["/history-results"], "History changes must not reload the document")
+    let redirected = expectation(description: "Denied redirect preserves the committed document")
+    messenger.onEvent = { call in
+      guard call.method == "navigationBlocked", let event = call.arguments as? [String: Any], event["url"] as? String == origin + "/denied-history" else { return }
+      redirected.fulfill()
+    }
+    messenger.invoke("open", ["viewId": 810, "requestId": 2, "url": origin + "/history-redirect"])
+    wait(for: [redirected], timeout: 7)
+    waitForJavaScript(web, "!document.hidden && window.historyMarker === 'kept'")
+    XCTAssertTrue(view.view().subviews.contains { $0 === web }, "A blocked network redirect must keep the previous renderer")
+    XCTAssertEqual(bridge.testDocumentIdentity(810)?.url, origin + "/history-results?q=colored-pencils#details")
+    XCTAssertEqual(server.counts["/history-redirect"], 1)
+    XCTAssertNil(server.counts["/denied-history"])
+    let denied = expectation(description: "Denied same-document URL retires renderer")
+    messenger.onEvent = { call in
+      guard call.method == "navigationBlocked", let event = call.arguments as? [String: Any], event["url"] as? String == origin + "/denied-history" else { return }
+      blocked.append(origin + "/denied-history"); denied.fulfill()
+    }
+    web.evaluateJavaScript("history.pushState({}, '', '/denied-history')", completionHandler: nil)
+    wait(for: [denied], timeout: 5)
+    XCTAssertEqual(blocked, [origin + "/denied-history"])
+    XCTAssertTrue(view.view().subviews.isEmpty, "A denied history URL must not leave an interactive renderer")
+    XCTAssertNil(server.counts["/denied-history"])
+  }
+
+  @MainActor
   private func waitForJavaScript(_ web: WKWebView, _ predicate: String, file: StaticString = #filePath, line: UInt = #line) {
     let reached = expectation(description: "JavaScript fixture condition")
     let deadline = Date().addingTimeInterval(7)
@@ -673,6 +755,9 @@ private final class ContentRuleFixtureServer {
         <!doctype html><title>Popup child</title><p>\(requestBody)</p>
         <script>if(window.opener)window.opener.postMessage('\(method) opener retained',location.origin)</script>
         """.utf8)
+    case "/history-redirect":
+      status = "302 Found"; type = "text/html"; body = Data()
+      extra = "Location: /denied-history\r\n"
     case "/lite/":
       type = "text/html; charset=utf-8"
       if target == "/lite/?q=redirect&kp=1" {
