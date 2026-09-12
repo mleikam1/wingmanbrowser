@@ -1,0 +1,10 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <uses-library android:name="android.test.runner" android:required="false" />
+        <!-- This activity is absent from profile and release variants. -->
+        <activity
+            android:name="com.wingmanbrowser.wingman_browser.GeckoPolicyProbeActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.Material.Light.NoActionBar" />
+    </application>
+</manifest>

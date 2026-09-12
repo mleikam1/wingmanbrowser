@@ -1,0 +1,22 @@
+Wingman isolated GeckoView prototype
+
+Engine: org.mozilla.geckoview:geckoview:155.0.20260903215306
+Publisher artifact repository: https://maven.mozilla.org/maven2/
+GeckoView is distributed under the Mozilla Public License, version 2.0.
+License: https://www.mozilla.org/MPL/2.0/
+Matching covered source revision: 5fdfd0092780e85643e2cddc0e1b590c8b9ef860
+Matching full Mozilla source:
+https://hg.mozilla.org/releases/mozilla-release/rev/5fdfd0092780e85643e2cddc0e1b590c8b9ef860
+Matching GeckoView Java sources:
+https://maven.mozilla.org/maven2/org/mozilla/geckoview/geckoview/155.0.20260903215306/geckoview-155.0.20260903215306-sources.jar
+
+The engine binary and covered engine source have not been modified by Wingman.
+Original Mozilla and third-party notices in the engine distribution remain intact.
+The independently authored Wingman bridge and policy extension are separate app code.
+This prototype is not a Firefox product and implies no Firefox trademark license,
+account/service integration, or endorsement. No Firefox service credentials are supplied.
+Wingman would own timely engine security updates, policy/private-data regression tests,
+and application releases if this bundled engine were promoted.
+
+This is a local comparison artifact, signed using the checkout's debug signing identity.
+It is not a store-signed production release and has unresolved promotion gates.

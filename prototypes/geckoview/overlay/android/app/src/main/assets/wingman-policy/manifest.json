@@ -1,0 +1,9 @@
+{
+  "manifest_version": 2,
+  "name": "Wingman isolated prototype mandatory policy",
+  "version": "1.0.0",
+  "browser_specific_settings": {"gecko": {"id": "wingman-policy@wingmanbrowser.test"}},
+  "permissions": ["webRequest", "webRequestBlocking", "<all_urls>", "nativeMessaging", "geckoViewAddons"],
+  "background": {"scripts": ["policy.js", "background.js"], "persistent": true},
+  "content_security_policy": "script-src 'self'; object-src 'none'"
+}

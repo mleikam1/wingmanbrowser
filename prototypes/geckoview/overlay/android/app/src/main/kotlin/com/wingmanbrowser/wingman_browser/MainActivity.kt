@@ -1,0 +1,211 @@
+package com.wingmanbrowser.wingman_browser
+
+import android.app.DownloadManager
+import android.app.role.RoleManager
+import android.provider.Settings
+import android.app.KeyguardManager
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.os.Bundle
+import android.view.View
+import android.view.ViewGroup
+import android.view.WindowManager
+import android.webkit.CookieManager
+import android.webkit.GeolocationPermissions
+import android.webkit.WebStorage
+import androidx.webkit.WebStorageCompat
+import androidx.webkit.WebViewFeature
+import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.MethodCall
+import io.flutter.plugin.common.MethodChannel
+
+/** Application lifecycle, incoming links and OS capabilities; content stays on the protected channel. */
+class MainActivity : FlutterActivity() {
+    private lateinit var channel: MethodChannel
+    private lateinit var protectedBrowser: ProtectedWebBridge
+    private var pendingLink: String? = null
+    private var initialized = false
+    private var discardingHandoffLinks = false
+    private var clearing = false
+
+    @Suppress("DEPRECATION")
+    override fun onBackPressed() {
+        if (::protectedBrowser.isInitialized && protectedBrowser.hideFullscreen()) return
+        super.onBackPressed()
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        if (Build.VERSION.SDK_INT >= 33) setRecentsScreenshotEnabled(false)
+        super.onCreate(savedInstanceState)
+    }
+
+    override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
+        super.configureFlutterEngine(flutterEngine)
+        channel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "wingman/browser")
+        channel.setMethodCallHandler(::handle)
+        protectedBrowser = ProtectedWebBridge(this, MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "wingman/protected-browser"))
+        flutterEngine.platformViewsController.registry.registerViewFactory(ProtectedWebBridge.VIEW_TYPE, protectedBrowser.factory)
+        // Flutter's embedding otherwise exposes third-party PROCESS_TEXT
+        // activities independently of url_launcher. No external text processor
+        // is part of the reviewed local renderer, including in debug builds.
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "flutter/processtext")
+            .setMethodCallHandler { call, result ->
+                if (call.method == "ProcessText.queryTextActions") result.success(emptyMap<String, String>())
+                else result.error("bundled_content_only", "External text actions are unavailable.", null)
+            }
+        pendingLink = validWebUrl(intent?.dataString)
+        // The isolated Gecko runtime initializes its mandatory extension here.
+        // No website session opens before the verified ready acknowledgement.
+    }
+
+    override fun onPause() {
+        if (::protectedBrowser.isInitialized) protectedBrowser.pauseAll()
+        super.onPause()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::protectedBrowser.isInitialized) protectedBrowser.resume()
+    }
+
+    override fun onDestroy() {
+        if (::protectedBrowser.isInitialized) protectedBrowser.closeAll()
+        super.onDestroy()
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (discardingHandoffLinks) return
+        validWebUrl(intent.dataString)?.let {
+            if (initialized) channel.invokeMethod("incomingUri", it) else pendingLink = it
+        }
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (::protectedBrowser.isInitialized && protectedBrowser.onActivityResult(requestCode, resultCode, data)) return
+        super.onActivityResult(requestCode, resultCode, data)
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        if (::protectedBrowser.isInitialized && protectedBrowser.onRequestPermissionsResult(requestCode)) return
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+    }
+
+    private fun validWebUrl(value: String?): String? {
+        if (value == null || value.length > 16384) return null
+        val uri = Uri.parse(value)
+        return if (uri.scheme in listOf("http", "https") && !uri.host.isNullOrBlank()
+            && uri.userInfo == null) value else null
+    }
+
+    private fun contentViewCount(view: View): Int =
+        (if (view is org.mozilla.geckoview.GeckoView) 1 else 0) +
+        (if (view is ViewGroup) (0 until view.childCount).sumOf { contentViewCount(view.getChildAt(it)) } else 0)
+
+    private fun handle(call: MethodCall, result: MethodChannel.Result) {
+        try {
+            when (call.method) {
+                "discardHandoffIncoming" -> {
+                    // Deny-only: guest addresses must never be replayed into the
+                    // owner shell after authentication or process replacement.
+                    protectedBrowser.hideAll()
+                    pendingLink = null
+                    initialized = false
+                    discardingHandoffLinks = true
+                    result.success(null)
+                }
+                "initialize" -> {
+                    if (discardingHandoffLinks) pendingLink = null
+                    discardingHandoffLinks = false
+                    protectedBrowser.restoreOwner()
+                    initialized = true
+                    result.success(pendingLink)
+                    pendingLink = null
+                }
+                "setSensitiveContent" -> result.success(null) // Cannot weaken the native baseline.
+                "capabilityState" -> result.success(mapOf(
+                    "capability" to "consumerWeb", "liveBrowsing" to protectedBrowser.liveAvailable(),
+                    "contentViews" to contentViewCount(window.decorView),
+                    "handoffIncomingDiscarded" to discardingHandoffLinks, "incomingReady" to initialized,
+                    "keyboardVisible" to (if (Build.VERSION.SDK_INT >= 30)
+                        window.decorView.rootWindowInsets?.isVisible(android.view.WindowInsets.Type.ime()) else null),
+                    "secureWindow" to ((window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE) != 0)))
+                "handoffCapabilities" -> result.success(mapOf(
+                    "staticOnly" to true, "liveBrowsing" to false,
+                    "contentViews" to contentViewCount(window.decorView),
+                    "deviceAuthenticationAvailable" to
+                        (getSystemService(KEYGUARD_SERVICE) as KeyguardManager).isDeviceSecure))
+                "privateAvailable" -> result.success(protectedBrowser.privateAvailable())
+                "defaultBrowser" -> result.success(Build.VERSION.SDK_INT >= 29 && (getSystemService(ROLE_SERVICE) as RoleManager).isRoleHeld(RoleManager.ROLE_BROWSER))
+                "requestDefaultBrowser" -> {
+                    if (Build.VERSION.SDK_INT >= 29) {
+                        val roles = getSystemService(ROLE_SERVICE) as RoleManager
+                        if (!roles.isRoleAvailable(RoleManager.ROLE_BROWSER)) { result.success(false); return }
+                        if (!roles.isRoleHeld(RoleManager.ROLE_BROWSER)) startActivityForResult(roles.createRequestRoleIntent(RoleManager.ROLE_BROWSER), 7113)
+                    } else startActivity(Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS))
+                    result.success(true)
+                }
+                "normalizeHost" -> result.success(NativeGuardPolicy.normalizeHost(call.argument<String>("host") ?: ""))
+                "quarantineLegacyContent" -> {
+                    // The retired pilot had only disposable profiles. Never erase a new normal
+                    // profile on startup. Purge abandoned private data, once per migration.
+                    val migrations = getSharedPreferences("browser_migrations", MODE_PRIVATE)
+                    if (migrations.getInt("consumer_profile", 0) >= 1) {
+                        protectedBrowser.quarantineCompleted(); result.success(null)
+                    } else protectedBrowser.purgeRetiredProfiles { success ->
+                        if (success) {
+                            migrations.edit().putInt("consumer_profile", 1).apply()
+                            protectedBrowser.quarantineCompleted(); result.success(null)
+                        } else result.error("cleanup_unavailable", "Private session cleanup needs recovery.", null)
+                    }
+                }
+                "clearData" -> {
+                    protectedBrowser.closeAll()
+                    clearLegacyData(
+                    storage = call.argument<Boolean>("storage") == true,
+                    cookies = call.argument<Boolean>("cookies") == true,
+                    cache = call.argument<Boolean>("cache") == true, result = result)
+                }
+                "hideForGuard" -> { protectedBrowser.hideAll(); result.success(null) }
+                "pause" -> { protectedBrowser.pauseAll(); result.success(null) }
+                "close" -> { protectedBrowser.closeAll(); result.success(null) }
+                "stop" -> result.success(null)
+                "closedViewReleased" -> result.success(true)
+                // There is deliberately no setter, config flag, debug escape,
+                // role exception or ID lookup that can create/bind a view.
+                else -> result.error("bundled_content_only", "This capability is unavailable in the bundled library.", null)
+            }
+        } catch (_: Exception) {
+            // An unrelated malformed call cannot release an in-flight cleanup.
+            result.error("local_cleanup_unavailable", "Local browser cleanup could not be completed.", null)
+        }
+    }
+
+    /** DownloadManager scopes queries to the calling app. Preserve completed files. */
+    private fun cancelUnfinishedDownloads() {
+        val manager = getSystemService(DOWNLOAD_SERVICE) as DownloadManager
+        val query = DownloadManager.Query().setFilterByStatus(
+            DownloadManager.STATUS_PENDING or DownloadManager.STATUS_RUNNING or DownloadManager.STATUS_PAUSED)
+        checkNotNull(manager.query(query)).use { cursor ->
+            val column = cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_ID)
+            val ids = mutableListOf<Long>()
+            while (cursor.moveToNext()) ids.add(cursor.getLong(column))
+            if (ids.isNotEmpty()) manager.remove(*ids.toLongArray())
+        }
+    }
+
+    private fun clearLegacyData(storage: Boolean, cookies: Boolean, cache: Boolean, quarantine: Boolean = false, result: MethodChannel.Result) {
+        if (clearing) { result.error("cleanup_pending", "Site-data cleanup is still pending.", null); return }
+        if (!storage && !cookies && !cache) { result.success(null); return }
+        clearing = true; protectedBrowser.cleanupStarted()
+        protectedBrowser.clearBrowsingData { success ->
+            clearing = false; protectedBrowser.cleanupFinished()
+            if (success) { if (quarantine) protectedBrowser.quarantineCompleted(); result.success(null) }
+            else result.error("cleanup_failed", "Site data could not be removed.", null)
+        }
+    }
+}
