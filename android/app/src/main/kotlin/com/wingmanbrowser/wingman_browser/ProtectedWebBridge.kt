@@ -11,6 +11,7 @@ import android.net.Uri
 import android.net.http.SslError
 import android.os.Build
 import android.os.Message
+import android.os.SystemClock
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
@@ -47,8 +48,15 @@ class ProtectedWebBridge(private val context: Context, private val channel: Meth
         const val PERMISSION_REQUEST = 7112
     }
     private val activity get() = context as Activity
+    private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private val policy by lazy { ConsumerProtectionPolicy(context) }
     private val views = mutableMapOf<Int, ProtectedView>()
+    private val pendingWindows = mutableMapOf<String, ProtectedView>()
+    private var nextPendingId = -1
+    private val profileReferences = BrowserProfileReferences()
+    @Volatile private var restrictionRevision = 0L
+    private var restrictionSignature = ""
+
     private val policyUpdates by lazy { ConsumerPolicyUpdates(context, policy) { action ->
         val prior = ready
         ready = false
@@ -80,7 +88,17 @@ class ProtectedWebBridge(private val context: Context, private val channel: Meth
         override fun create(context: Context, viewId: Int, args: Any?): PlatformView {
             val values = args as? Map<*, *> ?: emptyMap<Any, Any>()
             check(views.size < 12)
-            policy.setAdditionalRestrictions((values["blockedResourceIds"] as? List<*>)?.filterIsInstance<String>() ?: emptyList(), (values["blockedCollections"] as? List<*>)?.filterIsInstance<String>() ?: emptyList(), (values["blockedDomains"] as? List<*>)?.filterIsInstance<String>() ?: emptyList(), (values["blockedUrls"] as? List<*>)?.filterIsInstance<String>() ?: emptyList(), values["searchBlocked"] == true)
+            applyRestrictions(values)
+            val token = values["windowToken"] as? String
+            if (token != null) {
+                val child = pendingWindows.remove(token)
+                if (child != null && values["edition"] == "consumer" && child.privateMode == (values["private"] == true) &&
+                    child.claimWindow() && (values["tabId"] as? String)?.let { it.isNotBlank() && it.length <= 100 } == true) {
+                    child.id = viewId; child.tabId = values["tabId"] as String
+                    views[viewId] = child; return child
+                }
+                child?.release()
+            }
             return ProtectedView(context, viewId, values["tabId"] as? String ?: "", values["private"] == true).also { views[viewId] = it }
         }
     }
@@ -100,15 +118,45 @@ class ProtectedWebBridge(private val context: Context, private val channel: Meth
     fun cleanupFinished() { cleanupPending = false }
     fun hideAll() { denied = true; hideFullscreen(); closeAll() }
     fun restoreOwner() { denied = false }
-    fun pauseAll() { foreground = false; hideFullscreen(); views.values.forEach { it.web?.onPause() }; CookieManager.getInstance().flush() }
+    fun pauseAll() { foreground = false; cancelPendingWindows(); hideFullscreen(); views.values.forEach { it.web?.onPause() }; CookieManager.getInstance().flush() }
     fun resume() { foreground = true; views.values.filter { it.active }.forEach { it.web?.onResume() } }
-    fun closeAll() { hideFullscreen(); views.values.toList().forEach { it.release() }; cancelUpload(); download = null }
+    fun closeAll() { hideFullscreen(); cancelPendingWindows(); views.values.toList().forEach { it.release() }; cancelUpload(); download = null }
+    private fun applyRestrictions(values: Map<*, *>) {
+        fun strings(key: String) = (values[key] as? List<*>)?.filterIsInstance<String>() ?: emptyList()
+        val keys = listOf("blockedResourceIds", "blockedCollections", "blockedDomains", "blockedUrls")
+        val signature = keys.map { strings(it).distinct().sorted() }.toString() + (values["searchBlocked"] == true)
+        if (signature != restrictionSignature) {
+            restrictionSignature = signature; restrictionRevision++; cancelPendingWindows()
+        }
+        policy.setAdditionalRestrictions(strings(keys[0]), strings(keys[1]), strings(keys[2]), strings(keys[3]), values["searchBlocked"] == true)
+    }
+    private fun cancelPendingWindows(opener: ProtectedView? = null) {
+        val candidates = (pendingWindows.values + views.values).distinct().filter { it.windowPending && (opener == null || it.windowOpener === opener) }
+        candidates.forEach { it.release() }
+    }
+    private fun stageWindow(opener: ProtectedView, transport: WebView.WebViewTransport, message: Message): Boolean {
+        val renderer = opener.web ?: return false
+        val ticket = opener.documentScope.issue(opener.currentUrl) ?: return false
+        if (!mayOpen() || pendingWindows.size >= 4) return false
+        val child = ProtectedView(context, nextPendingId--, UUID.randomUUID().toString(), opener.privateMode)
+        val token = UUID.randomUUID().toString()
+        child.windowOpener = opener; child.windowToken = token; child.scriptWindow = true; child.active = false
+        child.windowLease = BrowserWindowLease(renderer, opener.documentScope, ticket, restrictionRevision, SystemClock.uptimeMillis() + 10000)
+        try {
+            val popup = child.createWeb(opener.profileName)
+            pendingWindows[token] = child
+            transport.webView = popup; message.sendToTarget()
+            activity.window.decorView.postDelayed({ if (child.windowPending) child.release() }, 10000)
+            return true
+        } catch (_: Exception) { child.release(); return false }
+    }
     fun privateAvailable() = WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE) && WebViewFeature.isFeatureSupported(WebViewFeature.DELETE_BROWSING_DATA) && !profilePurgeFailed
     fun liveAvailable() = ready && policy.valid() && policyUpdates.generationReady() && !cleanupPending
     private fun mayOpen() = liveAvailable() && foreground && !denied
     private fun purgeProfile(name: String, completion: (Boolean) -> Unit = {}) {
         if (name in purgedProfiles) { completion(true); return }
         profilePurgeWaiters[name]?.let { it.add(completion); return }
+        if (profileReferences.contains(name)) { completion(false); return }
         val profile = loadedProfiles[name] ?: run { completion(false); return }
         profilePurgeWaiters[name] = mutableListOf(completion)
         fun done(success: Boolean) {
@@ -155,6 +203,7 @@ class ProtectedWebBridge(private val context: Context, private val channel: Meth
                 "revertConsumerPolicy" -> { result.success(policyUpdates.revert(call.argument<String>("token") ?: "")); return }
             }
             if (call.method == "configurePolicy") {
+                restrictionRevision++; cancelPendingWindows()
                 policy.setAdditional(call.argument<List<String>>("blockedDomains") ?: emptyList())
                 views.values.forEach { view -> if (view.currentUrl.isNotEmpty() && !policy.decide(view.currentUrl).allowed) view.block(view.currentUrl, "Blocked by an additional restriction.") }
                 result.success(null); return
@@ -165,7 +214,8 @@ class ProtectedWebBridge(private val context: Context, private val channel: Meth
             val view = views[call.argument<Number>("viewId")?.toInt()] ?: throw IllegalStateException()
             call.argument<Number>("requestId")?.toLong()?.let { view.acceptRequest(it) }
             when (call.method) {
-                "updateRestrictions" -> { policy.setAdditionalRestrictions(call.argument<List<String>>("blockedResourceIds") ?: emptyList(), call.argument<List<String>>("blockedCollections") ?: emptyList(), call.argument<List<String>>("blockedDomains") ?: emptyList(), call.argument<List<String>>("blockedUrls") ?: emptyList(), call.argument<Boolean>("searchBlocked") == true); if (view.currentUrl.isNotEmpty() && !policy.decide(view.currentUrl).allowed) view.block(view.currentUrl, "Blocked by an additional restriction."); result.success(null) }
+                "adoptWindow" -> { check(view.activateWindow(call.argument<String>("windowToken") ?: "")); result.success(null) }
+                "updateRestrictions" -> { applyRestrictions(call.arguments as? Map<*, *> ?: emptyMap<Any, Any>()); if (view.currentUrl.isNotEmpty() && !policy.decide(view.currentUrl).allowed) view.block(view.currentUrl, "Blocked by an additional restriction."); result.success(null) }
                 "open" -> { view.open(call.argument<String>("url") ?: ""); result.success(null) }
                 "openSearch" -> { view.open(strictSearchURL(call.argument<String>("query") ?: "") ?: throw IllegalArgumentException()); result.success(null) }
                 "reload" -> {
@@ -191,16 +241,16 @@ class ProtectedWebBridge(private val context: Context, private val channel: Meth
             if (BuildConfig.DEBUG) android.util.Log.w("WingmanProtection", "method=${call.method}; failure=${failure.javaClass.simpleName}; location=${failure.stackTrace.firstOrNull()}")
             result.error("protected_navigation_denied", "The operation could not complete with the required protections.", null) }
     }
-    private inner class ProtectedView(context: Context, val id: Int, val tabId: String, val privateMode: Boolean) : PlatformView {
+    private inner class ProtectedView(context: Context, var id: Int, var tabId: String, val privateMode: Boolean) : PlatformView {
         private val container = FrameLayout(context)
-        var web: WebView? = null
+        @Volatile var web: WebView? = null
         @Volatile var currentUrl = ""
         var requestId = 0L
         @Volatile var downloadEpoch = 0L
         var active = true
         var loading = false
         private var disposed = false
-        private var profileName: String? = null
+        var profileName: String? = null
         private var progress = 0
         private var title = ""
         private var error: String? = null
@@ -208,12 +258,49 @@ class ProtectedWebBridge(private val context: Context, private val channel: Meth
         private var attempted = 0
         private var lastBlocked: String? = null
         val documentScope = BrowserDocumentScope()
-        private val popupViews = mutableSetOf<WebView>()
+        @Volatile var windowOpener: ProtectedView? = null
+        var windowToken: String? = null
+        @Volatile var windowLease: BrowserWindowLease? = null
+        var scriptWindow = false
+        private val windowDelivered = AtomicBoolean(false)
+        val windowPending get() = windowLease?.activated == false
+        private fun windowCurrent(): Boolean {
+            val opener = windowOpener ?: return false
+            return mayOpen() && windowLease?.current(opener.web, opener.currentUrl, restrictionRevision, SystemClock.uptimeMillis()) == true
+        }
+        fun claimWindow(): Boolean {
+            val opener = windowOpener ?: return false
+            return windowCurrent() && windowLease?.claim(opener.web, opener.currentUrl, restrictionRevision, SystemClock.uptimeMillis()) == true
+        }
+        fun activateWindow(token: String): Boolean {
+            val opener = windowOpener ?: return false
+            if (windowToken != token || !windowCurrent() || !policy.decide(currentUrl).allowed ||
+                windowLease?.activate(opener.web, opener.currentUrl, restrictionRevision, SystemClock.uptimeMillis()) != true) return false
+            windowToken = null; windowOpener = null; setVisibilityActive(true); emit(); return true
+        }
+        private fun deliverWindow(raw: String): Boolean {
+            if (!windowPending) return true
+            if (!windowCurrent()) { mainHandler.post { release() }; return false }
+            val decision = policy.decide(raw)
+            if (!decision.allowed || decision.url != raw) {
+                mainHandler.post { windowOpener?.block(raw, decision.reason); release() }; return false
+            }
+            if (windowDelivered.compareAndSet(false, true)) {
+                currentUrl = raw
+                mainHandler.post {
+                    val opener = windowOpener
+                    if (opener != null && windowCurrent()) channel.invokeMethod("newWindowRequested", mapOf("viewId" to opener.id, "requestId" to opener.requestId, "url" to raw, "windowToken" to windowToken))
+                    else release()
+                }
+            }
+            return true
+        }
+
         override fun getView(): View = container
         override fun dispose() { release(); disposed = true; views.remove(id) }
         fun acceptRequest(value: Long) { check(value >= requestId); requestId = value }
         fun state(): Map<String, Any?> = mapOf("viewId" to id, "requestId" to requestId, "url" to currentUrl, "title" to title, "progress" to progress, "isLoading" to loading, "error" to error, "blockedResources" to blocked, "requestAttempts" to attempted, "hasRenderer" to (web != null), "private" to privateMode, "javascript" to (web?.settings?.javaScriptEnabled ?: false), "engineNetworkBlocked" to false, "strictSearch" to currentUrl.startsWith("https://safe.duckduckgo.com/"), "canGoBack" to (web?.canGoBack() ?: false), "canGoForward" to (web?.canGoForward() ?: false))
-        fun emit() { container.post { if (!disposed) channel.invokeMethod("pageState", state()) } }
+        fun emit() { container.post { if (!disposed && !windowPending) channel.invokeMethod("pageState", state()) } }
         fun block(url: String, reason: String?) {
             web?.stopLoading(); loading = false
             // Retain the previous permitted committed page; the shell shows the denied destination separately.
@@ -243,7 +330,7 @@ class ProtectedWebBridge(private val context: Context, private val channel: Meth
             error = null; lastBlocked = null; currentUrl = decision.url; loading = true; progress = 0
             setVisibilityActive(true); emit(); w.loadUrl(decision.url)
         }
-        private fun createWeb(): WebView {
+        fun createWeb(inheritedProfile: String? = null): WebView {
             check(!privateMode || privateAvailable())
             val w = object : WebView(container.context) {
                 override fun onCreateInputConnection(outAttrs: EditorInfo): InputConnection? =
@@ -255,8 +342,11 @@ class ProtectedWebBridge(private val context: Context, private val channel: Meth
             WebView.setWebContentsDebuggingEnabled(false)
             if (privateMode) {
                 if (Build.VERSION.SDK_INT >= 26) w.importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
-                val name = "wingman_private_${UUID.randomUUID()}"
+                val name = if (windowPending) {
+                    checkNotNull(inheritedProfile).also { check(profileReferences.contains(it) && it !in retiringProfiles && loadedProfiles.containsKey(it)) }
+                } else "wingman_private_${UUID.randomUUID()}"
                 WebViewCompat.setProfile(w, name); profileName = name
+                profileReferences.retain(name)
                 loadedProfiles[name] = WebViewCompat.getProfile(w)
                 installServiceWorkerPolicy(loadedProfiles[name], name)
             }
@@ -284,37 +374,13 @@ class ProtectedWebBridge(private val context: Context, private val channel: Meth
                 override fun onCreateWindow(view: WebView, isDialog: Boolean, isUserGesture: Boolean, resultMsg: Message): Boolean {
                     if (!isUserGesture || view !== web || !active || !mayOpen()) return false
                     val transport = resultMsg.obj as? WebView.WebViewTransport ?: return false
-                    val ticket = documentScope.issue(currentUrl) ?: return false
-                    // A network-disabled transport captures the popup's requested address before any content loads.
-                    val popup = WebView(container.context)
-                    profileName?.let { WebViewCompat.setProfile(popup, it) }
-                    popupViews.add(popup)
-                    popup.settings.blockNetworkLoads = true; popup.settings.javaScriptEnabled = false
-                    popup.settings.allowFileAccess = false; popup.settings.allowContentAccess = false
-                    var delivered = false
-                    fun destroyPopup() { if (popupViews.remove(popup)) popup.destroy() }
-                    fun destination(raw: String): Boolean {
-                        if (delivered) return true
-                        if (raw == "about:blank") return false
-                        delivered = true
-                        if (!documentScope.owns(ticket, currentUrl) || web == null || !active || !mayOpen()) {
-                            container.post { destroyPopup() }; return true
-                        }
-                        val decision = policy.decide(raw)
-                        if (decision.allowed) channel.invokeMethod("newWindowRequested", mapOf("viewId" to id, "requestId" to requestId, "url" to decision.url)) else block(raw, decision.reason)
-                        container.post { destroyPopup() }
-                        return true
-                    }
-                    popup.webViewClient = object : WebViewClient() {
-                        override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest) = destination(request.url.toString())
-                        override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) { destination(url) }
-                        override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse { container.post { destination(request.url.toString()) }; return deniedResponse() }
-                        override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean { destroyPopup(); return true }
-                    }
-                    transport.webView = popup
-                    resultMsg.sendToTarget()
-                    container.postDelayed({ if (!delivered) { delivered = true; destroyPopup() } }, 15000)
-                    return true
+                    return stageWindow(this@ProtectedView, transport, resultMsg)
+                }
+                override fun onCloseWindow(window: WebView) {
+                    if (window !== web || !scriptWindow) return
+                    val adopted = !windowPending
+                    release()
+                    if (adopted) channel.invokeMethod("closeRequested", mapOf("viewId" to id, "requestId" to requestId))
                 }
                 override fun onPermissionRequest(request: PermissionRequest) { requestMediaPermission(this@ProtectedView, request) }
                 override fun onPermissionRequestCanceled(request: PermissionRequest) { siteRequests.filter { it.key === request }.toList().forEach { it.finish {} } }
@@ -334,6 +400,15 @@ class ProtectedWebBridge(private val context: Context, private val channel: Meth
             }
             w.webViewClient = object : WebViewClient() {
                 override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
+                    if (view !== web) return deniedResponse()
+                    val lease = windowLease
+                    if (lease != null && !lease.activated) {
+                        if (!request.isForMainFrame || request.method !in setOf("GET", "POST") || !deliverWindow(request.url.toString())) return deniedResponse()
+                        // WebView invokes this on its request worker. Keeping the
+                        // original request pending preserves Chromium's POST body.
+                        val adopted = try { lease.awaitActivation(SystemClock.uptimeMillis()) } catch (_: InterruptedException) { false }
+                        if (!adopted) { mainHandler.post { release() }; return deniedResponse() }
+                    }
                     val decision = policy.decide(request.url.toString(), request.isForMainFrame, currentUrl)
                     synchronized(this@ProtectedView) { attempted++; if (!decision.allowed) blocked++ }
                     // A WebView POST can skip shouldOverrideUrlLoading. Never let a
@@ -351,6 +426,8 @@ class ProtectedWebBridge(private val context: Context, private val channel: Meth
                     return null
                 }
                 override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+                    if (view !== web) return true
+                    if (windowPending && (!request.isForMainFrame || request.method !in setOf("GET", "POST") || !deliverWindow(request.url.toString()))) return true
                     val decision = policy.decide(request.url.toString(), request.isForMainFrame, currentUrl)
                     if (!decision.allowed || !mayOpen()) { if (request.isForMainFrame) block(request.url.toString(), decision.reason); return true }
                     if (request.isForMainFrame && decision.url != request.url.toString()) {
@@ -361,6 +438,7 @@ class ProtectedWebBridge(private val context: Context, private val channel: Meth
                 }
                 override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
                     if (view !== web || !ready) return
+                    if (windowPending && !deliverWindow(url)) return
                     invalidateDocument()
                     val decision = policy.decide(url)
                     if (!decision.allowed) { block(url, decision.reason); return }
@@ -391,24 +469,28 @@ class ProtectedWebBridge(private val context: Context, private val channel: Meth
             container.addView(w, FrameLayout.LayoutParams(-1, -1))
             return w
         }
-        fun cookieManager(): CookieManager = profileName?.let { loadedProfiles[it]?.cookieManager } ?: CookieManager.getInstance()
+        fun cookieManager(): CookieManager = if (privateMode) checkNotNull(profileName?.let { loadedProfiles[it]?.cookieManager }) else CookieManager.getInstance()
         private fun fail(message: String) { web?.stopLoading(); loading = false; error = message; emit() }
         private fun invalidateDocument() {
+            cancelPendingWindows(this)
             documentScope.advance()
             cancelSiteRequests(this)
             if (uploadOwner === this) cancelUpload()
         }
         fun release() {
+            windowLease?.cancel(); windowLease = null
+            windowToken?.let { pendingWindows.remove(it) }; windowToken = null
+            windowOpener = null
             invalidateDocument()
             downloadEpoch++
             if (download?.owner === this) download = null
             if (uploadOwner === this) cancelUpload()
             val retired = web
             web = null; loading = false
-            profileName?.let { retiringProfiles.add(it) }
             retired?.let { it.stopLoading(); it.visibility = View.INVISIBLE; container.removeView(it); it.destroy() }
-            popupViews.toList().forEach { it.destroy() }; popupViews.clear()
-            profileName?.let { purgeProfile(it) }; profileName = null
+            profileName?.let { name ->
+                if (profileReferences.release(name)) { retiringProfiles.add(name); purgeProfile(name) }
+            }; profileName = null
         }
     }
     private fun origin(raw: String) = browserOrigin(raw)

@@ -4,6 +4,52 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class BrowserRequestGuardsTest {
+    @Test fun popupLeaseRequiresClaimAndRejectsReplayChangedDocumentPolicyAndExpiry() {
+        val renderer = Any(); val scope = BrowserDocumentScope(); val url = "https://example.com/parent"
+        val lease = BrowserWindowLease(renderer, scope, scope.issue(url)!!, 4, 10000)
+        assertFalse(lease.activate(renderer, url, 4, 0))
+        assertFalse(lease.claim(Any(), url, 4, 0))
+        assertFalse(lease.claim(renderer, "https://other.example/", 4, 0))
+        assertFalse(lease.claim(renderer, url, 5, 0))
+        assertTrue(lease.claim(renderer, url, 4, 0))
+        assertFalse(lease.claim(renderer, url, 4, 0))
+        scope.advance()
+        assertFalse(lease.activate(renderer, url, 4, 0))
+        lease.cancel()
+        assertFalse(lease.awaitActivation(0))
+        val expired = BrowserWindowLease(renderer, scope, scope.issue(url)!!, 4, 10000)
+        assertFalse(expired.claim(renderer, url, 4, 10000))
+    }
+
+    @Test fun popupWorkerReleasesOriginalRequestOnlyAfterOneUseAdoption() {
+        val renderer = Any(); val scope = BrowserDocumentScope(); val url = "https://example.com/parent"
+        val lease = BrowserWindowLease(renderer, scope, scope.issue(url)!!, 4, 10000)
+        val entered = java.util.concurrent.CountDownLatch(1)
+        val completed = java.util.concurrent.CountDownLatch(1)
+        var permitted = false
+        val worker = Thread { entered.countDown(); permitted = lease.awaitActivation(0); completed.countDown() }
+        worker.start(); assertTrue(entered.await(1, java.util.concurrent.TimeUnit.SECONDS))
+        assertFalse(completed.await(20, java.util.concurrent.TimeUnit.MILLISECONDS))
+        assertTrue(lease.claim(renderer, url, 4, 0))
+        assertTrue(lease.activate(renderer, url, 4, 0))
+        assertTrue(completed.await(1, java.util.concurrent.TimeUnit.SECONDS)); worker.join()
+        assertTrue(permitted)
+        assertFalse(lease.activate(renderer, url, 4, 0))
+        lease.cancel(); assertFalse(lease.awaitActivation(0))
+    }
+
+    @Test fun privateProfileOutlivesParentAndPurgesOnlyAfterLastAdoptedChild() {
+        val refs = BrowserProfileReferences(); val profile = "wingman_private_test"
+        refs.retain(profile) // parent
+        refs.retain(profile) // staged child; factory adoption transfers this reference
+        assertFalse(refs.release(profile)) // parent closes
+        assertTrue(refs.contains(profile))
+        assertTrue(refs.release(profile)) // child closes
+        assertFalse(refs.contains(profile))
+        assertFalse(refs.release(profile)) // repeated disposal cannot purge a new profile
+        assertFalse(refs.contains("normal"))
+    }
+
     @Test fun originUsesBrowserDefaultPortSemantics() {
         assertEquals("https://example.com", browserOrigin("https://EXAMPLE.com:443/account?q=private"))
         assertEquals("http://example.com", browserOrigin("http://example.com:80/"))
