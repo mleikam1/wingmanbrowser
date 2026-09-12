@@ -1,3 +1,4 @@
+import '../policy/consumer_protection_policy.dart';
 import 'domain_normalizer.dart';
 import 'filter_pack_repository.dart';
 import 'navigation_policy_service.dart';
@@ -14,10 +15,14 @@ export 'signed_filter_manifest.dart';
 export 'sqlite_filter_pack_repository.dart';
 
 class GuardRuntime {
-  GuardRuntime._(this.repository, this.normalizer)
-    : policy = NavigationPolicyService(
+  GuardRuntime._(
+    this.repository,
+    this.normalizer,
+    ConsumerProtectionPolicy protection,
+  ) : policy = NavigationPolicyService(
         repository: repository,
         normalizer: normalizer,
+        protection: protection,
       );
   final FilterPackRepository repository;
   final DomainNormalizer normalizer;
@@ -27,9 +32,14 @@ class GuardRuntime {
   static Future<GuardRuntime> initialize({
     FilterPackRepository? repository,
     DomainNormalizer? normalizer,
+    ConsumerProtectionPolicy? protection,
   }) async {
     final storage = repository ?? SqliteFilterPackRepository();
     await storage.init();
-    return GuardRuntime._(storage, normalizer ?? DomainNormalizer());
+    return GuardRuntime._(
+      storage,
+      normalizer ?? DomainNormalizer(),
+      protection ?? await ConsumerProtectionPolicy.load(),
+    );
   }
 }

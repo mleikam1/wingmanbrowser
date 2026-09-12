@@ -531,6 +531,7 @@ class BrowserState extends ChangeNotifier {
       AdditionalRestrictions(
         blockedCollections: collections,
         blockedResourceIds: resources,
+        blockedDomains: current.blockedDomains,
       ),
       isPrivate: isPrivate,
     );
@@ -552,6 +553,7 @@ class BrowserState extends ChangeNotifier {
             .toSet() ??
         <String>{};
     final safe = AdditionalRestrictions(
+      blockedDomains: restrictions.blockedDomains,
       blockedCollections: restrictions.blockedCollections.where(
         (c) => c != 'support',
       ),

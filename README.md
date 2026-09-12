@@ -4,6 +4,14 @@
 
 **Built for discovery. Designed with boundaries.**
 
+Version **0.10.0+10** restores consumer browsing through Android System WebView and iOS WKWebView while preserving Wingman's existing interface, Launchpad, Spaces and local tools. Ordinary search opens DuckDuckGo's normal Strict experience; permitted result destinations do not require inclusion in the reviewed catalog. JavaScript, forms, first-party storage and native navigation are enabled behind local category/threat controls. The web companion submits search by leaving for the strict provider in the host browser.
+
+This recovery is not production-complete. Protection coverage, native interception limitations, incomplete update infrastructure and measured device acceptance are documented in [Consumer recovery](docs/CONSUMER_BROWSER_RECOVERY.md), [Search acceptance](docs/SEARCH_ACCEPTANCE.md), [Browser engine contract](docs/BROWSER_ENGINE_CONTRACT.md) and [Protection coverage](docs/PROTECTION_COVERAGE.md). A permitted destination is not a claim of verified safety. School allowlisting remains separate; users cannot disable the consumer mandatory baseline.
+
+## Historical 0.9 pilot
+
+The following pilot description is retained as historical context. Its exact-document and scriptless consumer requirements are superseded by the 0.10 recovery documents above.
+
 Version **0.9.0+9** adds direct DuckDuckGo search with publisher-fixed Strict adult filtering on supported Android and iOS builds, without a paid search API. It displays the first, text-only results page; result links still require an independently reviewed destination. The visual-browsing pilot continues to display six exact live documents with permitted images, styles and fonts. Launchpad, local photography, Home customization, local search, 18 original reviewed articles, Spaces, reading tools, themes and private sessions remain available. There is no account requirement, advertising SDK or new Wingman cloud service.
 
 **General-purpose browsing across desktop, iOS and Android remains unfinished.** This release is not a completed Firefox replacement or a guarantee that every live image and sentence meets every content rule. DuckDuckGo's adult filter is separate from Wingman's six-category policy: search snippets and advertisements are not fully classified against those rules, and provider filtering can miss content. Reviewed URLs can also serve changed content; there is no per-image or automatic six-category text classifier. See [Strict search](docs/STRICT_SEARCH.md) for v0.9 search behavior and [Live browsing status](docs/LIVE_BROWSING_STATUS.md) for the existing destination pilot.

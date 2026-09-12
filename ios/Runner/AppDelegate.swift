@@ -30,8 +30,8 @@ import LocalAuthentication
   }
 }
 
-/// The retired channel has no content loader, script evaluator or external opener.
-/// Reviewed visual content uses a separate factory and immutable native policy.
+/// Legacy native services contain no content loader or script evaluator.
+/// Consumer WebKit rendering uses the protected factory with a pinned baseline.
 final class BrowserNativeBridge {
   let channel: FlutterMethodChannel
   var initialized = false
@@ -40,8 +40,24 @@ final class BrowserNativeBridge {
   private var clearing = false
   private var quarantineCompletedInProcess = false
   private var quarantinePurgeCount = 0
+  private static let consumerMigrationVersion = 2
+  private static let migrationKey = "wingman.consumer.webkit.migration"
+  static var hasDefaultBrowserEntitlement: Bool {
+    // This checkout has no Apple-approved managed browser entitlement. Only
+    // enable this build flag together with Apple's granted signing entitlement.
+    #if WINGMAN_DEFAULT_BROWSER_ENTITLEMENT
+    return true
+    #else
+    return false
+    #endif
+  }
 
   init(registrar: FlutterPluginRegistrar) {
+    // Incomplete downloads never become a restored private-session artifact.
+    let temporary = FileManager.default.temporaryDirectory
+    for url in (try? FileManager.default.contentsOfDirectory(at: temporary, includingPropertiesForKeys: nil)) ?? [] where url.lastPathComponent.hasPrefix("WingmanDownload-") {
+      try? FileManager.default.removeItem(at: url)
+    }
     protectedBrowser = ProtectedWebBridge(registrar: registrar)
     channel = FlutterMethodChannel(name: "wingman/browser", binaryMessenger: registrar.messenger())
     channel.setMethodCallHandler { [weak self] call, result in self?.handle(call, result: result) }
@@ -73,7 +89,11 @@ final class BrowserNativeBridge {
       initialized = true
       result(AppDelegate.pendingURL)
       AppDelegate.pendingURL = nil
-    case "privateAvailable", "defaultBrowser": result(false)
+    case "privateAvailable": result(true)
+    case "defaultBrowser":
+      guard Self.hasDefaultBrowserEntitlement,
+        let settings = URL(string: UIApplication.openSettingsURLString) else { result(false); return }
+      UIApplication.shared.open(settings, options: [:]) { result($0) }
     case "setSensitiveContent": result(nil) // Every inactive scene is covered natively.
     case "handoffCapabilities":
       let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
@@ -86,7 +106,7 @@ final class BrowserNativeBridge {
         "deviceAuthenticationAvailable": available])
     case "capabilityState":
       let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
-      result(["capability": "bundledPlainTextOnly", "liveBrowsing": false,
+      result(["capability": "consumerWeb", "liveBrowsing": true,
         "contentViews": scenes.flatMap { $0.windows }.reduce(0) { $0 + contentViewCount($1) },
         "quarantineCompletedInProcess": quarantineCompletedInProcess,
         "quarantinePurgeCount": quarantinePurgeCount,
@@ -107,12 +127,12 @@ final class BrowserNativeBridge {
         result(FlutterError(code: "local_storage_unavailable", message: "Local storage could not be opened.", details: nil))
       }
     case "quarantineLegacyContent":
-      protectedBrowser.closeAll()
-      // New visual views use nonpersistent stores and cannot write the legacy
-      // persistent default store. A completed upgrade purge therefore remains
-      // valid for a second Flutter root in this process. Never persist this receipt:
-      // the first request in every native process must await actual removal.
-      if quarantineCompletedInProcess { protectedBrowser.quarantineCompleted { result(nil) }; return }
+      // Versioned upgrade cleanup. Never delete newly valid normal cookies or
+      // storage at each launch, Flutter-root rebuild or app resume.
+      if UserDefaults.standard.integer(forKey: Self.migrationKey) >= Self.consumerMigrationVersion {
+        quarantineCompletedInProcess = true
+        protectedBrowser.quarantineCompleted { result(nil) }; return
+      }
       clearData(types: WKWebsiteDataStore.allWebsiteDataTypes(), quarantine: true, result: result)
     case "clearData":
       protectedBrowser.closeAll()
@@ -158,6 +178,7 @@ final class BrowserNativeBridge {
       }
       if quarantine {
         self.quarantineCompletedInProcess = true
+        UserDefaults.standard.set(Self.consumerMigrationVersion, forKey: Self.migrationKey)
         self.protectedBrowser.quarantineCompleted(completion: finish)
       } else { finish() }
     }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import '../../policy/policy_runtime.dart';
 import '../browser_shell.dart' show safeTextContextMenu;
 import '../components/wingman_components.dart';
@@ -156,7 +157,9 @@ class _FocusedSearchScreenState extends State<FocusedSearchScreen> {
             const SizedBox(height: 12),
             Text(
               _web
-                  ? 'Search previews use DuckDuckGo’s adult filter. They are not fully classified against Wingman’s other content rules. This preview opens reviewed pages only; images, pagination and provider forms are unavailable. Use this field for each new search.'
+                  ? kIsWeb
+                        ? 'Web companion: search opens DuckDuckGo in your host browser. Wingman cannot control that browser or enforce its native destination filters after you leave this app.'
+                        : 'Search previews and ads use DuckDuckGo’s adult filter, which can miss content. They are not fully classified against Wingman’s other category rules. Destination filters apply when links open.'
                   : webAvailable
                   ? 'Choose Web to search with DuckDuckGo’s required Strict adult filtering.'
                   : 'Web search is unavailable on this platform or under your current boundaries. The installed library remains available.',

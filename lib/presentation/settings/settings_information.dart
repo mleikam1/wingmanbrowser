@@ -14,9 +14,9 @@ class PermissionsScreen extends StatelessWidget {
       children: [
         const WingmanEmptyState(
           icon: Icons.lock_outline,
-          title: 'Website permissions stay restricted',
+          title: 'Website permissions are origin scoped',
           message:
-              'Reviewed native pages can display HTML, styles and listed images. Camera, microphone, location, uploads, notifications and account sign-in remain unavailable for websites.',
+              'Supported native pages can request camera or microphone access for their own origin. Wingman asks before granting supported permissions. File uploads and downloads use system pickers. Account sessions use normal cookies; private website storage is separate.',
         ),
         const SizedBox(height: 24),
         for (final name in [
@@ -28,7 +28,9 @@ class PermissionsScreen extends StatelessWidget {
           WingmanSettingsRow(
             icon: Icons.block,
             title: name,
-            subtitle: 'Unavailable for websites in this build',
+            subtitle: name == 'Website notifications'
+                ? 'Unavailable in this build'
+                : 'Subject to native platform support and your permission',
           ),
         const SizedBox(height: 20),
         const Text(
@@ -82,15 +84,15 @@ class AboutScreen extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           const Text(
-            'Eligible Android and iOS 18.4+ builds include a limited reviewed website pilot with images and styles. Supported native sessions can also open the first, text-only DuckDuckGo results page with a fixed Strict adult filter. Search previews are not classified against all six Wingman rules, and only reviewed destination pages can open. Search images, pagination and page forms are unavailable.',
+            'Native consumer Wingman uses System WebView or WKWebView for ordinary pages, forms, JavaScript and sign-in continuity. DuckDuckGo Strict adult filtering is required. Local category and threat rules check destinations separately. Unknown destinations may be permitted; they are not verified safe.',
           ),
           const SizedBox(height: 12),
           const Text(
-            'Web search sends submitted queries and the connection’s IP address directly to DuckDuckGo, with no remote suggestions while typing and no paid search service. Native desktop apps are not available. The web companion has local tools only and does not control other browser tabs.',
+            'Web search sends submitted queries and the connection’s IP address directly to DuckDuckGo, with no remote suggestions while typing and no paid search service. Native desktop apps are not available. The web companion has local tools and submits search by leaving for the strict provider. It cannot enforce native protection in the host browser.',
           ),
           const SizedBox(height: 12),
           const Text(
-            'Website scripts, account sign-in, site permissions, remote Reader, downloads, cloud sync and report submission remain unavailable.',
+            'Filtering can miss prohibited content and block legitimate pages. Dynamic recommendations, images and ads are not comprehensively classified. Alcohol, recreational-drug promotion and tobacco data have limited coverage. Cloud sync and report submission remain unavailable.',
           ),
           const SizedBox(height: 20),
           WingmanSettingsRow(

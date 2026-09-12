@@ -259,6 +259,8 @@ class _Scope {
 
   static Future<_Scope> create(WorkspaceHandoffScene scene) async {
     final policy = await PolicyRuntime.initialize(
+      // This static gallery deliberately allocates no browser or network data.
+      consumerProtection: const ConsumerProtectionPolicy.unavailable(),
       repository: SignedPolicyRepository(
         clock: PolicyClock(wallClock: () => DateTime.utc(2026, 9, 11, 12)),
       ),

@@ -260,7 +260,7 @@ class _CompatibilityReportScreenState extends State<CompatibilityReportScreen>
               const WingmanStatus(
                 title: 'Protection stays in place',
                 message:
-                    'A missing capability or unreviewed destination is not a compatibility exemption. Corrections cannot grant website access, permissions or protection bypasses.',
+                    'A missing capability or prohibited destination is not a compatibility exemption. Corrections cannot grant website access, permissions or protection bypasses.',
               ),
             ],
           ),

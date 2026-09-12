@@ -124,7 +124,9 @@ class SqliteBrowserRepository
           orElse: () => ThemeMode.system,
         ),
         onboardingComplete: prefs['onboarding_complete'] == 'true',
-        guardJson: prefs['guard_configuration'] ?? '{}',
+        guardJson: retireLegacyGuardSettings(
+          prefs['guard_configuration'] ?? '{}',
+        ),
         protectedJson: prefs['protected_preferences'] ?? '{}',
         guardStatsJson: prefs['guard_statistics'] ?? '{}',
         localSuggestions: prefs['local_suggestions'] != 'false',
@@ -186,6 +188,12 @@ class SqliteBrowserRepository
 
   Future<void> _migratePermanentProtection(DatabaseExecutor db) async {
     await _createProtectionArchive(db);
+    final completed = await db.query(
+      'settings',
+      where: 'key=?',
+      whereArgs: ['consumer_migration_v1'],
+    );
+    if (completed.isNotEmpty) return;
     await db.execute(
       "INSERT OR IGNORE INTO retired_tabs SELECT id,url,title,position,desktop_mode FROM tabs WHERE url<>'' OR title<>'New tab'",
     );
@@ -204,6 +212,7 @@ class SqliteBrowserRepository
       'guard_configuration': guard,
       'search_provider': 'approved-content',
       'mandatory_policy_version': '1',
+      'consumer_migration_v1': 'complete',
     }.entries) {
       await db.insert('settings', {
         'key': entry.key,
@@ -410,6 +419,7 @@ class SqliteBrowserRepository
       'page_scale': settings.pageScale.clamp(75, 200).toString(),
       'protected_preferences': _protectedJson(settings.protectedJson),
       'mandatory_policy_version': '1',
+      'consumer_migration_v1': 'complete',
     };
     for (final entry in prefs.entries) {
       batch.insert('settings', {

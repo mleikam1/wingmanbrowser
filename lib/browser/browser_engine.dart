@@ -11,8 +11,8 @@ export 'reader_article.dart' show ReaderArticle;
 const _nativeChannel = MethodChannel('wingman/browser');
 typedef BrowserGuardRequest = GuardRequest;
 
-/// Only local cleanup, incoming-address rejection and capture protection remain.
-/// There is no website JavaScript bridge or content WebView plugin.
+/// Platform services are separate from page renderers. Websites cannot invoke
+/// this channel; it is only reachable from the trusted Flutter application.
 class NativeBrowserService {
   /// Retained by the owning discovery session until actual native completion.
   /// The caller can display pending without treating a timeout as deletion.
@@ -42,7 +42,7 @@ class NativeBrowserService {
     if (!kIsWeb) {
       await _nativeChannel
           .invokeMethod<void>('quarantineLegacyContent')
-          .timeout(const Duration(seconds: 15));
+          .timeout(const Duration(minutes: 2));
     }
   }
 
@@ -78,12 +78,40 @@ class NativeBrowserService {
     rejectAddress(await _nativeChannel.invokeMethod<String>('initialize'));
   }
 
-  Future<bool> privateBrowsingAvailable() async => false;
-  Future<bool> requestDefaultBrowser() async => false;
+  Future<bool> privateBrowsingAvailable() async {
+    if (kIsWeb) return false;
+    final value = await const MethodChannel(
+      'wingman/protected-browser',
+    ).invokeMapMethod<String, Object?>('capabilities');
+    return value?['privateAvailable'] == true;
+  }
+
+  Future<bool> requestDefaultBrowser() async =>
+      !kIsWeb &&
+      await _nativeChannel.invokeMethod<bool>('requestDefaultBrowser') == true;
 
   void dispose() {
     if (!kIsWeb) _nativeChannel.setMethodCallHandler(null);
   }
+}
+
+/// Real consumer engine contract. The production adapter is
+/// ProtectedWebController backed by Android System WebView or WKWebView.
+/// Capabilities are obtained from the native adapter before opening a tab.
+abstract interface class BrowserEngine {
+  Uri? get currentUrl;
+  bool get attached;
+  Future<void> open(Uri uri);
+  Future<void> back();
+  Future<void> forward();
+  Future<void> reload();
+  Future<void> stop();
+  Future<void> find(String query);
+  Future<void> findNext({bool forward = true});
+  Future<void> share();
+  Future<void> suspend();
+  Future<void> resume(Uri uri);
+  void dispose();
 }
 
 class BrowserPageStatus {
@@ -97,7 +125,8 @@ class BrowserPageStatus {
   GuardDecision? guardDecision;
 }
 
-/// Compatibility boundary for retired browser UI and stale navigation intents.
+/// Compatibility boundary only for pre-reset legacy callers. The consumer
+/// shell uses BrowserEngine/ProtectedWebController, never this retired pool.
 ///
 /// This class deliberately imports no WebView, URL launcher or network API.
 /// No preference, policy payload, role, private flag, build mode or test callback

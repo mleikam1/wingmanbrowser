@@ -1,0 +1,76 @@
+#!/usr/bin/env python3
+"""Reproducibly compile committed licensed local inputs. Performs no network I/O.
+
+Source revisions/digests are reviewed in this file. App/package signing is the
+shipped update trust boundary; arbitrary downloaded lists are never activated.
+"""
+import hashlib
+import json
+from pathlib import Path
+import re
+
+ROOT = Path(__file__).resolve().parents[1]
+SOURCE = ROOT / 'assets/policy/consumer_sources'
+COMMIT = '23cdd6516160ae7903b81d762c22d557b808c1e0'
+INPUTS = [
+    ('sexual-explicit', 'nsfw.txt', 'wildcard/nsfw-onlydomains.txt'),
+    ('gambling', 'gambling-mini.txt', 'wildcard/gambling.mini-onlydomains.txt'),
+    ('security-threat', 'threat-mini.txt', 'wildcard/tif.mini-onlydomains.txt'),
+]
+# Source corrections affect only this category, never security rules. No brand
+# is exempted from the evaluator or future rules. These are dictionary/medical
+# educational pages, not explicit entertainment services.
+CORRECTIONS = {'sexual-explicit': {'en.academic.ru'}}
+# Limited first-party promotion/commerce supplement: no generic keyword block,
+# no drug-treatment/medical list, no treatment/education exemptions to threats.
+SUPPLEMENT = {
+    'sexual-explicit': ['sexual-explicit.protection.test'],
+    'gambling': ['gambling.protection.test', 'espnbet.com', 'sportsbook.draftkings.com'],
+    'alcohol-promotion': ['alcohol.protection.test', 'totalwine.com', 'wine.com', 'drizly.com', 'reservebar.com', 'budweiser.com', 'budlight.com', 'heineken.com', 'jackdaniels.com', 'johnniewalker.com', 'bacardi.com', 'absolut.com', 'smirnoff.com', 'coors.com', 'millerlite.com', 'coronausa.com'],
+    'recreational-drug-promotion': ['drugs.protection.test', 'weedmaps.com', 'leafly.com', 'eaze.com', 'dutchie.com', 'iheartjane.com', 'trulieve.com', 'curaleaf.com', 'greenbudz.com', 'royalqueenseeds.com', 'zamnesia.com'],
+    'tobacco-nicotine': ['tobacco.protection.test', 'juul.com', 'vuse.com', 'zyn.com', 'velo.com', 'onoralnicotine.com', 'iqos.com', 'marlboro.com', 'blu.com', 'njoy.com', 'elfbar.com', 'lostmary.com', 'elementvape.com', 'vaporfi.com', 'vaping.com', 'cigarsinternational.com', 'famous-smoke.com'],
+    'security-threat': ['security-threat.protection.test'],
+}
+PATH_RULES = [
+    {'host': 'espn.com', 'pathPrefix': '/espn/betting', 'category': 'gambling'},
+    {'host': 'espn.com', 'pathPrefix': '/sports-betting', 'category': 'gambling'},
+    {'host': 'walmart.com', 'pathPrefix': '/cp/beer-wine-spirits', 'category': 'alcohol-promotion'},
+    {'host': 'walmart.com', 'pathPrefix': '/browse/food/beer-wine-spirits', 'category': 'alcohol-promotion'},
+    {'host': 'mixed.protection.test', 'pathPrefix': '/promotion/alcohol', 'category': 'alcohol-promotion'},
+    {'host': 'mixed.protection.test', 'pathPrefix': '/promotion/drugs', 'category': 'recreational-drug-promotion'},
+    {'host': 'mixed.protection.test', 'pathPrefix': '/promotion/gambling', 'category': 'gambling'},
+    {'host': 'mixed.protection.test', 'pathPrefix': '/promotion/tobacco', 'category': 'tobacco-nicotine'},
+    {'host': 'mixed.protection.test', 'pathPrefix': '/explicit-entertainment', 'category': 'sexual-explicit'},
+]
+HOST = re.compile(r'^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$')
+
+def main():
+    categories = {k: set(v) for k, v in SUPPLEMENT.items()}
+    sources = []
+    for category, name, upstream in INPUTS:
+        raw = (SOURCE / name).read_bytes()
+        domains = {line.strip() for line in raw.decode().splitlines() if line.strip() and not line.startswith('#')}
+        invalid = [d for d in domains if not HOST.fullmatch(d) or len(d) > 253]
+        if invalid:
+            raise ValueError(f'Invalid input domains in {name}: {invalid[:3]}')
+        corrected = domains - CORRECTIONS.get(category, set())
+        categories[category].update(corrected)
+        sources.append({'id': 'hagezi-' + category, 'license': 'GPL-3.0-only', 'sourceCommit': COMMIT,
+            'url': f'https://raw.githubusercontent.com/hagezi/dns-blocklists/{COMMIT}/{upstream}',
+            'sha256': hashlib.sha256(raw).hexdigest(), 'sourceRuleCount': len(domains),
+            'compiledRuleCount': len(corrected), 'excludedDomains': sorted(domains - corrected)})
+    privacy = json.loads((ROOT / 'assets/policy/live_sites.json').read_text())['privacy']
+    sources.append({'id': 'easyprivacy-third-party-subset', **{k: v for k, v in privacy.items() if k != 'domains'}})
+    payload = {'schemaVersion': 1, 'sequence': 1, 'version': '2026.9.11', 'generatedAt': '2026-09-11T08:49:00Z',
+        'sources': sources, 'categories': {k: sorted(v) for k, v in categories.items()},
+        'pathRules': PATH_RULES, 'trackers': privacy['domains']}
+    raw = (json.dumps(payload, ensure_ascii=True, separators=(',', ':')) + '\n').encode()
+    (ROOT / 'assets/policy/consumer_protection.json').write_bytes(raw)
+    digest = hashlib.sha256(raw).hexdigest()
+    (ROOT / 'lib/policy/consumer_manifest_hash.dart').write_text(
+        '// Generated by tool/compile_consumer_protection.py. Build trust anchor.\n'
+        f"const consumerManifestSha256 =\n    '{digest}';\n")
+    print(json.dumps({'sha256': digest, 'bytes': len(raw), 'categories': {k:len(v) for k,v in categories.items()}, 'trackers': len(privacy['domains'])}, indent=2))
+
+if __name__ == '__main__':
+    main()

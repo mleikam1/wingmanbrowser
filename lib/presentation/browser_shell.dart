@@ -1,5 +1,8 @@
 import 'dart:async';
+import 'components/browser_find_dialog.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
+import '../browser/companion_navigation.dart';
 import 'package:flutter/material.dart';
 import '../config/product_edition.dart';
 import '../browser/browser_engine.dart';
@@ -90,9 +93,28 @@ class _BrowserShellState extends State<BrowserShell>
   bool _officialSearch = false;
   CompatibilityProfileRegistry? _compatibility;
   bool _covered = false;
+  ProtectedWebCapabilities _capabilities = const ProtectedWebCapabilities();
   late final Listenable _launchpadChanges;
   final Map<String, ProtectedWebStatus> _webStatuses = {};
   final Map<String, int> _webRevisions = {};
+  final Map<String, Uri> _webRequests = {};
+  final Map<String, BrowserEngine> _webControllers = {};
+  final List<String> _liveOrder = [];
+  // Four live renderers; other tabs restore their last address on selection.
+  static const _maximumLiveTabs = 4;
+
+  void _retainEngine(DiscoveryTab owner, Uri uri) {
+    if (!_webRequests.containsKey(owner.id)) _webRequests[owner.id] = uri;
+    _liveOrder.remove(owner.id);
+    _liveOrder.add(owner.id);
+    while (_liveOrder.length > _maximumLiveTabs) {
+      final evicted = _liveOrder.removeAt(0);
+      _webControllers.remove(evicted);
+      _webRequests.remove(evicted);
+    }
+  }
+
+  void _persistSession() => _session.scheduleSave();
   final Map<String, ScrollController> _scrolls = {};
   ScrollController _scrollFor(String page) {
     final owner = _tab, key = '${_tab.id}:$page';
@@ -568,6 +590,7 @@ class _BrowserShellState extends State<BrowserShell>
   }
 
   void _recordTaskNavigation() {
+    _persistSession();
     final task = _tab.taskId, service = _features;
     if (task != null && service?.initialized == true) {
       unawaited(
@@ -623,17 +646,43 @@ class _BrowserShellState extends State<BrowserShell>
     super.dispose();
   }
 
+  Future<void> _refreshNativeCapabilities() async {
+    if (kIsWeb) return;
+    final capabilities = await ProtectedWebBridge.capabilities();
+    if (!mounted) return;
+    setState(() => _capabilities = capabilities);
+    widget.policy.configureLiveBrowsing(
+      widget.policy.policy.livePolicy ?? const LiveBrowsingPolicy.unavailable(),
+      nativeAvailable: capabilities.supported,
+      privateAvailable: capabilities.privateAvailable,
+      strictSearchAvailable: capabilities.strictSearchAvailable,
+    );
+  }
+
   Future<void> _bindIncoming() async {
+    Uri? pending;
+    var initialized = false;
     try {
       await _native.initialize(
         onIncomingUri: (uri) {
+          if (!initialized) {
+            pending = uri;
+            return;
+          }
           if (mounted && !(widget.handoff?.blocksOwner ?? false)) {
             _navigateWebsite(uri);
           }
         },
       );
+      await _refreshNativeCapabilities();
+      initialized = true;
+      if (pending != null &&
+          mounted &&
+          !(widget.handoff?.blocksOwner ?? false)) {
+        _navigateWebsite(pending!);
+      }
     } catch (_) {
-      // An incoming-link failure cannot grant content or discard local data.
+      // A capability/link failure cannot grant browsing authority.
     }
   }
 
@@ -645,6 +694,10 @@ class _BrowserShellState extends State<BrowserShell>
     final validTabs = _tabs.map((t) => t.id).toSet();
     _webStatuses.removeWhere((id, _) => !validTabs.contains(id));
     _webRevisions.removeWhere((id, _) => !validTabs.contains(id));
+    _webRequests.removeWhere((id, _) => !validTabs.contains(id));
+    _webControllers.removeWhere((id, _) => !validTabs.contains(id));
+    _liveOrder.removeWhere((id) => !validTabs.contains(id));
+    _persistSession();
     for (final key
         in _scrolls.keys
             .where((k) => !validTabs.contains(k.split(':').first))
@@ -655,6 +708,10 @@ class _BrowserShellState extends State<BrowserShell>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_refreshNativeCapabilities());
+    }
+    if (state != AppLifecycleState.resumed) unawaited(_session.flush());
     if (mounted) setState(() => _covered = state != AppLifecycleState.resumed);
   }
 
@@ -729,6 +786,13 @@ class _BrowserShellState extends State<BrowserShell>
       _deny();
       return;
     }
+    if (kIsWeb &&
+        productEdition == ProductEdition.consumer &&
+        const StrictSearchPolicy().acceptsCanonical(uri) &&
+        widget.policy.searchAvailable(additional: _additional)) {
+      navigateCompanion(uri);
+      return;
+    }
     final decision = _websiteDecision(uri);
     if (!decision.isAllowed) {
       _deny(decision);
@@ -750,6 +814,8 @@ class _BrowserShellState extends State<BrowserShell>
         _activeTab = _tabs.length - 1;
       }
       _tab.visitWebsite(uri);
+      _webRequests[_tab.id] = uri;
+      _retainEngine(_tab, uri);
       _webStatuses.remove(_tab.id);
       _webRevisions[_tab.id] = (_webRevisions[_tab.id] ?? 0) + 1;
       _destination = 0;
@@ -761,58 +827,155 @@ class _BrowserShellState extends State<BrowserShell>
     _recordTaskNavigation();
   }
 
-  Widget _websiteView(Uri uri) {
-    final owner = _tab;
-    if (!_websiteDecision(uri).isAllowed) {
-      return const Center(
-        child: Padding(
-          padding: EdgeInsets.all(24),
-          child: Text(
-            'This page is outside the current supported scope. Use Home or enter another address.',
-          ),
-        ),
-      );
-    }
-    final search = const StrictSearchPolicy().acceptsCanonical(uri);
-    final surface = ProtectedWebSurface(
+  Widget _websiteView(DiscoveryTab owner, Uri request, {required bool active}) {
+    return ProtectedWebSurface(
       key: ValueKey('live-${owner.id}'),
       tabId: owner.id,
-      url: uri,
+      url: request,
       isPrivate: owner.isPrivate,
+      active: active,
       revision: _webRevisions[owner.id] ?? 0,
+      restrictions: widget.policy.nativeConsumerConfiguration(_additional),
       policyChanges: _launchpadChanges,
       canOpen: (target) =>
-          _validOrigin(owner) &&
+          mounted &&
+          _tabs.contains(owner) &&
+          !(widget.handoff?.blocksOwner ?? false) &&
           _websiteDecision(target, isPrivate: owner.isPrivate).isAllowed,
+      onController: (controller) => _webControllers[owner.id] = controller,
       onNavigation: (target) {
         if (!_validOrigin(owner)) return;
-        // A result wrapper is decoded locally, never requested. Its target
-        // still passes the ordinary destination policy before any network I/O.
-        final destination = search
-            ? const StrictSearchPolicy().unwrapResultLink(target) ?? target
-            : target;
+        final destination =
+            const StrictSearchPolicy().unwrapResultLink(target) ?? target;
         _navigateWebsite(destination);
       },
+      onNewWindow: (target) {
+        if (_validOrigin(owner)) _navigateWebsite(target, newTab: true);
+      },
+      onBlocked: (message) {
+        if (_validOrigin(owner)) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(message)));
+        }
+      },
       onStatus: (status) {
-        if (!_validOrigin(owner)) return;
-        setState(() => _webStatuses[owner.id] = status);
+        if (!mounted ||
+            !_tabs.contains(owner) ||
+            (widget.handoff?.blocksOwner ?? false)) {
+          return;
+        }
+        setState(() {
+          _webStatuses[owner.id] = status;
+          if (status.url != null &&
+              status.error == null &&
+              owner.website != null) {
+            // The engine owns web history. Replace metadata without issuing a
+            // second load or adding fake entries for every progress callback.
+            owner.trail[owner.position] = 'web:${status.url}';
+          }
+        });
+        if (status.committed) _persistSession();
       },
     );
-    if (!search) return surface;
+  }
+
+  Widget _contentBody(ApprovedResource? resource, Uri? website) {
+    final showingWeb = _destination == 0 && website != null && _query.isEmpty;
+    if (showingWeb && _websiteDecision(website).isAllowed) {
+      _retainEngine(_tab, website);
+    }
+    final search =
+        showingWeb && const StrictSearchPolicy().acceptsCanonical(website);
     return Column(
       children: [
-        const Padding(
-          padding: EdgeInsets.fromLTRB(16, 10, 16, 10),
-          child: Text(
-            'DuckDuckGo search · Adult filtering: Strict\n'
-            'Previews are not fully classified against Wingman’s other rules. '
-            'This preview opens reviewed pages only.',
-            key: ValueKey('strict-search-scope'),
+        if (search)
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 10, 16, 10),
+            child: Text(
+              'DuckDuckGo search · Adult filtering: Strict\n'
+              'Previews and ads are not fully classified against Wingman’s other rules.',
+              key: ValueKey('strict-search-scope'),
+            ),
+          ),
+        Expanded(
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              for (final owner in _tabs.where(
+                (t) =>
+                    _webRequests.containsKey(t.id) &&
+                    _websiteDecision(
+                      _webStatuses[t.id]?.url ?? _webRequests[t.id]!,
+                      isPrivate: t.isPrivate,
+                    ).isAllowed,
+              ))
+                Offstage(
+                  key: ValueKey('engine-${owner.id}'),
+                  offstage: _covered || !showingWeb || owner != _tab,
+                  child: _websiteView(
+                    owner,
+                    _webRequests[owner.id]!,
+                    active: !_covered && showingWeb && owner == _tab,
+                  ),
+                ),
+              if (!showingWeb)
+                _destination == 0 && resource != null
+                    ? _article(resource)
+                    : _destination != 0 ||
+                          _query.isNotEmpty ||
+                          _collection != null
+                    ? _results()
+                    : _homeView(),
+              if (showingWeb && !_websiteDecision(website).isAllowed)
+                const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(24),
+                    child: Text(
+                      'This destination is blocked or protection needs recovery. Use Home or enter another address.',
+                    ),
+                  ),
+                ),
+              if (_covered)
+                const ColoredBox(
+                  color: Color(0xff07182e),
+                  child: Center(
+                    child: Icon(
+                      Icons.shield_outlined,
+                      color: Colors.white,
+                      size: 56,
+                    ),
+                  ),
+                ),
+            ],
           ),
         ),
-        Expanded(child: surface),
       ],
     );
+  }
+
+  void _historyStep(bool forward) {
+    final engine = _webControllers[_tab.id];
+    final status = _webStatuses[_tab.id];
+    if (_tab.website != null &&
+        engine != null &&
+        (forward ? status?.canGoForward == true : status?.canGoBack == true)) {
+      unawaited(forward ? engine.forward() : engine.back());
+      return;
+    }
+    final next = _tab.position + (forward ? 1 : -1);
+    if (next < 0 || next >= _tab.trail.length) return;
+    setState(() {
+      _tab.position = next;
+      _destination = 0;
+      _query = '';
+      final website = _tab.website;
+      if (website != null && _webStatuses[_tab.id]?.url != website) {
+        _webRequests[_tab.id] = website;
+        _webRevisions[_tab.id] = (_webRevisions[_tab.id] ?? 0) + 1;
+      }
+    });
+    _recordTaskNavigation();
   }
 
   void _deny([PolicyDecision? rejected]) {
@@ -823,7 +986,7 @@ class _BrowserShellState extends State<BrowserShell>
       _collection = null;
       _queryController.clear();
       _notice =
-          'This destination is outside the supported scope. Choose a reviewed website or explore the installed library. Downloads and external apps remain unavailable.';
+          'This destination is blocked by the current protection policy or requires a supported capability.';
     });
     final decision =
         rejected ??
@@ -876,10 +1039,33 @@ class _BrowserShellState extends State<BrowserShell>
     }
     // An address is checked before search; provider options are rebuilt before
     // URI normalization can erase an ambiguous literal path.
-    if (RegExp(
-      r'^(?:[a-z][a-z0-9+.-]*:|[^\s/]+\.[a-z]{2,}(?:[/?\x23:]|$))',
+    final scheme = RegExp(
+      r'^([a-z][a-z0-9+.-]*):',
       caseSensitive: false,
-    ).hasMatch(value)) {
+    ).firstMatch(value)?.group(1)?.toLowerCase();
+    final addressScheme =
+        const {
+          'http',
+          'https',
+          'file',
+          'data',
+          'javascript',
+          'about',
+          'intent',
+          'blob',
+          'mailto',
+          'tel',
+          'ftp',
+          'wingman',
+        }.contains(scheme) ||
+        value.contains('://');
+    final bareAddress =
+        !value.contains(RegExp(r'\s')) &&
+        RegExp(
+          r'^[^\s/]+\.[a-z]{2,}(?:[/?\x23:]|$)',
+          caseSensitive: false,
+        ).hasMatch(value);
+    if (addressScheme || bareAddress) {
       try {
         final explicit = RegExp(
           r'^[a-z][a-z0-9+.-]*:',
@@ -889,7 +1075,7 @@ class _BrowserShellState extends State<BrowserShell>
           explicit ? value : 'https://$value',
         );
         _navigateWebsite(
-          provider ?? Uri.parse(normalizeLaunchpadWebsite(value)),
+          provider ?? Uri.parse(explicit ? value : 'https://$value'),
         );
       } catch (_) {
         _deny();
@@ -938,7 +1124,7 @@ class _BrowserShellState extends State<BrowserShell>
           initialQuery: _tab.website == null
               ? _query
               : const StrictSearchPolicy().acceptsCanonical(_tab.website!)
-              ? _tab.website!.queryParameters['q']!
+              ? _tab.website!.queryParameters['q'] ?? ''
               : _tab.website.toString(),
         ),
       ),
@@ -966,29 +1152,23 @@ class _BrowserShellState extends State<BrowserShell>
         MediaQuery.sizeOf(context).width >= WingmanTokens.compact &&
         MediaQuery.sizeOf(context).height >= 640 &&
         MediaQuery.textScalerOf(context).scale(16) < 28;
-    final body = _covered
-        ? const Center(child: Icon(Icons.shield_outlined, size: 56))
-        : Column(
-            children: [
-              if (_ephemeral)
-                _banner(
-                  _tab.isPrivate
-                      ? 'Private session · Same protection, no saved activity'
-                      : 'Student experience · No account required',
-                ),
-              Expanded(
-                child: _destination == 0 && website != null && _query.isEmpty
-                    ? _websiteView(website)
-                    : _destination == 0 && resource != null
-                    ? _article(resource)
-                    : _destination != 0 ||
-                          _query.isNotEmpty ||
-                          _collection != null
-                    ? _results()
-                    : _homeView(),
-              ),
-            ],
-          );
+    final body = Column(
+      children: [
+        if (!kIsWeb &&
+            productEdition == ProductEdition.consumer &&
+            !widget.policy.consumerProtection.isUsable)
+          _banner(
+            'Protection needs recovery. Browsing is closed until a verified baseline is restored. Reopen Wingman or install a verified update.',
+          ),
+        if (_ephemeral)
+          _banner(
+            _tab.isPrivate
+                ? 'Private session · Same protection, no saved activity'
+                : 'Student experience · No account required',
+          ),
+        Expanded(child: _contentBody(resource, website)),
+      ],
+    );
     return Scaffold(
       body: SafeArea(
         bottom: false,
@@ -1056,28 +1236,31 @@ class _BrowserShellState extends State<BrowserShell>
                   ? null
                   : 'Reviewed offline article',
               isLive: website != null,
-              onReload: websiteAllowed ? () => _navigateWebsite(website) : null,
-              onAddress: _focusedSearch,
-              onPageInfo: () => _pageInfo(resource),
-              onBack: _tab.position > 0
+              isLoading: _webStatuses[_tab.id]?.loading == true,
+              onReload: websiteAllowed
                   ? () {
-                      setState(() {
-                        _tab.position--;
-                        _destination = 0;
-                        _query = '';
-                      });
-                      _recordTaskNavigation();
+                      final engine = _webControllers[_tab.id];
+                      if (engine == null) {
+                        _navigateWebsite(website);
+                        return;
+                      }
+                      unawaited(
+                        _webStatuses[_tab.id]?.loading == true
+                            ? engine.stop()
+                            : engine.reload(),
+                      );
                     }
                   : null,
-              onForward: _tab.position + 1 < _tab.trail.length
-                  ? () {
-                      setState(() {
-                        _tab.position++;
-                        _destination = 0;
-                        _query = '';
-                      });
-                      _recordTaskNavigation();
-                    }
+              onAddress: _focusedSearch,
+              onPageInfo: () => _pageInfo(resource),
+              onBack:
+                  _tab.position > 0 || _webStatuses[_tab.id]?.canGoBack == true
+                  ? () => _historyStep(false)
+                  : null,
+              onForward:
+                  _tab.position + 1 < _tab.trail.length ||
+                      _webStatuses[_tab.id]?.canGoForward == true
+                  ? () => _historyStep(true)
                   : null,
             ),
     );
@@ -1561,7 +1744,7 @@ class _BrowserShellState extends State<BrowserShell>
                 ),
                 const SizedBox(height: 12),
                 const Text(
-                  'Tabs start fresh on restart. Search terms stay in this session; saved Finish Mode tasks can restore reviewed library resources only.',
+                  'Normal tabs restore their last permitted address after restart. Private tabs and search-query pages do not restore. Page forms and navigation stacks may be lost when an inactive tab is released.',
                 ),
                 const SizedBox(height: 16),
                 Wrap(
@@ -2413,6 +2596,7 @@ class _BrowserShellState extends State<BrowserShell>
           _session.clearPrivateServicesIfUnused();
           _pruneScrolls();
         });
+        await _session.flush();
         completed.add(PrivacyDataCategory.session);
       } catch (_) {
         failed.add(PrivacyDataCategory.session);
@@ -2490,8 +2674,8 @@ class _BrowserShellState extends State<BrowserShell>
           const SizedBox(height: 16),
           Text(
             const StrictSearchPolicy().acceptsCanonical(uri)
-                ? 'Wingman requires DuckDuckGo’s Strict adult filter and blocks provider shortcuts that bypass it. Search previews are not fully classified against Wingman’s other content rules. Links still require a reviewed destination; pagination, images and provider forms are unavailable.'
-                : 'Reviewed live website scope. HTML, styles and listed images load directly from the website. Scripts, accounts, forms, embedded frames and downloads are disabled in this pilot.',
+                ? 'Wingman requires DuckDuckGo’s Strict adult filter and blocks provider shortcuts that bypass it. Search previews are not fully classified against Wingman’s other content rules. Destination links are checked against the separate category and security policy. Refinement, pagination and forms use the native browser.'
+                : 'Permitted by the current filtering policy; not verified safe. Pages connect directly to their websites. Normal sessions support JavaScript, forms, cookies and website storage. Filters can miss content or block legitimate pages.',
           ),
           const SizedBox(height: 12),
           Text(
@@ -2500,7 +2684,9 @@ class _BrowserShellState extends State<BrowserShell>
                 : 'Page requests reveal connection information to the requested website. Wingman does not upload your address, page contents or browsing history. Website content can change; this is not a guarantee about every image or word.',
           ),
           if (widget.policy.policy.livePolicy?.siteForUri(uri) case final site?)
-            Text('Scope review expires ${_date(site.expiresAt)}'),
+            Text(
+              'Home suggestion review expires ${_date(site.expiresAt)}; browsing uses separate protection data',
+            ),
           const SizedBox(height: 12),
         ] else ...[
           Text(
@@ -2524,12 +2710,62 @@ class _BrowserShellState extends State<BrowserShell>
     });
   }
 
+  Future<void> _findInPage(DiscoveryTab origin) async {
+    if (!_validOrigin(origin)) return;
+    await showDialog<void>(
+      context: context,
+      routeSettings: const RouteSettings(name: 'wingman-browser-find'),
+      builder: (_) => BrowserFindDialog(
+        onQuery: (query) {
+          if (_validOrigin(origin)) _webControllers[origin.id]?.find(query);
+        },
+        onNext: (forward) {
+          if (_validOrigin(origin)) {
+            _webControllers[origin.id]?.findNext(forward: forward);
+          }
+        },
+      ),
+    );
+  }
+
+  Future<void> _sharePage(DiscoveryTab origin, Uri uri) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (sheet) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.copy),
+              title: const Text('Copy address'),
+              onTap: () {
+                Navigator.pop(sheet);
+                if (_validOrigin(origin) && _websiteDecision(uri).isAllowed) {
+                  Clipboard.setData(ClipboardData(text: uri.toString()));
+                }
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.share_outlined),
+              title: const Text('Share address'),
+              onTap: () {
+                Navigator.pop(sheet);
+                if (_validOrigin(origin) && _websiteDecision(uri).isAllowed) {
+                  _webControllers[origin.id]?.share();
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _menu() {
     final origin = _tab;
     final resource = _current();
     final live = origin.website;
-    // The menu covers and destroys the native view. Keep its verified snapshot
-    // for this explicit action; opening another page invalidates the revision.
+    // Menus preserve the renderer; snapshot eligibility is rechecked on action.
     final committed = _webStatuses[origin.id];
     final liveRevision = _webRevisions[origin.id] ?? 0;
     final groups = <String, List<MenuAction>>{
@@ -2558,9 +2794,9 @@ class _BrowserShellState extends State<BrowserShell>
               ? 'Unavailable for private or temporary pages'
               : live != null &&
                     const StrictSearchPolicy().acceptsCanonical(live)
-              ? 'Search terms are not saved; pin a reviewed result page'
+              ? 'Search terms are not saved; pin a destination page'
               : live != null
-              ? 'Pin this committed reviewed page to Home'
+              ? 'Pin this permitted page to Home'
               : resource == null
               ? 'Open an eligible article first'
               : 'Pin this installed article to Home',
@@ -2597,25 +2833,24 @@ class _BrowserShellState extends State<BrowserShell>
             ),
           ),
         ],
-        const MenuAction(
+        MenuAction(
           'Find in page',
           Icons.find_in_page_outlined,
-          null,
-          subtitle: 'Text finding is unavailable in the current reader',
+          live == null ? null : () => _findInPage(origin),
         ),
         const MenuAction(
           'Desktop site',
           Icons.desktop_windows_outlined,
           null,
           subtitle:
-              'Changing website rendering modes is unavailable in this pilot',
+              'Changing website rendering modes is unavailable in this build',
         ),
-        const MenuAction(
+        MenuAction(
           'Copy or share page address',
           Icons.share_outlined,
-          null,
-          subtitle:
-              'Page-address export is unavailable here. Findings and receipts offer reviewed exports in their tools.',
+          live != null && _websiteDecision(live).isAllowed
+              ? () => _sharePage(origin, live)
+              : null,
         ),
       ],
       'Wingman tools': [
@@ -2671,6 +2906,18 @@ class _BrowserShellState extends State<BrowserShell>
         MenuAction('Trust Receipt', Icons.receipt_long_outlined, _receipt),
         MenuAction('Something isn’t working', Icons.build_outlined, _repair),
         MenuAction('Help Now', Icons.favorite_border, _helpNow),
+        MenuAction(
+          'Default browser',
+          Icons.open_in_browser,
+          _capabilities.defaultBrowser
+              ? () => _run(() async {
+                  await _native.requestDefaultBrowser();
+                })
+              : null,
+          subtitle: _capabilities.defaultBrowser
+              ? 'Choose Wingman in system settings'
+              : 'Unavailable in this build or platform',
+        ),
         MenuAction('Settings', Icons.tune, _settings),
       ],
     };

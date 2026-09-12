@@ -16,91 +16,91 @@
       "operation": "buildQuery",
       "name": "ordinary terms",
       "input": "moon phases",
-      "expected": "https://safe.duckduckgo.com/lite/?q=moon%20phases&kp=1"
+      "expected": "https://safe.duckduckgo.com/?q=moon%20phases&kp=1&kac=-1"
     },
     {
       "operation": "buildQuery",
       "name": "trim ASCII spaces",
       "input": "  moon phases  ",
-      "expected": "https://safe.duckduckgo.com/lite/?q=moon%20phases&kp=1"
+      "expected": "https://safe.duckduckgo.com/?q=moon%20phases&kp=1&kac=-1"
     },
     {
       "operation": "buildQuery",
       "name": "UTF8 accented query",
       "input": "café",
-      "expected": "https://safe.duckduckgo.com/lite/?q=caf%C3%A9&kp=1"
+      "expected": "https://safe.duckduckgo.com/?q=caf%C3%A9&kp=1&kac=-1"
     },
     {
       "operation": "buildQuery",
       "name": "literal plus",
       "input": "C++",
-      "expected": "https://safe.duckduckgo.com/lite/?q=C%2B%2B&kp=1"
+      "expected": "https://safe.duckduckgo.com/?q=C%2B%2B&kp=1&kac=-1"
     },
     {
       "operation": "buildQuery",
       "name": "ordinary percent",
       "input": "50% discount",
-      "expected": "https://safe.duckduckgo.com/lite/?q=50%25%20discount&kp=1"
+      "expected": "https://safe.duckduckgo.com/?q=50%25%20discount&kp=1&kac=-1"
     },
     {
       "operation": "buildQuery",
       "name": "quotes punctuation",
       "input": "\"moon\" (facts)",
-      "expected": "https://safe.duckduckgo.com/lite/?q=%22moon%22%20%28facts%29&kp=1"
+      "expected": "https://safe.duckduckgo.com/?q=%22moon%22%20%28facts%29&kp=1&kac=-1"
     },
     {
       "operation": "buildQuery",
       "name": "site syntax is not permission",
       "input": "moon site:nasa.gov",
-      "expected": "https://safe.duckduckgo.com/lite/?q=moon%20site%3Anasa.gov&kp=1"
+      "expected": "https://safe.duckduckgo.com/?q=moon%20site%3Anasa.gov&kp=1&kac=-1"
     },
     {
       "operation": "buildQuery",
       "name": "health education is not a banned keyword",
       "input": "breast cancer education",
-      "expected": "https://safe.duckduckgo.com/lite/?q=breast%20cancer%20education&kp=1"
+      "expected": "https://safe.duckduckgo.com/?q=breast%20cancer%20education&kp=1&kac=-1"
     },
     {
       "operation": "buildQuery",
       "name": "non-Latin query",
       "input": "月の満ち欠け",
-      "expected": "https://safe.duckduckgo.com/lite/?q=%E6%9C%88%E3%81%AE%E6%BA%80%E3%81%A1%E6%AC%A0%E3%81%91&kp=1"
+      "expected": "https://safe.duckduckgo.com/?q=%E6%9C%88%E3%81%AE%E6%BA%80%E3%81%A1%E6%AC%A0%E3%81%91&kp=1&kac=-1"
     },
     {
       "operation": "buildQuery",
       "name": "astral scalar",
       "input": "moon 🌙",
-      "expected": "https://safe.duckduckgo.com/lite/?q=moon%20%F0%9F%8C%99&kp=1"
+      "expected": "https://safe.duckduckgo.com/?q=moon%20%F0%9F%8C%99&kp=1&kac=-1"
     },
     {
       "operation": "buildQuery",
       "name": "portable Unicode trim",
       "input": "     　﻿moon﻿　",
-      "expected": "https://safe.duckduckgo.com/lite/?q=moon&kp=1"
+      "expected": "https://safe.duckduckgo.com/?q=moon&kp=1&kac=-1"
     },
     {
       "operation": "buildQuery",
       "name": "preserve harmless literal encoded text",
       "input": "%20moon%20",
-      "expected": "https://safe.duckduckgo.com/lite/?q=%2520moon%2520&kp=1"
+      "expected": "https://safe.duckduckgo.com/?q=%2520moon%2520&kp=1&kac=-1"
     },
     {
       "operation": "buildQuery",
       "name": "maximum ASCII characters",
       "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-      "expected": "https://safe.duckduckgo.com/lite/?q=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&kp=1"
+      "expected": "https://safe.duckduckgo.com/?q=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&kp=1&kac=-1"
     },
     {
       "operation": "buildQuery",
       "name": "maximum two-byte UTF8",
       "input": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé",
-      "expected": "https://safe.duckduckgo.com/lite/?q=%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9&kp=1"
+      "expected": "https://safe.duckduckgo.com/?q=%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9&kp=1&kac=-1"
     },
     {
       "operation": "buildQuery",
       "name": "maximum astral bytes",
       "input": "🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙🌙",
-      "expected": "https://safe.duckduckgo.com/lite/?q=%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99&kp=1"
+      "expected": "https://safe.duckduckgo.com/?q=%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99%F0%9F%8C%99&kp=1&kac=-1"
     },
     {
       "operation": "buildQuery",
@@ -280,85 +280,85 @@
       "operation": "rewriteProviderInput",
       "name": "root strict rebuild",
       "input": "https://duckduckgo.com/?q=moon&kp=-2",
-      "expected": "https://safe.duckduckgo.com/lite/?q=moon&kp=1"
+      "expected": "https://safe.duckduckgo.com/?q=moon&kp=1&kac=-1"
     },
     {
       "operation": "rewriteProviderInput",
       "name": "www root HTTP upgrade",
       "input": "http://www.duckduckgo.com/?q=moon",
-      "expected": "https://safe.duckduckgo.com/lite/?q=moon&kp=1"
+      "expected": "https://safe.duckduckgo.com/?q=moon&kp=1&kac=-1"
     },
     {
       "operation": "rewriteProviderInput",
       "name": "safe root",
       "input": "https://safe.duckduckgo.com/?q=moon",
-      "expected": "https://safe.duckduckgo.com/lite/?q=moon&kp=1"
+      "expected": "https://safe.duckduckgo.com/?q=moon&kp=1&kac=-1"
     },
     {
       "operation": "rewriteProviderInput",
       "name": "safe lite",
       "input": "https://safe.duckduckgo.com/lite/?q=moon&kp=1",
-      "expected": "https://safe.duckduckgo.com/lite/?q=moon&kp=1"
+      "expected": "https://safe.duckduckgo.com/lite/?q=moon&kp=1&kac=-1"
     },
     {
       "operation": "rewriteProviderInput",
       "name": "safe html",
       "input": "https://safe.duckduckgo.com/html/?q=moon",
-      "expected": "https://safe.duckduckgo.com/lite/?q=moon&kp=1"
+      "expected": "https://safe.duckduckgo.com/html/?q=moon&kp=1&kac=-1"
     },
     {
       "operation": "rewriteProviderInput",
       "name": "html exact path",
       "input": "https://html.duckduckgo.com/html?q=moon",
-      "expected": "https://safe.duckduckgo.com/lite/?q=moon&kp=1"
+      "expected": "https://safe.duckduckgo.com/html?q=moon&kp=1&kac=-1"
     },
     {
       "operation": "rewriteProviderInput",
       "name": "lite exact path",
       "input": "https://lite.duckduckgo.com/lite/?q=moon",
-      "expected": "https://safe.duckduckgo.com/lite/?q=moon&kp=1"
+      "expected": "https://safe.duckduckgo.com/lite/?q=moon&kp=1&kac=-1"
     },
     {
       "operation": "rewriteProviderInput",
       "name": "uppercase authority",
       "input": "https://SAFE.DUCKDUCKGO.COM/lite/?q=moon",
-      "expected": "https://safe.duckduckgo.com/lite/?q=moon&kp=1"
+      "expected": "https://safe.duckduckgo.com/lite/?q=moon&kp=1&kac=-1"
     },
     {
       "operation": "rewriteProviderInput",
       "name": "explicit standard port",
       "input": "https://safe.duckduckgo.com:443/?q=moon",
-      "expected": "https://safe.duckduckgo.com/lite/?q=moon&kp=1"
+      "expected": "https://safe.duckduckgo.com/?q=moon&kp=1&kac=-1"
     },
     {
       "operation": "rewriteProviderInput",
       "name": "encoded keys",
       "input": "https://duckduckgo.com/?%71=moon&%6bp=-2",
-      "expected": "https://safe.duckduckgo.com/lite/?q=moon&kp=1"
+      "expected": "https://safe.duckduckgo.com/?q=moon&kp=1&kac=-1"
     },
     {
       "operation": "rewriteProviderInput",
-      "name": "drop settings and fragment",
+      "name": "preserve settings but discard fragment and force strict",
       "input": "https://duckduckgo.com/?q=moon&k1=-1&ko=-2&key=abc&ia=images#kp=-2",
-      "expected": "https://safe.duckduckgo.com/lite/?q=moon&kp=1"
+      "expected": "https://safe.duckduckgo.com/?q=moon&k1=-1&ko=-2&key=abc&ia=images&kp=1&kac=-1"
     },
     {
       "operation": "rewriteProviderInput",
-      "name": "drop harmless unrelated field",
+      "name": "preserve harmless unrelated field",
       "input": "https://duckduckgo.com/?q=moon&kl=us-en",
-      "expected": "https://safe.duckduckgo.com/lite/?q=moon&kp=1"
+      "expected": "https://safe.duckduckgo.com/?q=moon&kl=us-en&kp=1&kac=-1"
     },
     {
       "operation": "rewriteProviderInput",
       "name": "literal parameter-looking query",
       "input": "https://duckduckgo.com/?q=moon%26kp%3D-2",
-      "expected": "https://safe.duckduckgo.com/lite/?q=moon%26kp%3D-2&kp=1"
+      "expected": "https://safe.duckduckgo.com/?q=moon%26kp%3D-2&kp=1&kac=-1"
     },
     {
       "operation": "rewriteProviderInput",
       "name": "plus is form space",
       "input": "https://duckduckgo.com/?q=moon+phases",
-      "expected": "https://safe.duckduckgo.com/lite/?q=moon%20phases&kp=1"
+      "expected": "https://safe.duckduckgo.com/?q=moon%20phases&kp=1&kac=-1"
     },
     {
       "operation": "rewriteProviderInput",
@@ -370,7 +370,7 @@
       "operation": "rewriteProviderInput",
       "name": "other search provider",
       "input": "https://www.google.com/search?q=moon",
-      "expected": null
+      "expected": "https://safe.duckduckgo.com/?q=moon&kp=1&kac=-1"
     },
     {
       "operation": "rewriteProviderInput",
@@ -400,7 +400,7 @@
       "operation": "rewriteProviderInput",
       "name": "missing query",
       "input": "https://duckduckgo.com/",
-      "throwsFormatException": true
+      "expected": "https://safe.duckduckgo.com/?kp=1&kac=-1"
     },
     {
       "operation": "rewriteProviderInput",
@@ -496,7 +496,7 @@
       "operation": "rewriteProviderInput",
       "name": "trailing dot host",
       "input": "https://safe.duckduckgo.com./?q=moon",
-      "throwsFormatException": true
+      "expected": "https://safe.duckduckgo.com/?q=moon&kp=1&kac=-1"
     },
     {
       "operation": "rewriteProviderInput",
@@ -530,51 +530,51 @@
     },
     {
       "operation": "rewriteProviderInput",
-      "name": "unsupported provider subdomain",
+      "name": "noai provider rewritten to strict",
       "input": "https://noai.duckduckgo.com/?q=moon",
-      "throwsFormatException": true
+      "expected": "https://safe.duckduckgo.com/?q=moon&kp=1&kac=-1"
     },
     {
       "operation": "rewriteProviderInput",
-      "name": "short domain unsupported",
+      "name": "short domain rewritten to strict",
       "input": "https://duck.com/?q=moon",
-      "throwsFormatException": true
+      "expected": "https://safe.duckduckgo.com/?q=moon&kp=1&kac=-1"
     },
     {
       "operation": "rewriteProviderInput",
       "name": "settings route",
       "input": "https://duckduckgo.com/settings?q=moon",
-      "throwsFormatException": true
+      "expected": null
     },
     {
       "operation": "rewriteProviderInput",
       "name": "redirect route",
       "input": "https://duckduckgo.com/l/?q=moon",
-      "throwsFormatException": true
+      "expected": null
     },
     {
       "operation": "rewriteProviderInput",
       "name": "challenge route",
       "input": "https://duckduckgo.com/anomaly.js?q=moon",
-      "throwsFormatException": true
+      "expected": null
     },
     {
       "operation": "rewriteProviderInput",
       "name": "vertical route",
       "input": "https://duckduckgo.com/i.js?q=moon",
-      "throwsFormatException": true
+      "expected": null
     },
     {
       "operation": "rewriteProviderInput",
       "name": "wrong html host route",
       "input": "https://html.duckduckgo.com/?q=moon",
-      "throwsFormatException": true
+      "expected": "https://safe.duckduckgo.com/?q=moon&kp=1&kac=-1"
     },
     {
       "operation": "rewriteProviderInput",
       "name": "wrong lite host route",
       "input": "https://lite.duckduckgo.com/html/?q=moon",
-      "throwsFormatException": true
+      "expected": "https://safe.duckduckgo.com/html/?q=moon&kp=1&kac=-1"
     },
     {
       "operation": "rewriteProviderInput",
@@ -603,19 +603,19 @@
     {
       "operation": "acceptsCanonical",
       "name": "canonical query",
-      "input": "https://safe.duckduckgo.com/lite/?q=moon&kp=1",
+      "input": "https://safe.duckduckgo.com/lite/?q=moon&kp=1&kac=-1",
       "expected": true
     },
     {
       "operation": "acceptsCanonical",
       "name": "canonical punctuation",
-      "input": "https://safe.duckduckgo.com/lite/?q=C%2B%2B%20%22facts%22&kp=1",
+      "input": "https://safe.duckduckgo.com/lite/?q=C%2B%2B%20%22facts%22&kp=1&kac=-1",
       "expected": true
     },
     {
       "operation": "acceptsCanonical",
       "name": "canonical Unicode",
-      "input": "https://safe.duckduckgo.com/lite/?q=caf%C3%A9%20%F0%9F%8C%99&kp=1",
+      "input": "https://safe.duckduckgo.com/lite/?q=caf%C3%A9%20%F0%9F%8C%99&kp=1&kac=-1",
       "expected": true
     },
     {
@@ -633,14 +633,14 @@
     {
       "operation": "acceptsCanonical",
       "name": "wrong order",
-      "input": "https://safe.duckduckgo.com/lite/?kp=1&q=moon",
-      "expected": false
+      "input": "https://safe.duckduckgo.com/lite/?kp=1&q=moon&kac=-1",
+      "expected": true
     },
     {
       "operation": "acceptsCanonical",
       "name": "extra setting",
-      "input": "https://safe.duckduckgo.com/lite/?q=moon&kp=1&k1=-1",
-      "expected": false
+      "input": "https://safe.duckduckgo.com/lite/?q=moon&kp=1&k1=-1&kac=-1",
+      "expected": true
     },
     {
       "operation": "acceptsCanonical",
@@ -651,14 +651,14 @@
     {
       "operation": "acceptsCanonical",
       "name": "form plus encoding",
-      "input": "https://safe.duckduckgo.com/lite/?q=moon+phases&kp=1",
-      "expected": false
+      "input": "https://safe.duckduckgo.com/lite/?q=moon+phases&kp=1&kac=-1",
+      "expected": true
     },
     {
       "operation": "acceptsCanonical",
       "name": "query trim needed",
-      "input": "https://safe.duckduckgo.com/lite/?q=%20moon%20&kp=1",
-      "expected": false
+      "input": "https://safe.duckduckgo.com/lite/?q=%20moon%20&kp=1&kac=-1",
+      "expected": true
     },
     {
       "operation": "acceptsCanonical",
@@ -681,8 +681,8 @@
     {
       "operation": "acceptsCanonical",
       "name": "alternate route",
-      "input": "https://safe.duckduckgo.com/?q=moon&kp=1",
-      "expected": false
+      "input": "https://safe.duckduckgo.com/?q=moon&kp=1&kac=-1",
+      "expected": true
     },
     {
       "operation": "acceptsCanonical",
@@ -827,6 +827,42 @@
       "name": "encoded target control",
       "input": "https://duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.com%2F%2500",
       "expected": null
+    },
+    {
+      "operation": "buildQuery",
+      "name": "ordinary exclamation punctuation",
+      "input": "Hello! C++!",
+      "expected": "https://safe.duckduckgo.com/?q=Hello%21%20C%2B%2B%21&kp=1&kac=-1"
+    },
+    {
+      "operation": "rewriteProviderInput",
+      "name": "subsequent results preserve pagination",
+      "input": "https://duckduckgo.com/?q=moon&s=30&dc=31&vqd=abc&kp=-2",
+      "expected": "https://safe.duckduckgo.com/?q=moon&s=30&dc=31&vqd=abc&kp=1&kac=-1"
+    },
+    {
+      "operation": "acceptsCanonical",
+      "name": "pagination strict page",
+      "input": "https://safe.duckduckgo.com/?q=moon&s=30&dc=31&kp=1&kac=-1",
+      "expected": true
+    },
+    {
+      "operation": "rewriteProviderInput",
+      "name": "bing image results cannot bypass strict provider",
+      "input": "https://www.bing.com/images/search?q=moon&adlt=off",
+      "expected": "https://safe.duckduckgo.com/?q=moon&kp=1&kac=-1"
+    },
+    {
+      "operation": "rewriteProviderInput",
+      "name": "provider autocomplete cannot be reenabled",
+      "input": "https://duckduckgo.com/?q=moon&kp=-2&kac=1",
+      "expected": "https://safe.duckduckgo.com/?q=moon&kp=1&kac=-1"
+    },
+    {
+      "operation": "acceptsCanonical",
+      "name": "autocomplete setting required",
+      "input": "https://safe.duckduckgo.com/?q=moon&kp=1&kac=1",
+      "expected": false
     }
   ]
 }

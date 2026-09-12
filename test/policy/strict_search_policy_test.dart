@@ -52,8 +52,8 @@ void main() {
           reason: entry['name'] as String,
         );
         expect(policy.rewriteProviderInput(uri.toString()), uri);
-        expect(uri.queryParametersAll.keys, orderedEquals(['q', 'kp']));
         expect(uri.queryParametersAll['kp'], ['1']);
+        expect(uri.queryParametersAll['kac'], ['-1']);
         expect(uri.hasFragment, isFalse);
       }
     },

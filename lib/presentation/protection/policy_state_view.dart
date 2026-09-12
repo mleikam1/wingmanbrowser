@@ -24,7 +24,7 @@ class PolicyStateView extends StatelessWidget {
         WingmanStatus(
           title: switch (decision.code) {
             PolicyDecisionCode.blockPolicyUnavailable =>
-              'Reviewed policy unavailable',
+              'Protection needs recovery',
             PolicyDecisionCode.blockAdditionalRestriction =>
               'An additional boundary applies',
             PolicyDecisionCode.blockMandatoryCategory =>
@@ -37,7 +37,7 @@ class PolicyStateView extends StatelessWidget {
           },
           message: switch (decision.code) {
             PolicyDecisionCode.blockPolicyUnavailable =>
-              'Content stays closed until a valid reviewed policy is available. Settings and local support options remain accessible.',
+              'Browsing stays closed when no valid mandatory protection baseline is available. Reopen Wingman or install a verified app update. Settings and available local resources remain accessible.',
             PolicyDecisionCode.blockAdditionalRestriction =>
               'A saved additional boundary blocks this content or feature. Removing it cannot lower the required protections.',
             PolicyDecisionCode.blockMandatoryCategory =>
@@ -45,7 +45,7 @@ class PolicyStateView extends StatelessWidget {
             PolicyDecisionCode.blockSecurityThreat =>
               'The policy identified a security threat. The destination was not opened; there is no proceed-anyway action.',
             PolicyDecisionCode.blockUnsupportedCapability =>
-              'This page or operation is outside the supported scope for this session. Destination browsing requires a reviewed website; supported native apps also provide separate Strict adult-filtered search. A search result does not approve its destination. This action did not dispatch a website request.',
+              'This platform, edition or session does not support the requested operation. Consumer browsing requires a working native engine and mandatory protection baseline. Managed school browsing retains its separate approved-site policy.',
             _ =>
               'Identity, a familiar domain or a review request does not establish approval. Explore reviewed website scopes and offline articles for available material.',
           },

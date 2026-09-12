@@ -51,7 +51,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         const WingmanStatus(
           title: 'Protection is part of Wingman',
           message:
-              'Explore the reviewed offline library. Supported Android and iOS apps also open a limited set of reviewed websites and text-only DuckDuckGo searches with required Strict adult filtering. Search previews are not classified against all Wingman content rules. Downloads remain unavailable.',
+              'Explore the offline library and local tools. Native Wingman opens ordinary websites with mandatory category and security filters. DuckDuckGo Strict adult filtering is required; search previews and changing pages can contain misses. The web companion opens searches in your host browser and cannot control it after navigation.',
         ),
         const SizedBox(height: 20),
         const Text(

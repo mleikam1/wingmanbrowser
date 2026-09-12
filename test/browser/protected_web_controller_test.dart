@@ -272,7 +272,146 @@ void main() {
     },
   );
 
-  test('native capability requires the expected restricted mode', () async {
+  test(
+    'menu suspension preserves renderer request and resumes without reloading',
+    () async {
+      final controller = ProtectedWebController(
+        canOpen: (_) => true,
+        onNavigation: (_) {},
+      )..attach(90);
+      await controller.open(moon);
+      final request = (calls.last.arguments as Map)['requestId'];
+      await native('pageState', {
+        'viewId': 90,
+        'requestId': request,
+        'url': moon.toString(),
+        'title': 'Moon',
+        'progress': 100,
+        'isLoading': false,
+        'canGoBack': true,
+      });
+      await controller.suspend();
+      await controller.resume(moon);
+      expect(calls.where((c) => c.method == 'open'), hasLength(1));
+      expect(calls.where((c) => c.method == 'close'), isEmpty);
+      await native('pageState', {
+        'viewId': 90,
+        'requestId': request,
+        'url': moon.toString(),
+        'title': 'Still here',
+        'progress': 100,
+        'canGoForward': true,
+      });
+      expect(controller.status.title, 'Still here');
+      expect(controller.status.canGoForward, isTrue);
+      await controller.forward();
+      await controller.find('Moon');
+      expect(calls.any((c) => c.method == 'forward'), isTrue);
+      expect(calls.any((c) => c.method == 'find'), isTrue);
+      controller.dispose();
+    },
+  );
+
+  test(
+    'blocked links preserve committed page and hidden new windows cannot open',
+    () async {
+      final windows = <Uri>[];
+      final notices = <String>[];
+      final controller = ProtectedWebController(
+        canOpen: (_) => true,
+        onNavigation: (_) {},
+        onNewWindow: windows.add,
+        onBlocked: notices.add,
+      )..attach(91);
+      await controller.open(moon);
+      final request = (calls.last.arguments as Map)['requestId'];
+      final event = {
+        'viewId': 91,
+        'requestId': request,
+        'url': moon.toString(),
+      };
+      await native('pageState', {...event, 'title': 'Moon', 'progress': 100});
+      await native('navigationBlocked', {
+        ...event,
+        'url': 'https://blocked.invalid/',
+      });
+      expect(controller.status.committed, isTrue);
+      expect(controller.status.title, 'Moon');
+      expect(notices, hasLength(1));
+      await controller.suspend();
+      await native('newWindowRequested', event);
+      expect(windows, isEmpty);
+      await controller.resume(moon);
+      await native('newWindowRequested', event);
+      expect(windows, [moon]);
+      controller.dispose();
+    },
+  );
+
+  test(
+    'pagination search URLs retain provider fields instead of becoming first page',
+    () async {
+      final uri = const StrictSearchPolicy().rewriteProviderInput(
+        'https://safe.duckduckgo.com/?q=moon&s=30&dc=31&kp=1&kac=-1',
+      )!;
+      final controller = ProtectedWebController(
+        canOpen: (_) => true,
+        onNavigation: (_) {},
+      )..attach(92);
+      await controller.open(uri);
+      expect(calls.where((c) => c.method == 'openSearch'), isEmpty);
+      final args =
+          calls.singleWhere((c) => c.method == 'open').arguments as Map;
+      expect(args['url'], uri.toString());
+      expect(Uri.parse(args['url'] as String).queryParameters['s'], '30');
+      controller.dispose();
+    },
+  );
+
+  test(
+    'URL-free find results preserve the page and allow the next load',
+    () async {
+      final controller = ProtectedWebController(
+        canOpen: (_) => true,
+        onNavigation: (_) {},
+      )..attach(93);
+      await controller.open(moon);
+      final request = (calls.last.arguments as Map)['requestId'];
+      await native('pageState', {
+        'viewId': 93,
+        'requestId': request,
+        'url': moon.toString(),
+        'title': 'Moon',
+        'progress': 100,
+        'canGoBack': true,
+      });
+      final committed = controller.status;
+      await controller.find('Moon');
+      await native('findResult', {
+        'viewId': 93,
+        'requestId': request,
+        'activeMatchOrdinal': 0,
+        'numberOfMatches': 3,
+        'isDoneCounting': true,
+      });
+      expect(identical(controller.status, committed), isTrue);
+      expect(
+        calls.where(
+          (c) =>
+              c.method == 'setActive' &&
+              (c.arguments as Map)['active'] == false,
+        ),
+        isEmpty,
+      );
+      final next = Uri.parse('https://www.nasa.gov/');
+      await controller.open(next);
+      expect(calls.where((c) => c.method == 'open'), hasLength(2));
+      expect(controller.currentUrl, next);
+      controller.dispose();
+    },
+  );
+
+  test('native capability requires the consumer engine contract', () async {
     messenger.setMockMethodCallHandler(
       ProtectedWebBridge.channel,
       (_) async => {
@@ -290,7 +429,7 @@ void main() {
       (_) async => {
         'supported': true,
         'privateAvailable': false,
-        'mode': 'reviewedScriptlessWeb',
+        'mode': 'consumerWeb',
         'strictSearchAvailable': true,
       },
     );

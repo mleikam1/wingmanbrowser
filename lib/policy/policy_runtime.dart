@@ -6,71 +6,86 @@ import 'policy_models.dart';
 import 'signed_policy_repository.dart';
 import 'live_browsing_policy.dart';
 import 'strict_search_policy.dart';
+import 'consumer_protection_policy.dart';
 
 export 'policy_models.dart';
 export 'signed_policy_repository.dart';
 export 'policy_checkpoint_store.dart';
 export 'live_browsing_policy.dart';
 export 'strict_search_policy.dart';
+export 'consumer_protection_policy.dart';
 
 class ContentEligibilityService {
-  ContentEligibilityService(this.repository);
+  ContentEligibilityService(this.repository, {this.edition = productEdition});
+  final ProductEdition edition;
+  ConsumerProtectionPolicy consumerProtection =
+      const ConsumerProtectionPolicy.unavailable();
   final SignedPolicyRepository repository;
   LiveBrowsingPolicy? livePolicy;
   bool nativeLiveAvailable = false, privateLiveAvailable = false;
   bool nativeSearchAvailable = false;
+
+  /// A hidden reviewed source subtracts its listed document URLs. This mapping
+  /// never permits a URL or depends on review/catalog freshness.
+  Set<String> blockedBrowsingUrls(AdditionalRestrictions? additional) => {
+    for (final site in livePolicy?.sites ?? const <LiveSiteRecord>[])
+      if (additional?.blockedResourceIds.contains(site.id) == true ||
+          additional?.blockedCollections.contains(site.collection) == true)
+        for (final document in site.documents) document.url,
+  };
+
   PolicyDecision evaluate(
     PolicyRequest request, {
     AdditionalRestrictions? additional,
   }) {
     if (request.operation == PolicyOperation.navigate && request.uri != null) {
       if (!nativeLiveAvailable ||
-          (request.isPrivate && !privateLiveAvailable) ||
-          livePolicy == null) {
+          (request.isPrivate && !privateLiveAvailable)) {
         return const PolicyDecision(
           PolicyDecisionCode.blockUnsupportedCapability,
         );
       }
-      if (!repository.status.usable) {
-        return const PolicyDecision(PolicyDecisionCode.blockPolicyUnavailable);
-      }
-      // Provider search is a separate capability with adult SafeSearch fixed
-      // by the publisher. It does not classify its previews against the other
-      // Wingman categories or grant permission to any result destination.
-      if (const StrictSearchPolicy().acceptsCanonical(request.uri!)) {
-        if (!nativeSearchAvailable) {
+      if (edition == ProductEdition.consumer) {
+        if (const StrictSearchPolicy().acceptsCanonical(request.uri!) &&
+            !nativeSearchAvailable) {
           return const PolicyDecision(
             PolicyDecisionCode.blockUnsupportedCapability,
           );
         }
-        if (!livePolicy!.isUsable(now: repository.clock.now())) {
-          return const PolicyDecision(
-            PolicyDecisionCode.blockPolicyUnavailable,
-          );
-        }
-        if (additional?.blockedCollections.contains('web-search') == true ||
-            additional?.blockedResourceIds.contains('web-search') == true) {
+        final decision = consumerProtection.assessNavigation(
+          request.uri!,
+          additional: additional,
+        );
+        if (!decision.isAllowed) return decision;
+        // Existing reviewed-site identifiers remain subtractive metadata for
+        // saved user restrictions. Their expiry never becomes an allow gate.
+        final site = livePolicy?.siteForUri(request.uri!);
+        if (site != null &&
+            (additional?.blockedResourceIds.contains(site.id) == true ||
+                additional?.blockedCollections.contains(site.collection) ==
+                    true)) {
           return const PolicyDecision(
             PolicyDecisionCode.blockAdditionalRestriction,
           );
         }
-        return const PolicyDecision(
-          PolicyDecisionCode.allowApproved,
-          resourceId: 'web-search',
-          safeTitle: 'DuckDuckGo search',
-        );
+        return decision;
+      }
+      // Managed school mode remains explicitly allowlisted. Consumer policy
+      // cannot silently expand its documents, resources, or search permissions.
+      if (!repository.status.usable || livePolicy == null) {
+        return const PolicyDecision(PolicyDecisionCode.blockPolicyUnavailable);
       }
       return livePolicy!.assessNavigation(
         request.uri!,
-        context: productEdition == ProductEdition.consumer
+        context: edition == ProductEdition.consumer
             ? request.context
             : ContentContext.student,
         additional: additional,
         now: repository.clock.now(),
       );
     }
-    // Other capabilities remain unavailable; live navigation has its separate
-    // immutable reviewed scope plus independent native resource enforcement.
+    // Browser-owned resource/authentication/download operations are enforced
+    // by the native adapter. This service also owns reviewed local documents.
     if (request.operation != PolicyOperation.renderBundled ||
         request.uri != null) {
       return const PolicyDecision(
@@ -86,7 +101,7 @@ class ContentEligibilityService {
     if (record == null) {
       return const PolicyDecision(PolicyDecisionCode.blockUnreviewed);
     }
-    final context = productEdition == ProductEdition.consumer
+    final context = edition == ProductEdition.consumer
         ? request.context
         : ContentContext.student;
     if (!record.contexts.contains(context)) {
@@ -125,20 +140,54 @@ class PolicyRuntime extends ChangeNotifier {
   PolicyStatus get status => repository.status;
   PolicyClock get clock => repository.clock;
   List<LiveSiteRecord> get liveSites => policy.livePolicy?.sites ?? const [];
+  ConsumerProtectionPolicy get consumerProtection => policy.consumerProtection;
+  bool _consumerUpdatesConfigured = false;
+  bool get consumerUpdatesConfigured => _consumerUpdatesConfigured;
+
+  void configureConsumerUpdateAvailability({required bool configured}) {
+    _consumerUpdatesConfigured = configured;
+    if (!_disposed) notifyListeners();
+  }
+
   bool liveAvailable({bool isPrivate = false}) =>
-      status.usable &&
       policy.nativeLiveAvailable &&
       (!isPrivate || policy.privateLiveAvailable) &&
-      (policy.livePolicy?.isUsable(now: clock.now()) ?? false);
+      (productEdition == ProductEdition.consumer
+          ? consumerProtection.isUsable
+          : status.usable &&
+                (policy.livePolicy?.isUsable(now: clock.now()) ?? false));
 
   bool searchAvailable({
     bool isPrivate = false,
     AdditionalRestrictions? additional,
   }) =>
-      liveAvailable(isPrivate: isPrivate) &&
-      policy.nativeSearchAvailable &&
+      productEdition == ProductEdition.consumer &&
+      (kIsWeb ||
+          (liveAvailable(isPrivate: isPrivate) &&
+              policy.nativeSearchAvailable)) &&
       additional?.blockedCollections.contains('web-search') != true &&
-      additional?.blockedResourceIds.contains('web-search') != true;
+      additional?.blockedResourceIds.contains('web-search') != true &&
+      additional?.blockedDomains.any(
+            (domain) => hostMatches('safe.duckduckgo.com', domain),
+          ) !=
+          true;
+
+  void configureConsumerProtection(ConsumerProtectionPolicy protection) {
+    policy.consumerProtection = protection;
+    if (!_disposed) notifyListeners();
+  }
+
+  /// Immutable edition and additive restrictions are the only caller-provided
+  /// inputs. Native adapters load mandatory data from their pinned asset.
+  Map<String, Object?> nativeConsumerConfiguration(
+    AdditionalRestrictions additional,
+  ) => {
+    'edition': productEdition.name,
+    'blockedDomains': additional.blockedDomains.toList()..sort(),
+    'blockedUrls': policy.blockedBrowsingUrls(additional).toList()..sort(),
+    'blockedCollections': additional.blockedCollections.toList()..sort(),
+    'blockedResourceIds': additional.blockedResourceIds.toList()..sort(),
+  };
 
   /// Native capability is observed after startup quarantine; it is never loaded
   /// from preferences, a Launchpad record, user role or remote allow flag.
@@ -163,6 +212,7 @@ class PolicyRuntime extends ChangeNotifier {
     SignedPolicyRepository? repository,
     PolicyCheckpointStore? checkpointStore,
     DateTime Function()? clock,
+    ConsumerProtectionPolicy? consumerProtection,
   }) async {
     final store = checkpointStore ?? SqlitePolicyCheckpointStore();
     PolicyCheckpoint checkpoint;
@@ -180,6 +230,8 @@ class PolicyRuntime extends ChangeNotifier {
           clock: PolicyClock(wallClock: clock, checkpoint: checkpoint.seenAt),
         );
     final runtime = PolicyRuntime._(repo, store);
+    runtime.policy.consumerProtection =
+        consumerProtection ?? await ConsumerProtectionPolicy.load();
     repo.beforeActivation = store.save;
     repo.addListener(runtime._repositoryChanged);
     if (checkpointFailed) {

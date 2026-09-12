@@ -1,10 +1,17 @@
+import java.util.Base64
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+val wingmanEdition = (project.findProperty("dart-defines") as? String).orEmpty()
+    .split(',').mapNotNull { encoded -> runCatching { String(Base64.getDecoder().decode(encoded)) }.getOrNull() }
+    .firstOrNull { it.startsWith("WINGMAN_EDITION=") }?.substringAfter('=') ?: "consumer"
+
 android {
+    buildFeatures { buildConfig = true }
     namespace = "com.wingmanbrowser.wingman_browser"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
@@ -23,6 +30,7 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        buildConfigField("String", "WINGMAN_EDITION", "\"${if (wingmanEdition == "consumer") "consumer" else "managed"}\"")
     }
 
     buildTypes {
@@ -47,4 +55,6 @@ flutter {
 
 dependencies {
     implementation("androidx.webkit:webkit:1.15.0")
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20250517")
 }

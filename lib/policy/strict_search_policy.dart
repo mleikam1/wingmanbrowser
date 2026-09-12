@@ -7,88 +7,136 @@ class StrictSearchPolicy {
 
   static const providerId = 'duckduckgo-strict';
   static const canonicalOrigin = 'https://safe.duckduckgo.com';
-  static const canonicalPath = '/lite/';
+  static const canonicalPath = '/';
   static const maxQueryCharacters = 512;
   static const maxQueryUtf8Bytes = 1024;
-  static const _maxUrlLength = 8192;
+  static const _maxUrlLength = 16384;
   static const _inputHosts = {
     'duckduckgo.com',
     'www.duckduckgo.com',
     'safe.duckduckgo.com',
     'html.duckduckgo.com',
     'lite.duckduckgo.com',
+    'noai.duckduckgo.com',
+    'start.duckduckgo.com',
   };
 
   Uri buildQuery(String query) {
     final value = _validatedQuery(query);
     return Uri.parse(
-      '$canonicalOrigin$canonicalPath?q=${_encodeComponent(value)}&kp=1',
+      '$canonicalOrigin$canonicalPath?q=${_encodeComponent(value)}&kp=1&kac=-1',
     );
   }
 
-  /// Returns null for a non-provider address or a non-URL search term. An
-  /// explicit provider URL is either rebuilt locally or rejected; callers must
-  /// never load the original URL before applying this rewrite.
+  /// Normalize known provider search pages before they reach a renderer.
+  /// Pagination and ordinary query refinements remain intact. Search shortcuts
+  /// cannot send users to an unfiltered alternative provider.
   Uri? rewriteProviderInput(String input) {
     if (input.length > _maxUrlLength) _invalid('This address is too long.');
     final uri = Uri.tryParse(input);
     if (uri == null) _invalid('This address is malformed.');
     if (!uri.hasAuthority) return null;
     _validateUrlText(input);
-    final host = uri.host.toLowerCase();
-    final withoutDots = host.replaceFirst(RegExp(r'\.+$'), '');
-    final isProvider =
-        withoutDots == 'duckduckgo.com' ||
-        withoutDots.endsWith('.duckduckgo.com') ||
-        {'duck.com', 'www.duck.com', 'ddg.gg'}.contains(withoutDots);
-    if (!isProvider) return null;
-    if (!_inputHosts.contains(host) ||
-        !{'http', 'https'}.contains(uri.scheme) ||
+    final host = uri.host.toLowerCase().replaceFirst(RegExp(r'\.$'), '');
+    final ddg =
+        host == 'duckduckgo.com' ||
+        host.endsWith('.duckduckgo.com') ||
+        const {'duck.com', 'www.duck.com', 'ddg.gg'}.contains(host);
+    final alternative = (const {
+      'google.com',
+      'www.google.com',
+      'bing.com',
+      'www.bing.com',
+      'search.brave.com',
+      'safe.search.brave.com',
+    }.contains(host));
+    if (!ddg && !alternative) return null;
+    _validateUrlText(input);
+    if (!{'http', 'https'}.contains(uri.scheme) ||
         uri.userInfo.isNotEmpty ||
         (uri.hasPort && uri.port != (uri.scheme == 'https' ? 443 : 80))) {
       _invalid('This search address is unsupported.');
     }
-    // Inspect the literal path/authority, before URI dot-segment normalization.
     final parts = _urlParts(input);
     if (parts == null || parts.group(2)!.contains('%')) {
       _invalid('This search address is unsupported.');
     }
     final path = parts.group(3)!;
-    final paths = switch (host) {
-      'html.duckduckgo.com' => const {'/html', '/html/'},
-      'lite.duckduckgo.com' => const {'/lite', '/lite/'},
-      _ => const {'', '/', '/html', '/html/', '/lite', '/lite/'},
-    };
-    if (!paths.contains(path)) {
-      _invalid('This provider page is not a supported search address.');
+    final searchPath = ddg
+        ? const {'', '/', '/html', '/html/', '/lite', '/lite/'}.contains(path)
+        : const {
+            '',
+            '/',
+            '/search',
+            '/images/search',
+            '/videos/search',
+            '/images',
+            '/videos',
+            '/news',
+            '/ask',
+          }.contains(path);
+    // Assets and ordinary provider help pages are ordinary destinations. The
+    // result wrapper is handled separately and never gets navigation authority.
+    if (!searchPath) {
+      if (path.contains('%') ||
+          path.split('/').any((part) => part == '.' || part == '..')) {
+        _invalid('This provider address has an ambiguous path.');
+      }
+      return null;
     }
-    final query = _parseQuery(parts.group(4) ?? '');
-    final value = query['q'];
-    if (value == null) _invalid('Enter something to search for.');
-    // All incoming settings, attribution and vertical-selection fields are
-    // discarded. No incoming kp value, cookie or preference becomes authority.
-    return buildQuery(value);
+    if (ddg &&
+        !_inputHosts.contains(host) &&
+        !const {'duck.com', 'www.duck.com', 'ddg.gg'}.contains(host)) {
+      _invalid('This search address is unsupported.');
+    }
+    final query = uri.query.isEmpty
+        ? <String, String>{}
+        : _parseQuery(uri.query);
+    if (query.keys.any((key) => key.toLowerCase() == 'q' && key != 'q')) {
+      _invalid('This search address has an ambiguous query.');
+    }
+    final q = query['q'];
+    if (q != null) query['q'] = _validatedQuery(q);
+    if (alternative) {
+      return q == null
+          ? Uri.parse('$canonicalOrigin/?kp=1&kac=-1')
+          : buildQuery(q);
+    }
+    query.removeWhere(
+      (key, _) => const {'kp', 'kac'}.contains(key.toLowerCase()),
+    );
+    query['kp'] = '1';
+    query['kac'] = '-1';
+    final normalizedPath = path.isEmpty ? '/' : path;
+    final outputQuery = query.entries
+        .map((e) => '${_encodeComponent(e.key)}=${_encodeComponent(e.value)}')
+        .join('&');
+    return Uri.parse('$canonicalOrigin$normalizedPath?$outputQuery');
   }
 
-  /// Only a URL equal to the publisher's freshly rebuilt serialization passes.
-  /// A true result still requires the caller's independent capability/policy.
+  /// Provider-controlled strict pages may include pagination and refinement
+  /// fields. This checks the strict boundary, not exact first-page serialization.
   bool acceptsCanonical(Uri uri) {
     try {
       if (uri.scheme != 'https' ||
           uri.host != 'safe.duckduckgo.com' ||
           uri.userInfo.isNotEmpty ||
-          uri.hasPort ||
-          uri.path != canonicalPath ||
+          (uri.hasPort && uri.port != 443) ||
+          !const {
+            '/',
+            '/html',
+            '/html/',
+            '/lite',
+            '/lite/',
+          }.contains(uri.path) ||
           uri.hasFragment) {
         return false;
       }
-      final text = uri.toString();
-      _validateUrlText(text);
+      _validateUrlText(uri.toString());
       final query = _parseQuery(uri.query);
-      if (query.length != 2 || query['kp'] != '1' || query['q'] == null) {
-        return false;
-      }
-      return buildQuery(query['q']!).toString() == text;
+      if (query['kp'] != '1' || query['kac'] != '-1') return false;
+      if (query['q'] != null) _validatedQuery(query['q']!);
+      return true;
     } on FormatException {
       return false;
     }
@@ -177,8 +225,8 @@ class StrictSearchPolicy {
         ),
       );
       if (probe.runes.any(_isControl) ||
-          probe.contains('!') ||
-          probe.contains(r'\')) {
+          RegExp(r'(^|[^a-zA-Z0-9_])![a-zA-Z0-9_]').hasMatch(probe) ||
+          probe.trimLeft().startsWith(r'\')) {
         _invalid('Search shortcuts are not supported.');
       }
       final encodedRun = RegExp(r'(?:%[0-9a-fA-F]{2})+');
@@ -253,7 +301,7 @@ class StrictSearchPolicy {
     _validateUnicode(input);
     _validateEscapes(input);
     final decoded = Uri.decodeComponent(input);
-    if (decoded.runes.any(_isControl) || decoded.contains(r'\')) {
+    if (decoded.runes.any(_isControl)) {
       _invalid('This address contains encoded unsupported characters.');
     }
   }

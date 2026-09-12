@@ -102,7 +102,7 @@ class _AdditionalBoundariesScreenState
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Choose less of the reviewed library and supported websites, or disable web search. Removing an additional boundary never lowers the fixed search filter or approves an unreviewed destination.',
+              'Choose less of the library and supported websites, or disable web search. Removing an additional boundary never lowers the required search, category or security protections.',
             ),
             if (widget.isPrivate)
               const WingmanStatus(
@@ -126,7 +126,7 @@ class _AdditionalBoundariesScreenState
                   : (v) => _change(collection: 'web-search', hidden: v),
             ),
             const Text(
-              'When available, live search sends submitted queries directly to DuckDuckGo and shows its first, text-only results page. Results and ads are not classified against all six Wingman rules. Only reviewed destination pages can open.',
+              'Web search sends submitted queries directly to DuckDuckGo with required Strict adult filtering. Results and ads are not classified against all six Wingman rules. Consumer result destinations are checked against local category, threat and additional restrictions.',
             ),
             const SizedBox(height: 20),
             const WingmanSection(title: 'Collections'),

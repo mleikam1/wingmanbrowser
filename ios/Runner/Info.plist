@@ -24,6 +24,18 @@
 	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>CFBundleURLTypes</key>
+	<array><dict><key>CFBundleURLName</key><string>Wingman Web Links</string>
+	<key>CFBundleURLSchemes</key><array><string>http</string><string>https</string></array>
+	</dict></array>
+	<key>NSCameraUsageDescription</key>
+	<string>Use the camera when you allow the website requesting it.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Use the microphone when you allow the website requesting it.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Use your location when you allow the website requesting it while Wingman is open.</string>
+	<key>NSAppTransportSecurity</key>
+	<dict><key>NSAllowsArbitraryLoadsInWebContent</key><true/></dict>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UIApplicationSceneManifest</key>

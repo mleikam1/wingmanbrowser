@@ -38,6 +38,7 @@ enum PolicyOperation {
 
 enum PolicyDecisionCode {
   allowApproved,
+  allowPermitted,
   blockMandatoryCategory,
   blockAdditionalRestriction,
   blockUnreviewed,
@@ -85,7 +86,9 @@ class PolicyDecision {
   final PolicyDecisionCode code;
   final String? resourceId, safeTitle;
   final MandatoryCategory? category;
-  bool get isAllowed => code == PolicyDecisionCode.allowApproved;
+  bool get isAllowed =>
+      code == PolicyDecisionCode.allowApproved ||
+      code == PolicyDecisionCode.allowPermitted;
 }
 
 bool validResourceId(String id) =>
@@ -98,15 +101,40 @@ class AdditionalRestrictions {
   AdditionalRestrictions({
     Iterable<String> blockedResourceIds = const [],
     Iterable<String> blockedCollections = const [],
-  }) : blockedResourceIds = _ids(blockedResourceIds, 500),
+    Iterable<String> blockedDomains = const [],
+  }) : blockedDomains = UnmodifiableSetView(
+         blockedDomains
+             .map((host) => host.toLowerCase().replaceFirst(RegExp(r'\.$'), ''))
+             .where(
+               (host) =>
+                   host.length <= 253 &&
+                   host.contains('.') &&
+                   host
+                       .split('.')
+                       .every(
+                         (label) => RegExp(
+                           r'^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$',
+                         ).hasMatch(label),
+                       ),
+             )
+             .take(500)
+             .toSet(),
+       ),
+       blockedResourceIds = _ids(blockedResourceIds, 500),
        blockedCollections = _ids(blockedCollections, 50);
-  final Set<String> blockedResourceIds, blockedCollections;
+  final Set<String> blockedResourceIds, blockedCollections, blockedDomains;
   Map<String, Object?> toJson() => {
+    'blockedDomains': blockedDomains.toList()..sort(),
     'blockedResourceIds': blockedResourceIds.toList()..sort(),
     'blockedCollections': blockedCollections.toList()..sort(),
   };
   factory AdditionalRestrictions.fromJson(Map<String, Object?> json) =>
       AdditionalRestrictions(
+        blockedDomains:
+            (json['blockedDomains'] is List
+                    ? json['blockedDomains'] as List
+                    : const [])
+                .whereType<String>(),
         blockedResourceIds:
             (json['blockedResourceIds'] is List
                     ? json['blockedResourceIds'] as List

@@ -67,6 +67,9 @@ void main() {
       final (state, policy, repository) = await fixture(tester);
       try {
         await state.setResourceBookmarked('moon-phases', true);
+        await state.saveAdditionalRestrictions(
+          AdditionalRestrictions(blockedDomains: ['example.net']),
+        );
         final reviewed = Uri.parse('https://science.nasa.gov/moon/facts/');
         final unreviewed = Uri.parse('https://example.org/');
         bool search({bool isPrivate = false}) => policy.searchAvailable(
@@ -93,6 +96,7 @@ void main() {
           ),
         );
         expect(saved.blockedCollections, contains('web-search'));
+        expect(saved.additional.blockedDomains, {'example.net'});
         expect(saved.bookmarkedIds, contains('moon-phases'));
         expect(
           policy.policy
@@ -109,7 +113,7 @@ void main() {
           policy.policy
               .evaluate(PolicyRequest.navigation(unreviewed))
               .isAllowed,
-          isFalse,
+          isTrue,
         );
         expect(
           const StrictSearchPolicy().buildQuery('moon').queryParameters['kp'],
@@ -205,7 +209,7 @@ void main() {
           find.text('Search previews have limited coverage'),
           findsOneWidget,
         );
-        expect(find.textContaining('first, text-only'), findsOneWidget);
+        expect(find.textContaining('first, text-only'), findsNothing);
         expect(find.byType(DropdownButton<String>), findsNothing);
         await state.setAdditionalBoundary(
           collection: 'web-search',
@@ -229,7 +233,7 @@ void main() {
           findsOneWidget,
         );
         expect(
-          find.textContaining('native desktop apps are not available'),
+          find.textContaining('Native desktop apps are a separate project'),
           findsOneWidget,
         );
         await tester.pumpWidget(const SizedBox());

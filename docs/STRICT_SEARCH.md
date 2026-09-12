@@ -1,5 +1,7 @@
 # Strict web search — v0.9.0+9
 
+> Historical pilot record. Consumer 0.10 supersedes the exact-document, scriptless, first-page-only restrictions below. Current implementation and remaining release gaps: [Consumer recovery](CONSUMER_BROWSER_RECOVERY.md), [Search acceptance](SEARCH_ACCEPTANCE.md), [Protection coverage](PROTECTION_COVERAGE.md). School allowlisting remains a separate policy.
+
 Implementation scope recorded September 11, 2026. This document supersedes earlier blanket statements that Wingman has no live web search. It does not broaden the existing reviewed destination list or establish a completed general-purpose browser.
 
 ## What is implemented

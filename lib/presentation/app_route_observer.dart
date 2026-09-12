@@ -6,6 +6,11 @@ final appRouteObserver = AppRouteObserver();
 
 class AppRouteObserver extends RouteObserver<ModalRoute<dynamic>> {
   final List<Route<dynamic>> _routes = [];
+
+  /// An app-owned find control needs the document visible beneath its dialog.
+  bool get showsBrowserControls =>
+      _routes.isNotEmpty &&
+      _routes.last.settings.name == 'wingman-browser-find';
   @override
   void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
     if (previousRoute == null) _routes.clear();

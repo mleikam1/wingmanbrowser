@@ -192,8 +192,8 @@ class _SearchSettingsScreenState extends State<SearchSettingsScreen> {
               message: blocked
                   ? 'Your additional boundary disables web search. Private tabs inherit this choice. Local library search remains available.'
                   : available
-                  ? 'Search opens the first, text-only DuckDuckGo results page. Image search, pagination and page forms are unavailable. Website access remains limited to reviewed destination pages.'
-                  : 'Web search requires a supported Android or iOS native session and a current policy. The web companion has local tools only; native desktop apps are not available.',
+                  ? 'Search opens DuckDuckGo with required Strict adult filtering. Native browsing supports refinement, subsequent results and ordinary permitted destinations. Search previews and ads can contain filtering misses.'
+                  : 'Native search requires a working browser engine and protection baseline. The web companion opens the strict provider in the host browser, whose protections Wingman cannot control. Native desktop apps are a separate project.',
               tone: WingmanTone.info,
             ),
             const WingmanStatus(

@@ -1,14 +1,17 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../presentation/app_route_observer.dart';
+import '../config/product_edition.dart';
+import 'browser_engine.dart' show BrowserEngine;
 import '../policy/strict_search_policy.dart';
 
-/// A separate, restricted bridge. Retired browser commands remain retired.
-/// Native code independently checks its build-pinned website/resource manifest.
+/// Native browser transport. Each adapter validates its mandatory baseline
+/// before allocating a renderer; pages have no privileged Dart/JS bridge.
 abstract final class ProtectedWebBridge {
   static const channel = MethodChannel('wingman/protected-browser');
   static final Map<int, ProtectedWebController> _views = {};
@@ -22,12 +25,14 @@ abstract final class ProtectedWebBridge {
       );
       return ProtectedWebCapabilities(
         supported:
-            result?['supported'] == true &&
-            result?['mode'] == 'reviewedScriptlessWeb',
+            result?['supported'] == true && result?['mode'] == 'consumerWeb',
         privateAvailable: result?['privateAvailable'] == true,
+        downloads: result?['downloads'] == true,
+        uploads: result?['uploads'] == true,
+        defaultBrowser: result?['defaultBrowserAvailable'] == true,
         strictSearchAvailable:
             result?['supported'] == true &&
-            result?['mode'] == 'reviewedScriptlessWeb' &&
+            result?['mode'] == 'consumerWeb' &&
             result?['strictSearchAvailable'] == true,
       );
     } catch (_) {
@@ -57,8 +62,12 @@ class ProtectedWebCapabilities {
     this.supported = false,
     this.privateAvailable = false,
     this.strictSearchAvailable = false,
+    this.uploads = false,
+    this.downloads = false,
+    this.defaultBrowser = false,
   });
   final bool supported, privateAvailable, strictSearchAvailable;
+  final bool uploads, downloads, defaultBrowser;
 }
 
 class ProtectedWebStatus {
@@ -70,12 +79,14 @@ class ProtectedWebStatus {
     this.blockedResources,
     this.loadedResources,
     this.error,
+    this.canGoBack = false,
+    this.canGoForward = false,
   });
   final Uri? url;
   final String title;
   final int progress;
   final int? blockedResources, loadedResources;
-  final bool loading;
+  final bool loading, canGoBack, canGoForward;
   final String? error;
   bool get committed =>
       url != null && !loading && error == null && progress == 100;
@@ -83,13 +94,24 @@ class ProtectedWebStatus {
 
 /// Only current native events may become committed page metadata. No decisions,
 /// page bodies, cookies or history are sent to an application server.
-class ProtectedWebController extends ChangeNotifier {
-  ProtectedWebController({required this.canOpen, required this.onNavigation});
+class ProtectedWebController extends ChangeNotifier implements BrowserEngine {
+  ProtectedWebController({
+    required this.canOpen,
+    required this.onNavigation,
+    this.onNewWindow,
+    this.onBlocked,
+  });
   final bool Function(Uri) canOpen;
   final ValueChanged<Uri> onNavigation;
+  final ValueChanged<Uri>? onNewWindow;
+  final ValueChanged<String>? onBlocked;
   int? _viewId;
   int _requestId = 0;
   bool _disposed = false, _active = true;
+  @override
+  Uri? get currentUrl => status.url;
+  @override
+  bool get attached => _viewId != null && !_disposed;
   ProtectedWebStatus status = const ProtectedWebStatus();
 
   void attach(int id) {
@@ -108,6 +130,7 @@ class ProtectedWebController extends ChangeNotifier {
     ProtectedWebBridge._attach(id, this);
   }
 
+  @override
   Future<void> open(Uri uri) async {
     final id = _viewId;
     if (_disposed || !_active || id == null) return;
@@ -132,7 +155,11 @@ class ProtectedWebController extends ChangeNotifier {
         await stopping;
         return;
       }
-      final search = const StrictSearchPolicy().acceptsCanonical(uri);
+      final query = uri.queryParameters['q'];
+      final search =
+          query != null &&
+          const StrictSearchPolicy().acceptsCanonical(uri) &&
+          uri == const StrictSearchPolicy().buildQuery(query);
       await ProtectedWebBridge.channel
           .invokeMethod<void>(search ? 'openSearch' : 'open', {
             'viewId': id,
@@ -149,11 +176,11 @@ class ProtectedWebController extends ChangeNotifier {
     }
   }
 
-  // Keep last committed metadata for an explicit pin from an overlaid menu.
-  // Native content is destroyed; suspended events cannot change this snapshot.
+  // Hide/pause without destroying the renderer, navigation stack or data.
+  // Events cannot trigger navigation while a route or app overlay covers it.
+  @override
   Future<void> suspend() async {
     _active = false;
-    _requestId++;
     final id = _viewId;
     if (id == null) return;
     try {
@@ -166,11 +193,50 @@ class ProtectedWebController extends ChangeNotifier {
     }
   }
 
+  @override
   Future<void> resume(Uri uri) async {
     if (_disposed) return;
     _active = true;
-    await open(uri);
+    if (status.url == null || status.error != null) {
+      await open(uri);
+    } else {
+      await command('setActive', {'active': true});
+    }
   }
+
+  Future<void> command(
+    String method, [
+    Map<String, Object?> arguments = const {},
+  ]) async {
+    final id = _viewId;
+    if (_disposed || id == null) return;
+    try {
+      await ProtectedWebBridge.channel.invokeMethod<Object?>(method, {
+        'viewId': id,
+        ...arguments,
+      });
+    } on PlatformException {
+      if (!_disposed && _active) {
+        onBlocked?.call('This browser action could not complete. Try again.');
+      }
+    }
+  }
+
+  @override
+  Future<void> back() => command('back');
+  @override
+  Future<void> forward() => command('forward');
+  @override
+  Future<void> reload() => command('reload');
+  @override
+  Future<void> stop() => command('stop');
+  @override
+  Future<void> find(String query) => command('find', {'query': query});
+  @override
+  Future<void> findNext({bool forward = true}) =>
+      command('findNext', {'forward': forward});
+  @override
+  Future<void> share() => command('share');
 
   void _failure(String message) {
     if (_disposed) return;
@@ -179,7 +245,7 @@ class ProtectedWebController extends ChangeNotifier {
   }
 
   void _event(String method, Map<dynamic, dynamic> value) {
-    if (_disposed || !_active || value['viewId'] != _viewId) return;
+    if (_disposed || value['viewId'] != _viewId) return;
     if (value['requestId'] != _requestId) return;
     if (method == 'rendererGone') {
       _failure('The page stopped. Reload to try again.');
@@ -187,19 +253,34 @@ class ProtectedWebController extends ChangeNotifier {
     }
     final raw = value['url'];
     final uri = raw is String && raw.length <= 4096 ? Uri.tryParse(raw) : null;
+    if (method == 'navigationBlocked') {
+      if (_active) {
+        onBlocked?.call(
+          'This destination is blocked by your protection policy.',
+        );
+      }
+      return;
+    }
+    if (method == 'newWindowRequested') {
+      if (_active && uri != null && canOpen(uri)) onNewWindow?.call(uri);
+      return;
+    }
     if (method == 'navigationRequested') {
+      if (!_active) return;
       // The native delegate already canceled this request. The Shell must
       // explain a denied link through policy, not silently load it or erase
       // the current committed page. No candidate metadata is published here.
       if (uri != null) onNavigation(uri);
       return;
     }
+    // Auxiliary callbacks (for example findResult) do not carry a page URL.
+    // Only pageState can update or invalidate the committed document.
+    if (method != 'pageState') return;
     if (uri == null || !canOpen(uri)) {
       unawaited(suspend());
       _failure('This page is outside the current supported scope.');
       return;
     }
-    if (method != 'pageState') return;
     int count(String key, int maximum) =>
         value[key] is int ? (value[key] as int).clamp(0, maximum) : 0;
     final rawTitle = value['title'];
@@ -214,6 +295,8 @@ class ProtectedWebController extends ChangeNotifier {
           : '',
       progress: count('progress', 100),
       loading: value['isLoading'] == true,
+      canGoBack: value['canGoBack'] == true,
+      canGoForward: value['canGoForward'] == true,
       blockedResources: value['blockedResources'] is int
           ? count('blockedResources', 100000)
           : null,
@@ -222,7 +305,12 @@ class ProtectedWebController extends ChangeNotifier {
           : null,
       error: value['error'] == null
           ? null
-          : 'This page could not finish within its supported scope.',
+          : const {
+              "The site's TLS certificate is invalid. The connection was blocked.",
+              'The secure connection could not be verified. Wingman did not bypass it.',
+            }.contains(value['error'])
+          ? 'The secure connection could not be verified. The connection was blocked.'
+          : 'This page could not load. Check your connection or try another page.',
     );
     notifyListeners();
   }
@@ -257,6 +345,11 @@ class ProtectedWebSurface extends StatefulWidget {
     required this.onNavigation,
     required this.onStatus,
     this.revision = 0,
+    this.active = true,
+    this.onController,
+    this.onNewWindow,
+    this.onBlocked,
+    this.restrictions = const {},
   });
   final String tabId;
   final Uri url;
@@ -266,6 +359,11 @@ class ProtectedWebSurface extends StatefulWidget {
   final ValueChanged<Uri> onNavigation;
   final ValueChanged<ProtectedWebStatus> onStatus;
   final int revision;
+  final bool active;
+  final ValueChanged<ProtectedWebController>? onController;
+  final ValueChanged<Uri>? onNewWindow;
+  final ValueChanged<String>? onBlocked;
+  final Map<String, Object?> restrictions;
 
   @override
   State<ProtectedWebSurface> createState() => _ProtectedWebSurfaceState();
@@ -280,9 +378,10 @@ class _ProtectedWebSurfaceState extends State<ProtectedWebSurface>
   void initState() {
     super.initState();
     _controller = ProtectedWebController(
-      canOpen: (uri) =>
-          mounted && !_covered && !_background && widget.canOpen(uri),
+      canOpen: (uri) => mounted && widget.canOpen(uri),
       onNavigation: (uri) => widget.onNavigation(uri),
+      onNewWindow: (uri) => widget.onNewWindow?.call(uri),
+      onBlocked: (message) => widget.onBlocked?.call(message),
     )..addListener(_changed);
     WidgetsBinding.instance.addObserver(this);
     widget.policyChanges.addListener(_recheck);
@@ -319,10 +418,20 @@ class _ProtectedWebSurfaceState extends State<ProtectedWebSurface>
       oldWidget.policyChanges.removeListener(_recheck);
       widget.policyChanges.addListener(_recheck);
     }
+    if (oldWidget.active != widget.active) {
+      if (widget.active) {
+        _resume();
+      } else {
+        _suspend();
+      }
+    }
+    if (oldWidget.restrictions.toString() != widget.restrictions.toString()) {
+      unawaited(_controller.command('updateRestrictions', widget.restrictions));
+    }
     if (oldWidget.url != widget.url || oldWidget.revision != widget.revision) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && !_covered && !_background) {
-          unawaited(_controller.resume(widget.url));
+        if (mounted && widget.active && !_covered && !_background) {
+          unawaited(_controller.open(widget.url));
         }
       });
     }
@@ -334,7 +443,7 @@ class _ProtectedWebSurfaceState extends State<ProtectedWebSurface>
   }
 
   void _resume() {
-    if (mounted && !_covered && !_background) {
+    if (mounted && widget.active && !_covered && !_background) {
       setState(() {});
       unawaited(_controller.resume(widget.url));
     }
@@ -342,6 +451,7 @@ class _ProtectedWebSurfaceState extends State<ProtectedWebSurface>
 
   @override
   void didPushNext() {
+    if (appRouteObserver.showsBrowserControls) return;
     _covered = true;
     _suspend();
   }
@@ -369,21 +479,35 @@ class _ProtectedWebSurfaceState extends State<ProtectedWebSurface>
         child: Text('This website is unavailable on this platform.'),
       );
     }
-    final params = {'tabId': widget.tabId, 'private': widget.isPrivate};
+    final params = {
+      'tabId': widget.tabId,
+      'private': widget.isPrivate,
+      'edition': productEdition.name,
+      ...widget.restrictions,
+    };
     void created(int id) {
       _controller.attach(id);
-      if (!_covered && !_background) unawaited(_controller.open(widget.url));
+      widget.onController?.call(_controller);
+      if (widget.active && !_covered && !_background) {
+        unawaited(_controller.open(widget.url));
+      }
     }
 
     final view = switch (defaultTargetPlatform) {
       TargetPlatform.android => AndroidView(
         viewType: 'wingman/protected-web',
+        gestureRecognizers: {
+          Factory<OneSequenceGestureRecognizer>(EagerGestureRecognizer.new),
+        },
         creationParams: params,
         creationParamsCodec: const StandardMessageCodec(),
         onPlatformViewCreated: created,
       ),
       TargetPlatform.iOS => UiKitView(
         viewType: 'wingman/protected-web',
+        gestureRecognizers: {
+          Factory<OneSequenceGestureRecognizer>(EagerGestureRecognizer.new),
+        },
         creationParams: params,
         creationParamsCodec: const StandardMessageCodec(),
         onPlatformViewCreated: created,

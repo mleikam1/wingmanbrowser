@@ -235,7 +235,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
       WingmanSettingsRow(
         icon: Icons.download_outlined,
         title: 'Downloads',
-        subtitle: 'New file downloads are unavailable',
+        subtitle: productEdition == ProductEdition.consumer
+            ? 'Website files use the system save or export flow'
+            : 'New file downloads are unavailable',
         onTap: () => _select(LibrarySection.downloads),
       ),
     ],
@@ -248,10 +250,14 @@ class _LibraryScreenState extends State<LibraryScreen> {
             : Icons.download_outlined,
         title: _section == LibrarySection.history
             ? 'No browsing history is recorded'
+            : productEdition == ProductEdition.consumer
+            ? 'Find downloads where you saved them'
             : 'New downloads are unavailable',
         message: _section == LibrarySection.history
-            ? 'This build keeps ordinary tab trails in memory and does not create browsing-history records. Earlier history remains quarantined; raw titles and addresses are not shown.'
-            : 'The reviewed articles are installed with the app. No new website download is started, and unknown files are not previewed or launched. Completed legacy files remain where you saved them.',
+            ? 'Live tabs keep their navigation history in the browser engine. Normal tabs can restore their last address; private tabs and search-query addresses are not restored. This library does not create a browsing-history log. Earlier history remains quarantined.'
+            : productEdition == ProductEdition.consumer
+            ? 'Website downloads use your device’s save or export controls. Open the location you chose in the system Files app. Wingman does not automatically run downloaded files. Completed legacy files remain where you saved them.'
+            : 'The reviewed articles are installed with the app. New website downloads are unavailable in this edition. Completed legacy files remain where you saved them.',
       ),
       if (_section == LibrarySection.history && !widget.isPrivate)
         Text(

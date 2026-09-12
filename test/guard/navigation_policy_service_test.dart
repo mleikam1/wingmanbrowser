@@ -1,8 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wingman_browser/guard/guard_runtime.dart';
 import 'guard_test_support.dart';
+import '../support/protected_test_support.dart';
+import 'package:wingman_browser/policy/consumer_protection_policy.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   final categories = GuardCategory.values.where((c) => c.isLifestyle).toList();
   test(
     'legacy mandatory category decisions cannot be disabled by any configuration or grant',
@@ -43,7 +46,7 @@ void main() {
     },
   );
   test(
-    'unknown, support-host and unavailable legacy policy never approve live content',
+    'missing mandatory baseline differs from unknown and support annotations',
     () async {
       final rules = MemoryRules([
         const GuardRuleMatch(
@@ -60,7 +63,7 @@ void main() {
           GuardRequest(uri: Uri.parse('https://$host'), tabId: 't'),
           GuardConfiguration(customAllow: {host}),
         );
-        expect(decision.action, GuardAction.blockUnsupported);
+        expect(decision.action, GuardAction.blockPolicyUnavailable);
         expect(decision.overrideAllowed, false);
       }
       rules.fail = true;
@@ -70,6 +73,43 @@ void main() {
           GuardConfiguration(),
         )).action,
         GuardAction.blockPolicyUnavailable,
+      );
+    },
+  );
+  test(
+    'consumer baseline permits unknown domains and retains additive restrictions',
+    () async {
+      final baseline = await ConsumerProtectionPolicy.load(
+        bundle: LocalCatalogBundle(),
+      );
+      final policy = NavigationPolicyService(
+        repository: MemoryRules([]),
+        protection: baseline,
+      );
+      final request = GuardRequest(
+        uri: Uri.parse('https://unknown.test/interactive'),
+        tabId: 't',
+      );
+      expect(
+        (await policy.evaluate(request, GuardConfiguration())).action,
+        GuardAction.allow,
+      );
+      expect(
+        (await policy.evaluate(
+          request,
+          GuardConfiguration(customBlock: {'unknown.test'}),
+        )).action,
+        GuardAction.blockCustomRule,
+      );
+      expect(
+        (await policy.evaluate(
+          GuardRequest(
+            uri: Uri.parse('https://gambling.protection.test/'),
+            tabId: 't',
+          ),
+          GuardConfiguration(customAllow: {'gambling.protection.test'}),
+        )).action,
+        GuardAction.blockCategory,
       );
     },
   );

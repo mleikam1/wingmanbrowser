@@ -21,6 +21,7 @@ class BrowserDock extends StatelessWidget {
     this.isPrivate = false,
     this.isLive = false,
     this.onReload,
+    this.isLoading = false,
   });
   final VoidCallback onHome, onTabs, onMenu, onLibrary, onSpaces;
   final VoidCallback? onBack, onForward, onAddress, onPageInfo;
@@ -28,6 +29,7 @@ class BrowserDock extends StatelessWidget {
   final String? resourceTitle;
   final bool isPrivate;
   final bool isLive;
+  final bool isLoading;
   final VoidCallback? onReload;
   @override
   Widget build(BuildContext context) => Material(
@@ -56,9 +58,11 @@ class BrowserDock extends StatelessWidget {
                   ),
                   if (isLive)
                     IconButton(
-                      tooltip: 'Reload protected page',
+                      tooltip: isLoading
+                          ? 'Stop loading'
+                          : 'Reload protected page',
                       onPressed: onReload,
-                      icon: const Icon(Icons.refresh),
+                      icon: Icon(isLoading ? Icons.close : Icons.refresh),
                     )
                   else
                     const Tooltip(

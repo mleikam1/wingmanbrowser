@@ -8,7 +8,7 @@ void main() {
   final query = const StrictSearchPolicy().buildQuery('moon facts');
 
   test(
-    'search requires its own capability and all existing trust gates',
+    'search requires native capability and independent mandatory baseline',
     () async {
       final runtime = await loadTestPolicy();
       addTearDown(runtime.dispose);
@@ -65,9 +65,7 @@ void main() {
       for (final url in [
         'https://safe.duckduckgo.com/lite/?q=moon&kp=-2',
         'https://duckduckgo.com/?q=moon&kp=1',
-        'https://safe.duckduckgo.com/lite/?q=moon&kp=1&iax=images',
         'https://safe.duckduckgo.com/lite/?q=%21safeoff%20moon&kp=1',
-        'https://example.com/',
       ]) {
         expect(
           runtime.policy
@@ -81,13 +79,18 @@ void main() {
       expect(decision.safeTitle, 'DuckDuckGo search');
       expect(decision.resourceId, 'web-search');
       runtime.repository.restrict('test-unavailable');
+      expect(runtime.searchAvailable(), isTrue);
+      expect(allowed(), isTrue);
+      runtime.configureConsumerProtection(
+        const ConsumerProtectionPolicy.unavailable('baseline-integrity'),
+      );
       expect(runtime.searchAvailable(), isFalse);
       expect(allowed(), isFalse);
     },
   );
 
   testWidgets(
-    'search expires with the live policy even when offline remains usable',
+    'search survives reviewed live policy expiry using its validated baseline',
     (tester) async {
       var now = DateTime.utc(2026, 10, 10, 23, 59, 30);
       final runtime = (await tester.runAsync(
@@ -107,11 +110,11 @@ void main() {
       runtime.addListener(() => observed.add(runtime.searchAvailable()));
       now = DateTime.utc(2026, 10, 11);
       await tester.pump(const Duration(seconds: 31));
-      expect(observed, contains(false));
+      expect(observed, isNot(contains(false)));
       expect(runtime.status.usable, isTrue);
       expect(
         runtime.policy.evaluate(PolicyRequest.navigation(query)).isAllowed,
-        isFalse,
+        isTrue,
       );
       runtime.dispose();
     },

@@ -303,6 +303,7 @@ void main() {
           clock: PolicyClock(wallClock: () => now),
         ),
         checkpointStore: store,
+        consumerProtection: const ConsumerProtectionPolicy.unavailable(),
       );
       var expiryObserved = false;
       app.addListener(() {
@@ -343,6 +344,7 @@ void main() {
       final app = await PolicyRuntime.initialize(
         repository: repo,
         checkpointStore: store,
+        consumerProtection: const ConsumerProtectionPolicy.unavailable(),
       );
       var expiryObserved = false;
       app.addListener(() {

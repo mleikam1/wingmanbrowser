@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'browser/browser_engine.dart';
 import 'browser/protected_web_surface.dart';
 import 'config/product_edition.dart';
 import 'data/sqlite_browser_repository.dart';
 import 'policy/policy_runtime.dart';
+import 'policy/consumer_protection_repository.dart';
 import 'state/browser_state.dart';
 import 'presentation/app_route_observer.dart';
 import 'presentation/browser_shell.dart';
@@ -19,6 +21,7 @@ import 'signature/workspaces/discovery_session.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  runApp(const StartupSurface());
   try {
     // This secure marker is read before constructing or loading owner state.
     final journal = PrivacyJournal(sessionKind: PrivacySessionKind.handoff);
@@ -36,31 +39,59 @@ Future<void> main() async {
       ),
     );
     await handoff.initialize();
-    final policy = await PolicyRuntime.initialize();
-    handoff.attachPolicy(policy);
     await NativeBrowserService().quarantineLegacyContent();
+    // Restore and, when configured, refresh the independent signed browsing
+    // baseline before any owner renderer is allocated. An update outage keeps
+    // the last usable local generation; it never grants unfiltered access.
+    final updates = ConsumerProtectionRepository(
+      source: _consumerUpdateSource(),
+    );
+    await updates.init();
+    await updates.checkForUpdates();
+    final policy = await PolicyRuntime.initialize(
+      consumerProtection: updates.policy,
+    );
+    policy.configureConsumerUpdateAvailability(
+      configured:
+          updates.status.sourceConfigured && updates.status.trustConfigured,
+    );
+    handoff.attachPolicy(policy);
+    LiveBrowsingPolicy reviewed;
     try {
-      final reviewed = await LiveBrowsingPolicy.load();
-      final capabilities = await ProtectedWebBridge.capabilities();
-      policy.configureLiveBrowsing(
-        reviewed,
-        nativeAvailable: capabilities.supported,
-        privateAvailable: capabilities.privateAvailable,
-        strictSearchAvailable: capabilities.strictSearchAvailable,
-      );
+      reviewed = await LiveBrowsingPolicy.load();
     } catch (_) {
-      // A missing/invalid live pack cannot break the existing offline library
-      // or turn an unreviewed destination into an allowed website.
+      reviewed = const LiveBrowsingPolicy.unavailable('curation-unavailable');
     }
+    // Consumer renderer authority is independent of optional Home curation.
+    final capabilities = await ProtectedWebBridge.capabilities();
+    policy.configureLiveBrowsing(
+      reviewed,
+      nativeAvailable: capabilities.supported,
+      privateAvailable: capabilities.privateAvailable,
+      strictSearchAvailable: capabilities.strictSearchAvailable,
+    );
     runApp(
       SignatureApplicationRoot(
         policy: policy,
         handoff: handoff,
         handoffJournal: journal,
+        updates: updates,
       ),
     );
   } catch (_) {
     runApp(const StartupSurface(failed: true));
+  }
+}
+
+ConsumerUpdateSource? _consumerUpdateSource() {
+  const endpoint = String.fromEnvironment('WINGMAN_CONSUMER_UPDATE_URL');
+  if (kIsWeb || endpoint.isEmpty) return null;
+  try {
+    return HttpsConsumerUpdateSource(manifestUri: Uri.parse(endpoint));
+  } on ArgumentError {
+    return null;
+  } on FormatException {
+    return null;
   }
 }
 
@@ -72,10 +103,12 @@ class SignatureApplicationRoot extends StatefulWidget {
     required this.policy,
     required this.handoff,
     required this.handoffJournal,
+    this.updates,
   });
   final PolicyRuntime policy;
   final HandoffController handoff;
   final PrivacyJournal handoffJournal;
+  final ConsumerProtectionRepository? updates;
   @override
   State<SignatureApplicationRoot> createState() =>
       _SignatureApplicationRootState();
@@ -130,7 +163,25 @@ class _SignatureApplicationRootState extends State<SignatureApplicationRoot> {
     );
     // Optional tools don't hold the ordinary Home startup gate.
     unawaited(signatures.initialize());
-    return _OwnerContext(state, signatures, DiscoverySession());
+    final session = DiscoverySession();
+    if (productEdition == ProductEdition.consumer) {
+      await session.restore(
+        repository,
+        permitted: (uri) => widget.policy.policy
+            .evaluate(
+              PolicyRequest.navigation(uri),
+              additional: state.protectedPreferences.additional,
+            )
+            .isAllowed,
+        resourceEligible: (id) => widget.policy.policy
+            .evaluate(
+              PolicyRequest.bundled(id),
+              additional: state.protectedPreferences.additional,
+            )
+            .isAllowed,
+      );
+    }
+    return _OwnerContext(state, signatures, session);
   }
 
   @override
@@ -161,6 +212,7 @@ class _SignatureApplicationRootState extends State<SignatureApplicationRoot> {
     widget.handoff.dispose();
     widget.handoffJournal.dispose();
     widget.policy.dispose();
+    unawaited(widget.updates?.close());
     super.dispose();
   }
 }
@@ -172,6 +224,7 @@ class _OwnerContext {
   final DiscoverySession session;
   Future<void> close() async {
     await signatures.flush();
+    await session.flush();
     session.dispose();
     signatures.dispose();
     state.dispose();

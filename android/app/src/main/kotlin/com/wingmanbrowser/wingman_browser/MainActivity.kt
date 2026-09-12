@@ -1,6 +1,8 @@
 package com.wingmanbrowser.wingman_browser
 
 import android.app.DownloadManager
+import android.app.role.RoleManager
+import android.provider.Settings
 import android.app.KeyguardManager
 import android.content.Intent
 import android.net.Uri
@@ -19,7 +21,7 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 
-/** Legacy channel stays closed; reviewed visual browsing has a separate narrow bridge. */
+/** Application lifecycle, incoming links and OS capabilities; content stays on the protected channel. */
 class MainActivity : FlutterActivity() {
     private lateinit var channel: MethodChannel
     private lateinit var protectedBrowser: ProtectedWebBridge
@@ -27,6 +29,12 @@ class MainActivity : FlutterActivity() {
     private var initialized = false
     private var discardingHandoffLinks = false
     private var clearing = false
+
+    @Suppress("DEPRECATION")
+    override fun onBackPressed() {
+        if (::protectedBrowser.isInitialized && protectedBrowser.hideFullscreen()) return
+        super.onBackPressed()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
@@ -77,6 +85,16 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (::protectedBrowser.isInitialized && protectedBrowser.onActivityResult(requestCode, resultCode, data)) return
+        super.onActivityResult(requestCode, resultCode, data)
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        if (::protectedBrowser.isInitialized && protectedBrowser.onRequestPermissionsResult(requestCode)) return
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+    }
+
     private fun validWebUrl(value: String?): String? {
         if (value == null || value.length > 16384) return null
         val uri = Uri.parse(value)
@@ -110,7 +128,7 @@ class MainActivity : FlutterActivity() {
                 }
                 "setSensitiveContent" -> result.success(null) // Cannot weaken the native baseline.
                 "capabilityState" -> result.success(mapOf(
-                    "capability" to "bundledPlainTextOnly", "liveBrowsing" to false,
+                    "capability" to "consumerWeb", "liveBrowsing" to protectedBrowser.liveAvailable(),
                     "contentViews" to contentViewCount(window.decorView),
                     "handoffIncomingDiscarded" to discardingHandoffLinks, "incomingReady" to initialized,
                     "keyboardVisible" to (if (Build.VERSION.SDK_INT >= 30)
@@ -121,12 +139,29 @@ class MainActivity : FlutterActivity() {
                     "contentViews" to contentViewCount(window.decorView),
                     "deviceAuthenticationAvailable" to
                         (getSystemService(KEYGUARD_SERVICE) as KeyguardManager).isDeviceSecure))
-                "privateAvailable", "defaultBrowser" -> result.success(false)
+                "privateAvailable" -> result.success(protectedBrowser.privateAvailable())
+                "defaultBrowser" -> result.success(Build.VERSION.SDK_INT >= 29 && (getSystemService(ROLE_SERVICE) as RoleManager).isRoleHeld(RoleManager.ROLE_BROWSER))
+                "requestDefaultBrowser" -> {
+                    if (Build.VERSION.SDK_INT >= 29) {
+                        val roles = getSystemService(ROLE_SERVICE) as RoleManager
+                        if (!roles.isRoleAvailable(RoleManager.ROLE_BROWSER)) { result.success(false); return }
+                        if (!roles.isRoleHeld(RoleManager.ROLE_BROWSER)) startActivityForResult(roles.createRequestRoleIntent(RoleManager.ROLE_BROWSER), 7113)
+                    } else startActivity(Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS))
+                    result.success(true)
+                }
                 "normalizeHost" -> result.success(NativeGuardPolicy.normalizeHost(call.argument<String>("host") ?: ""))
                 "quarantineLegacyContent" -> {
-                    protectedBrowser.closeAll()
-                    cancelUnfinishedDownloads()
-                    clearLegacyData(storage = true, cookies = true, cache = true, quarantine = true, result = result)
+                    // The retired pilot had only disposable profiles. Never erase a new normal
+                    // profile on startup. Purge abandoned private data, once per migration.
+                    val migrations = getSharedPreferences("browser_migrations", MODE_PRIVATE)
+                    if (migrations.getInt("consumer_profile", 0) >= 1) {
+                        protectedBrowser.quarantineCompleted(); result.success(null)
+                    } else protectedBrowser.purgeRetiredProfiles { success ->
+                        if (success) {
+                            migrations.edit().putInt("consumer_profile", 1).apply()
+                            protectedBrowser.quarantineCompleted(); result.success(null)
+                        } else result.error("cleanup_unavailable", "Private session cleanup needs recovery.", null)
+                    }
                 }
                 "clearData" -> {
                     protectedBrowser.closeAll()
@@ -135,7 +170,10 @@ class MainActivity : FlutterActivity() {
                     cookies = call.argument<Boolean>("cookies") == true,
                     cache = call.argument<Boolean>("cache") == true, result = result)
                 }
-                "stop", "pause", "hideForGuard", "close" -> result.success(null) // No retained views.
+                "hideForGuard" -> { protectedBrowser.hideAll(); result.success(null) }
+                "pause" -> { protectedBrowser.pauseAll(); result.success(null) }
+                "close" -> { protectedBrowser.closeAll(); result.success(null) }
+                "stop" -> result.success(null)
                 "closedViewReleased" -> result.success(true)
                 // There is deliberately no setter, config flag, debug escape,
                 // role exception or ID lookup that can create/bind a view.

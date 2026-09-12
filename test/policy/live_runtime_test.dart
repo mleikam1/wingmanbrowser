@@ -7,7 +7,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   final uri = Uri.parse('https://science.nasa.gov/moon/facts/');
   test(
-    'runtime requires reviewed data, signed catalog and native/private capability together',
+    'consumer runtime requires baseline and native/private capability independently of catalog',
     () async {
       final runtime = await loadTestPolicy();
       addTearDown(runtime.dispose);
@@ -40,43 +40,42 @@ void main() {
         isTrue,
       );
       runtime.repository.restrict('test-catalog-unavailable');
-      expect(allowed(), isFalse);
-      expect(runtime.liveAvailable(), isFalse);
+      expect(allowed(), isTrue);
+      expect(runtime.liveAvailable(), isTrue);
       expect(
         launchpad.assess(LaunchpadTarget.website(uri.toString())).canOpen,
-        isFalse,
+        isTrue,
       );
     },
   );
 
-  testWidgets(
-    'live expiry notifies displays at its own deadline before offline expiry',
-    (tester) async {
-      var now = DateTime.utc(2026, 10, 10, 23, 59, 30);
-      final runtime = (await tester.runAsync(
-        () => loadTestPolicy(clock: () => now),
-      ))!;
-      final pack = (await tester.runAsync(
-        () => LiveBrowsingPolicy.load(bundle: LocalCatalogBundle()),
-      ))!;
-      runtime.configureLiveBrowsing(
-        pack,
-        nativeAvailable: true,
-        privateAvailable: true,
-      );
-      expect(runtime.liveAvailable(), isTrue);
-      final observed = <bool>[];
-      runtime.addListener(() => observed.add(runtime.liveAvailable()));
-      now = DateTime.utc(2026, 10, 11);
-      await tester.pump(const Duration(seconds: 31));
-      expect(observed, contains(false));
-      expect(runtime.liveAvailable(), isFalse);
-      expect(
-        runtime.status.usable,
-        isTrue,
-        reason: 'Offline articles have their own later review expiry',
-      );
-      runtime.dispose();
-    },
-  );
+  testWidgets('reviewed live expiry does not expire consumer browsing', (
+    tester,
+  ) async {
+    var now = DateTime.utc(2026, 10, 10, 23, 59, 30);
+    final runtime = (await tester.runAsync(
+      () => loadTestPolicy(clock: () => now),
+    ))!;
+    final pack = (await tester.runAsync(
+      () => LiveBrowsingPolicy.load(bundle: LocalCatalogBundle()),
+    ))!;
+    runtime.configureLiveBrowsing(
+      pack,
+      nativeAvailable: true,
+      privateAvailable: true,
+    );
+    expect(runtime.liveAvailable(), isTrue);
+    final observed = <bool>[];
+    runtime.addListener(() => observed.add(runtime.liveAvailable()));
+    now = DateTime.utc(2026, 10, 11);
+    await tester.pump(const Duration(seconds: 31));
+    expect(observed, isNot(contains(false)));
+    expect(runtime.liveAvailable(), isTrue);
+    expect(
+      runtime.status.usable,
+      isTrue,
+      reason: 'Offline articles have their own later review expiry',
+    );
+    runtime.dispose();
+  });
 }

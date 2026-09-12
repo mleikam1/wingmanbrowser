@@ -135,7 +135,7 @@ void main() {
     );
   }
   test(
-    'v3 forged restore is re-sanitized even after migration marker and later saves',
+    'consumer migration runs once; later metadata survives and legacy grant settings stay inert',
     () async {
       await seed(2);
       final repo = open();
@@ -152,8 +152,8 @@ void main() {
         whereArgs: ['guard_configuration'],
       );
       final restored = await repo.load();
-      expect(restored.tabs.single.isHome, true);
-      expect(restored.quarantined.archivedTabs, 2);
+      expect(restored.tabs.single.url, 'https://restored.test');
+      expect(restored.quarantined.archivedTabs, 1);
       expect(jsonDecode(restored.settings.guardJson)['customAllow'], isEmpty);
       await repo.saveSettings(
         const BrowserSettings(
@@ -162,7 +162,7 @@ void main() {
         ),
       );
       expect((await repo.load()).settings.searchProviderId, 'approved-content');
-      expect((await raw.query('retired_tabs')).length, 2);
+      expect((await raw.query('retired_tabs')).length, 1);
       await repo.close();
     },
   );
@@ -170,6 +170,11 @@ void main() {
     final repo = open();
     await repo.load();
     final raw = await databaseFactoryFfi.openDatabase(filename);
+    await raw.delete(
+      'settings',
+      where: 'key=?',
+      whereArgs: ['consumer_migration_v1'],
+    );
     await raw.insert('tabs', {
       'id': 'old-home',
       'url': '',
@@ -191,6 +196,11 @@ void main() {
       final repo = open();
       await repo.load();
       final raw = await databaseFactoryFfi.openDatabase(filename);
+      await raw.delete(
+        'settings',
+        where: 'key=?',
+        whereArgs: ['consumer_migration_v1'],
+      );
       await raw.insert('tabs', {
         'id': 'failed',
         'url': 'https://evidence.test',

@@ -9,6 +9,7 @@ abstract interface class SignatureDocumentStore {
     'compatibility',
     'ui',
     'launchpad',
+    'browserSession',
   };
   static const maximumBytes = 512 * 1024;
   Future<Map<String, Object?>?> readDocument(String key);

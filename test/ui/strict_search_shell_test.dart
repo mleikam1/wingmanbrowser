@@ -211,6 +211,21 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  shellTest(
+    'ordinary colon punctuation and site operators remain web queries',
+    (tester) async {
+      final (:h, :repository) = await mount(tester);
+      await enter(tester, 'site:python.org documentation');
+      await submit(tester);
+      expect(
+        h.session.current.website!.queryParameters['q'],
+        'site:python.org documentation',
+      );
+      expect(find.byType(PolicyStateView), findsNothing);
+      await expectNotStored(h, repository, 'site:python.org documentation');
+    },
+  );
+
   shellTest('pasted weaker provider URL is rebuilt before Shell navigation', (
     tester,
   ) async {
@@ -221,52 +236,49 @@ void main() {
     final surface = tester.widget<ProtectedWebSurface>(
       find.byType(ProtectedWebSurface),
     );
-    expect(surface.url, policy.buildQuery(marker));
-    expect(surface.url.queryParametersAll.keys, orderedEquals(['q', 'kp']));
+    expect(surface.url.queryParameters['q'], marker);
+    expect(surface.url.queryParameters['kp'], '1');
+    expect(surface.url.host, 'safe.duckduckgo.com');
+    expect(surface.url.queryParameters['k1'], '-1');
     await expectNotStored(h, repository, marker);
   });
 
-  shellTest('result wrappers require ordinary reviewed destination policy', (
-    tester,
-  ) async {
-    final (:h, :repository) = await mount(tester);
-    await enter(tester, 'moon phases');
-    await submit(tester);
-    final initial = h.session.current.website;
-    var surface = tester.widget<ProtectedWebSurface>(
-      find.byType(ProtectedWebSurface),
-    );
-    final unknown = Uri.https('duckduckgo.com', '/l/', {
-      'uddg': 'https://unreviewed.example/moon',
-    });
-    surface.onNavigation(unknown);
-    await tester.pumpAndSettle();
-    expect(find.byType(PolicyStateView), findsOneWidget);
-    expect(h.session.current.website, initial);
-    expect(
-      h.session.current.trail.join(),
-      isNot(contains('unreviewed.example')),
-    );
-    await shared.home(tester);
-    surface = tester.widget<ProtectedWebSurface>(
-      find.byType(ProtectedWebSurface),
-    );
-    surface.onNavigation(
-      Uri.https('duckduckgo.com', '/l/', {'uddg': nasa, 'rut': 'abc123'}),
-    );
-    await tester.pumpAndSettle();
-    expect(h.session.current.website.toString(), nasa);
-    expect(find.byType(PolicyStateView), findsNothing);
-    expect(
-      tester
-          .widget<ProtectedWebSurface>(find.byType(ProtectedWebSurface))
-          .url
-          .toString(),
-      nasa,
-    );
-    expect(h.session.current.trail.join(), isNot(contains('/l/?')));
-    await expectNotStored(h, repository, 'moon phases');
-  });
+  shellTest(
+    'result wrappers open ordinary permitted domains and retain independent filtering',
+    (tester) async {
+      final (:h, :repository) = await mount(tester);
+      await enter(tester, 'moon phases');
+      await submit(tester);
+      var surface = tester.widget<ProtectedWebSurface>(
+        find.byType(ProtectedWebSurface),
+      );
+      final unknown = Uri.https('duckduckgo.com', '/l/', {
+        'uddg': 'https://unreviewed.example/moon',
+      });
+      surface.onNavigation(unknown);
+      await tester.pumpAndSettle();
+      expect(find.byType(PolicyStateView), findsNothing);
+      expect(h.session.current.website!.host, 'unreviewed.example');
+      surface = tester.widget<ProtectedWebSurface>(
+        find.byType(ProtectedWebSurface),
+      );
+      surface.onNavigation(
+        Uri.https('duckduckgo.com', '/l/', {'uddg': nasa, 'rut': 'abc123'}),
+      );
+      await tester.pumpAndSettle();
+      expect(h.session.current.website.toString(), nasa);
+      expect(find.byType(PolicyStateView), findsNothing);
+      expect(
+        tester
+            .widget<ProtectedWebSurface>(find.byType(ProtectedWebSurface))
+            .url
+            .toString(),
+        nasa,
+      );
+      expect(h.session.current.trail.join(), isNot(contains('/l/?')));
+      await expectNotStored(h, repository, 'moon phases');
+    },
+  );
 
   shellTest('even a committed search page cannot be pinned to Launchpad', (
     tester,
@@ -288,7 +300,7 @@ void main() {
         .singleWhere((row) => row.title == 'Add to Launchpad');
     expect(pin.onTap, isNull);
     expect(
-      find.text('Search terms are not saved; pin a reviewed result page'),
+      find.text('Search terms are not saved; pin a destination page'),
       findsOneWidget,
     );
     expect(find.byType(LaunchpadEditorScreen), findsNothing);

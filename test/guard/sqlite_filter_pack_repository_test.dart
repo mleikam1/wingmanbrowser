@@ -266,7 +266,20 @@ void main() {
         GuardRequest(uri: Uri.parse('https://example.test'), tabId: 'one'),
         GuardConfiguration(),
       );
-      expect(decision.action, GuardAction.blockPolicyUnavailable);
+      expect(
+        decision.action,
+        GuardAction.allow,
+        reason:
+            'The independent build-pinned mandatory baseline remains usable',
+      );
+      final withoutBaseline = NavigationPolicyService(repository: repo);
+      expect(
+        (await withoutBaseline.evaluate(
+          GuardRequest(uri: Uri.parse('https://example.test'), tabId: 'one'),
+          GuardConfiguration(),
+        )).action,
+        GuardAction.blockPolicyUnavailable,
+      );
       final inspect = await databaseFactoryFfi.openDatabase(getPath());
       expect(await inspect.query('guard_releases'), hasLength(1));
     },

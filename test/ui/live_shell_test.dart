@@ -32,7 +32,7 @@ void main() {
   }
 
   testWidgets(
-    'an address reaches the live surface, while unreviewed links explain policy',
+    'ordinary addresses outside the reviewed catalog reach the consumer surface',
     (tester) async {
       final h = await shared.mount(tester);
       try {
@@ -52,11 +52,11 @@ void main() {
         final surface = tester.widget<ProtectedWebSurface>(
           find.byType(ProtectedWebSurface),
         );
-        expect(surface.canOpen(Uri.parse('https://example.com/')), isFalse);
+        expect(surface.canOpen(Uri.parse('https://example.com/')), isTrue);
         surface.onNavigation(Uri.parse('https://example.com/'));
         await tester.pumpAndSettle();
-        expect(find.byType(PolicyStateView), findsOneWidget);
-        expect(h.session.current.website!.host, 'science.nasa.gov');
+        expect(find.byType(PolicyStateView), findsNothing);
+        expect(h.session.current.website!.host, 'example.com');
         expect(h.services.launchpad.snapshot.shortcuts, isEmpty);
         expect(tester.takeException(), isNull);
       } finally {

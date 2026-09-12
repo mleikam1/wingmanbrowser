@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../config/product_edition.dart';
 import '../../policy/policy_runtime.dart';
 import '../../state/browser_state.dart';
 import '../components/wingman_components.dart';
@@ -65,8 +66,11 @@ class ProtectionScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  policy.status.usable
-                      ? 'Your reviewed-content rules have no off switch.'
+                  productEdition == ProductEdition.consumer &&
+                          !policy.consumerProtection.isUsable
+                      ? 'Browsing is closed until mandatory protection data is recovered.'
+                      : policy.status.usable
+                      ? 'Mandatory category and security rules have no off switch.'
                       : 'Core rules remain active. Reviewed content is currently unavailable.',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: Colors.white,
@@ -80,18 +84,20 @@ class ProtectionScreen extends StatelessWidget {
           const SizedBox(height: 16),
           WingmanStatus(
             title: 'Coverage is limited',
-            message: policy.status.usable
-                ? '${policy.status.resourceCount} reviewed offline articles. ${policy.liveAvailable(isPrivate: isPrivate) ? 'Reviewed website paths can display images and styles. Live content can change; there is no per-image or automatic text classifier.' : 'Live website support is unavailable in this session.'}'
-                : 'No usable catalog is available. A polished interface is not evidence of live-site coverage.',
+            message:
+                '${policy.status.resourceCount} reviewed offline articles. ${policy.liveAvailable(isPrivate: isPrivate) ? 'Consumer pages use local category and threat filtering. Unknown destinations may be permitted, not verified safe. Live content can change; there is no per-image or automatic text classifier.' : 'Live website support is unavailable in this session.'}',
             tone: WingmanTone.caution,
+          ),
+          const Text(
+            'Filters can miss prohibited material or block legitimate pages. Alcohol, drug promotion and tobacco coverage is limited; dynamic ads and recommendations may not be classified.',
           ),
           WingmanStatus(
             title: 'Web search has a separate filtering scope',
             message:
-                '${policy.searchAvailable(isPrivate: isPrivate, additional: state.protectedPreferences.additional) ? 'The first, text-only DuckDuckGo results page is available with publisher-fixed Strict adult filtering.' : 'Web search is unavailable or disabled in this session.'} Search snippets and ads are not classified against all six Wingman rules. Search results do not expand the reviewed destination list.',
+                '${policy.searchAvailable(isPrivate: isPrivate, additional: state.protectedPreferences.additional) ? 'DuckDuckGo search is available with required Strict adult filtering.' : 'Web search is unavailable or disabled in this session.'} Search snippets and ads are not classified against all six Wingman rules. Clicked destinations are evaluated separately.',
             tone: WingmanTone.caution,
           ),
-          const WingmanSection(title: 'Reviewed-content policy'),
+          const WingmanSection(title: 'Mandatory content policy'),
           for (final category in MandatoryCategory.values.where(
             (value) => value != MandatoryCategory.securityThreat,
           )) ...[
@@ -138,7 +144,7 @@ class ProtectionScreen extends StatelessWidget {
             icon: Icons.security,
             title: 'Website request controls',
             subtitle: policy.liveAvailable(isPrivate: isPrivate)
-                ? 'Reviewed page and asset addresses plus local tracker rules limit native requests. Scripts, sign-in and embedded media stay disabled.'
+                ? 'Native category, threat and tracker controls apply to supported requests. JavaScript, normal sign-in and user-initiated media use platform browser controls.'
                 : 'Live website support is unavailable in this session.',
           ),
           WingmanSettingsRow(
@@ -191,14 +197,14 @@ class AlwaysOnProtectionsScreen extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'These reviewed-content boundaries are built into the application. Private sessions, optional settings, review requests and compatibility corrections cannot turn them off. Live search previews use a separate provider filter; they are not classified against all six rules.',
+            'Mandatory category and security boundaries are built into the application. Private sessions, optional settings, review requests and compatibility corrections cannot turn them off. Live search previews use a separate provider filter; they are not classified against all six rules.',
           ),
           const SizedBox(height: 20),
           for (final category in MandatoryCategory.values)
             WingmanSettingsRow(
               icon: Icons.lock_outline,
               title: category.label,
-              subtitle: 'Restricted in the reviewed-content policy',
+              subtitle: 'Mandatory policy; filtering coverage varies',
             ),
           const SizedBox(height: 24),
           const WingmanSection(title: 'Policy & review data'),
@@ -214,11 +220,31 @@ class AlwaysOnProtectionsScreen extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Text(
-            'Website scope expires: ${_reviewExpiry(policy.policy.livePolicy?.expiresAt)}',
+            'Reviewed Home website catalog expires: ${_reviewExpiry(policy.policy.livePolicy?.expiresAt)}',
           ),
+          if (productEdition == ProductEdition.consumer) ...[
+            Text(
+              policy.consumerUpdatesConfigured
+                  ? 'Online rule updates are configured. Wingman checks during startup; outages retain the last validated rules.'
+                  : 'Online rule updates are not configured in this build. Install verified app updates to refresh the bundled rules.',
+            ),
+            Text(
+              'Browsing protection: ${policy.consumerProtection.version ?? 'Recovery required'}',
+            ),
+            Text(
+              'Protection data date: ${_reviewExpiry(policy.consumerProtection.generatedAt)}',
+            ),
+            Text(
+              policy.consumerProtection.isUsable
+                  ? policy.consumerProtection.isStale(DateTime.now())
+                        ? 'Protection data is older than 24 hours. The last validated rules remain active; coverage may be outdated.'
+                        : 'Validated local protection data is installed.'
+                  : 'No usable mandatory baseline is available. Browsing stays closed.',
+            ),
+          ],
           const SizedBox(height: 16),
           const Text(
-            'Installed text uses exact-content approval. The native website pilot permits separately reviewed page and asset addresses. Unknown or unsupported destinations stay closed. Website content can change; no per-image or automatic text classifier checks every response. iOS cannot inspect every image response before display. Expired website scope closes live access until a reviewed app update; there is no automatic online filter-update service.',
+            'Installed articles and reviewed Home content use separate approval records. Consumer browsing permits ordinary destinations under local category and threat rules; the reviewed catalog does not grant browsing permission. School allowlisting remains separate. Filters can miss prohibited content or block legitimate pages. Dynamic ads, images and recommendations are not reliably classified. Browsing uses the last validated baseline during update outages and closes when no usable baseline exists.',
           ),
           const SizedBox(height: 16),
           const Text(

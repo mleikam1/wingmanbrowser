@@ -1,432 +1,491 @@
 package com.wingmanbrowser.wingman_browser
 
+import android.Manifest
+import android.app.Activity
+import android.app.AlertDialog
 import android.content.Context
-import android.graphics.BitmapFactory
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.graphics.Bitmap
 import android.net.Uri
 import android.net.http.SslError
 import android.os.Build
+import android.os.Message
 import android.view.View
 import android.view.ViewGroup
-import android.view.inputmethod.EditorInfo
-import android.view.inputmethod.InputConnection
 import android.webkit.*
 import android.widget.FrameLayout
+import android.widget.Toast
 import androidx.webkit.*
-import io.flutter.FlutterInjector
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.StandardMessageCodec
 import io.flutter.plugin.platform.PlatformView
 import io.flutter.plugin.platform.PlatformViewFactory
-import org.json.JSONObject
 import java.io.ByteArrayInputStream
 import java.net.HttpURLConnection
 import java.net.URI
-import java.security.MessageDigest
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
 import java.util.UUID
+import java.util.concurrent.Executors
 
-/** Scriptless reviewed websites and a separately authorized provider-Strict search surface. */
+/** Native networking and origin sandbox, with local mandatory policy before navigation. No page JS bridge. */
 class ProtectedWebBridge(private val context: Context, private val channel: MethodChannel) {
     companion object {
         const val VIEW_TYPE = "wingman/protected-web"
-        const val CATALOG_ASSET = "assets/policy/live_sites.json"
-        // Updated by the reviewed-catalog build tool; no method-channel setter exists.
-        const val CATALOG_SHA256 = "7937170f4c5605faff4e7fbfcc0ea4f27623b05a75c84e6adc8aba2243f965c1"
-        private const val MAX_PAGE_BYTES = 12 * 1024 * 1024
-        private const val MAX_REQUESTS = 80
-        private const val SEARCH_CSS = "https://safe.duckduckgo.com/dist/lr.48ddfe4eadf6a534e93f.css"
-        private const val CSP = "default-src 'none'; script-src 'none'; img-src https:; style-src 'unsafe-inline' https:; font-src https:; connect-src 'none'; frame-src 'none'; child-src 'none'; object-src 'none'; media-src 'none'; base-uri 'none'; form-action 'none'; sandbox allow-same-origin"
+        const val UPLOAD_REQUEST = 7110
+        const val DOWNLOAD_REQUEST = 7111
+        const val PERMISSION_REQUEST = 7112
     }
+    private val activity get() = context as Activity
+    private val policy by lazy { ConsumerProtectionPolicy(context) }
     private val views = mutableMapOf<Int, ProtectedView>()
-    private val policy by lazy { Catalog(context) }
-    @Volatile private var ready = false
+    private val policyUpdates by lazy { ConsumerPolicyUpdates(context, policy) { action ->
+        val prior = ready
+        ready = false
+        try { closeAll(); action() } finally { ready = prior }
+    } }
+    @Volatile private var ready = true
     @Volatile private var foreground = true
     @Volatile private var denied = false
     @Volatile private var cleanupPending = false
     private val loadedProfiles = mutableMapOf<String, Profile>()
     private val purgedProfiles = mutableSetOf<String>()
+    private val retiringProfiles = java.util.Collections.synchronizedSet(mutableSetOf<String>())
     private val profilePurgeWaiters = mutableMapOf<String, MutableList<(Boolean) -> Unit>>()
-    @Volatile private var profilePurgeFailed = false
-
-    // Android cannot unregister a profile loaded in this process. Purge its
-    // storage explicitly now; the next startup unregisters the empty UUID name.
+    private var profilePurgeFailed = false
+    private var uploadCallback: ValueCallback<Array<Uri>>? = null
+    private var uploadOwner: ProtectedView? = null
+    private var uploadOrigin: String? = null
+    private data class Download(val owner: ProtectedView, val url: String, val mime: String, val filename: String, val cookie: String?, val epoch: Long)
+    private var download: Download? = null
+    private var permissionCompletion: (() -> Unit)? = null
+    private var fullscreen: View? = null
+    private var fullscreenBack: android.window.OnBackInvokedCallback? = null
+    private var fullscreenCallback: WebChromeClient.CustomViewCallback? = null
+    private val downloads = Executors.newSingleThreadExecutor()
+    val factory = object : PlatformViewFactory(StandardMessageCodec.INSTANCE) {
+        override fun create(context: Context, viewId: Int, args: Any?): PlatformView {
+            val values = args as? Map<*, *> ?: emptyMap<Any, Any>()
+            check(views.size < 12)
+            policy.setAdditionalRestrictions((values["blockedResourceIds"] as? List<*>)?.filterIsInstance<String>() ?: emptyList(), (values["blockedCollections"] as? List<*>)?.filterIsInstance<String>() ?: emptyList(), (values["blockedDomains"] as? List<*>)?.filterIsInstance<String>() ?: emptyList(), (values["blockedUrls"] as? List<*>)?.filterIsInstance<String>() ?: emptyList(), values["searchBlocked"] == true)
+            return ProtectedView(context, viewId, values["tabId"] as? String ?: "", values["private"] == true).also { views[viewId] = it }
+        }
+    }
+    init {
+        channel.setMethodCallHandler(::handle)
+        // Remove only incomplete app-owned download staging files after a process crash.
+        context.cacheDir.listFiles()?.filter { it.name.startsWith("wingman-download-") && it.name.endsWith(".part") }?.forEach { it.delete() }
+        if (privateAvailable()) {
+            // Abandoned private profiles from a terminated process are never reused.
+            try { ProfileStore.getInstance().allProfileNames.filter { it.startsWith("wingman_private_") }.forEach { ProfileStore.getInstance().deleteProfile(it) } }
+            catch (_: Exception) { profilePurgeFailed = true }
+        }
+        installServiceWorkerPolicy(null)
+    }
+    fun quarantineCompleted() { ready = true }
+    fun cleanupStarted() { cleanupPending = true; closeAll() }
+    fun cleanupFinished() { cleanupPending = false }
+    fun hideAll() { denied = true; hideFullscreen(); closeAll() }
+    fun restoreOwner() { denied = false }
+    fun pauseAll() { foreground = false; hideFullscreen(); views.values.forEach { it.web?.onPause() }; CookieManager.getInstance().flush() }
+    fun resume() { foreground = true; views.values.filter { it.active }.forEach { it.web?.onResume() } }
+    fun closeAll() { hideFullscreen(); views.values.toList().forEach { it.release() }; cancelUpload(); download = null }
+    fun privateAvailable() = WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE) && WebViewFeature.isFeatureSupported(WebViewFeature.DELETE_BROWSING_DATA) && !profilePurgeFailed
+    fun liveAvailable() = ready && policy.valid() && policyUpdates.generationReady() && !cleanupPending
+    private fun mayOpen() = liveAvailable() && foreground && !denied
     private fun purgeProfile(name: String, completion: (Boolean) -> Unit = {}) {
         if (name in purgedProfiles) { completion(true); return }
         profilePurgeWaiters[name]?.let { it.add(completion); return }
         val profile = loadedProfiles[name] ?: run { completion(false); return }
         profilePurgeWaiters[name] = mutableListOf(completion)
-        fun finish(success: Boolean) {
+        fun done(success: Boolean) {
             if (success) purgedProfiles.add(name) else profilePurgeFailed = true
             profilePurgeWaiters.remove(name)?.forEach { it(success) }
-            if (!success) closeAll()
         }
         try {
             WebStorageCompat.deleteBrowsingData(profile.webStorage) {
-                try {
-                    profile.cookieManager.removeAllCookies {
-                        try { profile.cookieManager.flush(); finish(true) }
-                        catch (_: Exception) { finish(false) }
-                    }
-                } catch (_: Exception) { finish(false) }
+                profile.cookieManager.removeAllCookies { profile.cookieManager.flush(); done(true) }
             }
-        } catch (_: Exception) { finish(false) }
+        } catch (_: Exception) { done(false) }
     }
     fun purgeRetiredProfiles(completion: (Boolean) -> Unit) {
-        if (!privateAvailable()) { completion(true); return }
-        val store = ProfileStore.getInstance()
-        val names = store.allProfileNames.filter { it.startsWith("wingman_private_") }
+        if (!WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)) { completion(true); return }
+        val names = ProfileStore.getInstance().allProfileNames.filter { it.startsWith("wingman_private_") }
         if (names.isEmpty()) { completion(true); return }
-        var remaining = names.size
-        var success = true
-        fun finished(ok: Boolean) { success = success && ok; remaining--; if (remaining == 0) completion(success) }
+        var count = names.size; var okay = true
+        fun done(success: Boolean) { okay = okay && success; if (--count == 0) completion(okay) }
         names.forEach { name ->
-            if (loadedProfiles.containsKey(name)) purgeProfile(name, ::finished)
-            else try { store.deleteProfile(name); finished(true) } catch (_: Exception) { finished(false) }
+            if (loadedProfiles.containsKey(name)) purgeProfile(name, ::done)
+            else try { ProfileStore.getInstance().deleteProfile(name); done(true) } catch (_: Exception) { done(false) }
         }
     }
-    val factory = object : PlatformViewFactory(StandardMessageCodec.INSTANCE) {
-        override fun create(context: Context, viewId: Int, args: Any?): PlatformView {
-            val values = args as? Map<*, *> ?: emptyMap<Any, Any>()
-            val view = ProtectedView(context, viewId, values["tabId"] as? String ?: "", values["private"] == true)
-            views[viewId] = view
-            return view
-        }
+    private fun deniedResponse() = WebResourceResponse("text/plain", "UTF-8", 403, "Blocked", mapOf("Cache-Control" to "no-store"), ByteArrayInputStream(ByteArray(0)))
+    private fun installServiceWorkerPolicy(profile: Profile?, profileName: String? = null) {
+        if (Build.VERSION.SDK_INT < 24) return
+        val controller = profile?.serviceWorkerController ?: ServiceWorkerController.getInstance()
+        controller.serviceWorkerWebSettings.apply { allowFileAccess = false; allowContentAccess = false }
+        controller.setServiceWorkerClient(object : ServiceWorkerClient() {
+            override fun shouldInterceptRequest(request: WebResourceRequest): WebResourceResponse? =
+                if (liveAvailable() && !denied && !cleanupPending && (profileName == null || profileName !in retiringProfiles) && policy.decide(request.url.toString(), false).allowed) null else deniedResponse()
+        })
     }
-    init { channel.setMethodCallHandler(::handle) }
-    fun quarantineCompleted() { ready = true }
-    fun cleanupStarted() { cleanupPending = true; closeAll() }
-    fun cleanupFinished() { cleanupPending = false }
-    fun hideAll() { denied = true; views.values.toList().forEach { it.release() } }
-    fun restoreOwner() { denied = false }
-    fun pauseAll() { foreground = false; views.values.toList().forEach { it.release() } }
-    fun resume() { foreground = true }
-    fun closeAll() { views.values.toList().forEach { it.release() } }
-    private fun privateAvailable() = WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE) && WebViewFeature.isFeatureSupported(WebViewFeature.DELETE_BROWSING_DATA)
-    private fun mayOpen() = ready && foreground && !denied && !cleanupPending && !profilePurgeFailed && policy.valid()
     private fun handle(call: MethodCall, result: MethodChannel.Result) {
         try {
             if (call.method == "capabilities") {
-                val supported = ready && !cleanupPending && !profilePurgeFailed && policy.valid()
-                result.success(mapOf("supported" to supported, "privateAvailable" to (supported && privateAvailable()), "strictSearchAvailable" to mayOpen(), "mode" to "reviewedScriptlessWeb", "reason" to if (supported) null else "Reviewed website protection is unavailable.")); return
+                if (BuildConfig.DEBUG) android.util.Log.i("WingmanProtection", "baseline=${policy.diagnostic}; ready=$ready; cleanup=$cleanupPending; edition=${BuildConfig.WINGMAN_EDITION}")
+                result.success(mapOf("supported" to liveAvailable(), "privateAvailable" to (liveAvailable() && privateAvailable()), "strictSearchAvailable" to liveAvailable(), "mode" to "consumerWeb", "javascript" to true, "cookies" to true, "storage" to true, "history" to true, "findInPage" to true, "uploads" to true, "downloads" to true, "media" to true, "permissions" to true, "newWindows" to true, "defaultBrowserAvailable" to true, "engine" to "Android System WebView", "engineVersion" to WebViewCompat.getCurrentWebViewPackage(context)?.versionName, "reason" to if (liveAvailable()) null else "Mandatory protection needs recovery.")); return
+            }
+            when (call.method) {
+                "prepareConsumerPolicy" -> { result.success(policyUpdates.prepare(call.argument<ByteArray>("envelope") ?: throw IllegalArgumentException(), call.argument<ByteArray>("data") ?: throw IllegalArgumentException(), call.argument<Boolean>("restore") == true)); return }
+                "activateConsumerPolicy" -> { result.success(policyUpdates.activate(call.argument<String>("token") ?: "")); return }
+                "discardConsumerPolicy" -> { policyUpdates.discard(call.argument<String>("token") ?: ""); result.success(null); return }
+                "revertConsumerPolicy" -> { result.success(policyUpdates.revert(call.argument<String>("token") ?: "")); return }
+            }
+            if (call.method == "configurePolicy") {
+                policy.setAdditional(call.argument<List<String>>("blockedDomains") ?: emptyList())
+                views.values.forEach { view -> if (view.currentUrl.isNotEmpty() && !policy.decide(view.currentUrl).allowed) view.block(view.currentUrl, "Blocked by an additional restriction.") }
+                result.success(null); return
             }
             if (call.method == "state" && call.argument<Number>("viewId") == null) {
-                result.success(mapOf("views" to views.values.count { it.web != null }, "ready" to ready, "foreground" to foreground, "handoffBlocked" to denied, "cleanupPending" to cleanupPending, "catalogValid" to policy.valid(), "profilePurgesPending" to profilePurgeWaiters.size, "profilePurgesCompleted" to purgedProfiles.size, "profilePurgeFailed" to profilePurgeFailed, "profilesRemaining" to if (privateAvailable()) ProfileStore.getInstance().allProfileNames.count { it.startsWith("wingman_private_") } else null)); return
+                result.success(mapOf("views" to views.values.count { it.web != null }, "ready" to ready, "foreground" to foreground, "handoffBlocked" to denied, "cleanupPending" to cleanupPending, "baselineValid" to policy.valid(), "profilePurgesPending" to profilePurgeWaiters.size, "profilePurgeFailed" to profilePurgeFailed)); return
             }
             val view = views[call.argument<Number>("viewId")?.toInt()] ?: throw IllegalStateException()
+            call.argument<Number>("requestId")?.toLong()?.let { view.acceptRequest(it) }
             when (call.method) {
-                "open", "reload" -> {
-                    check(mayOpen())
-                    val url = call.argument<String>("url") ?: view.currentUrl
-                    val requestId = call.argument<Number>("requestId")?.toLong() ?: throw IllegalStateException()
-                    view.open(url, requestId)
-                    result.success(null)
-                }
-                "openSearch" -> {
-                    check(mayOpen())
-                    val query = call.argument<String>("query") ?: throw IllegalStateException()
-                    val requestId = call.argument<Number>("requestId")?.toLong() ?: throw IllegalStateException()
-                    val url = strictSearchURL(query) ?: throw IllegalStateException()
-                    view.openScope(url, requestId, Site("DuckDuckGo Strict search", policy.expiry(), mapOf(url to Entry(url, setOf("text/html"), 1024 * 1024)), mapOf(SEARCH_CSS to Entry(SEARCH_CSS, setOf("text/css"), 64 * 1024)), true))
-                    result.success(null)
-                }
-                "stop" -> { view.suspendView(); result.success(null) }
+                "updateRestrictions" -> { policy.setAdditionalRestrictions(call.argument<List<String>>("blockedResourceIds") ?: emptyList(), call.argument<List<String>>("blockedCollections") ?: emptyList(), call.argument<List<String>>("blockedDomains") ?: emptyList(), call.argument<List<String>>("blockedUrls") ?: emptyList(), call.argument<Boolean>("searchBlocked") == true); if (view.currentUrl.isNotEmpty() && !policy.decide(view.currentUrl).allowed) view.block(view.currentUrl, "Blocked by an additional restriction."); result.success(null) }
+                "open" -> { view.open(call.argument<String>("url") ?: ""); result.success(null) }
+                "openSearch" -> { view.open(strictSearchURL(call.argument<String>("query") ?: "") ?: throw IllegalArgumentException()); result.success(null) }
+                "reload" -> { check(mayOpen()); if (policy.decide(view.currentUrl).allowed) view.web?.reload(); result.success(null) }
+                "back" -> { check(mayOpen()); view.history(-1); result.success(null) }
+                "forward" -> { check(mayOpen()); view.history(1); result.success(null) }
+                "stop" -> { view.web?.stopLoading(); view.loading = false; view.emit(); result.success(null) }
                 "close" -> { view.release(); views.remove(view.id); result.success(null) }
-                "setActive" -> { if (call.argument<Boolean>("active") != true) view.suspendView() else view.activate(); result.success(null) }
-                "state" -> view.diagnosticState(result)
-                else -> result.error("protected_method_unavailable", "This browser operation is unavailable.", null)
+                "setActive" -> { view.setVisibilityActive(call.argument<Boolean>("active") == true); result.success(null) }
+                "find" -> { view.web?.findAllAsync(call.argument<String>("query")?.take(1024) ?: ""); result.success(null) }
+                "findNext" -> { view.web?.findNext(call.argument<Boolean>("forward") != false); result.success(null) }
+                "clearFind" -> { view.web?.clearMatches(); result.success(null) }
+                "share" -> { check(policy.decide(view.currentUrl).allowed); activity.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, view.currentUrl) }, "Share page")); result.success(null) }
+                "state" -> result.success(view.state())
+                else -> result.error("browser_method_unavailable", "This browser operation is unavailable.", null)
             }
-        } catch (_: Exception) { result.error("protected_navigation_denied", "This page is outside the current reviewed website scope.", null) }
+        } catch (failure: Exception) {
+            if (BuildConfig.DEBUG) android.util.Log.w("WingmanProtection", "method=${call.method}; failure=${failure.javaClass.simpleName}; location=${failure.stackTrace.firstOrNull()}")
+            result.error("protected_navigation_denied", "The operation could not complete with the required protections.", null) }
     }
-
     private inner class ProtectedView(context: Context, val id: Int, val tabId: String, val privateMode: Boolean) : PlatformView {
         private val container = FrameLayout(context)
-        @Volatile var web: WebView? = null
-        var currentUrl = ""
-        private var requestId = 0L
-        private var active = false
+        var web: WebView? = null
+        @Volatile var currentUrl = ""
+        var requestId = 0L
+        @Volatile var downloadEpoch = 0L
+        var active = true
+        var loading = false
         private var disposed = false
         private var profileName: String? = null
-        private var site: Site? = null
-        private var epoch = 0L
-        private var requests = 0
-        private var networkRequests = 0
-        private var byteCount = 0
-        private var reservedBytes = 0
-        private var loaded = 0
-        private var blocked = 0
         private var progress = 0
-        private var loading = false
-        private var error: String? = null
         private var title = ""
-        private var loadedImages = 0
-        private var decodedImages = 0
-        private var searchResultLinks: Int? = null
-        private var loadedStyleSheets = 0
-        private var expiryTask: Runnable? = null
-        private var deadlineNanos = 0L
-        private val connections = mutableSetOf<HttpURLConnection>()
-        private val lock = Any()
+        private var error: String? = null
+        private var blocked = 0
+        private var attempted = 0
+        private var lastBlocked: String? = null
         override fun getView(): View = container
         override fun dispose() { release(); disposed = true; views.remove(id) }
-        fun state(): Map<String, Any?> = synchronized(lock) { mapOf("viewId" to id, "requestId" to requestId, "url" to currentUrl, "title" to title, "progress" to progress, "isLoading" to loading, "error" to error, "blockedResources" to blocked, "loadedResources" to loaded, "bytesReceived" to byteCount, "requests" to requests, "requestAttempts" to requests, "networkRequests" to networkRequests, "hasRenderer" to (web != null), "private" to privateMode, "javascript" to (web?.settings?.javaScriptEnabled ?: false), "networkFallback" to false, "engineNetworkBlocked" to (web?.settings?.blockNetworkLoads ?: true), "loadedImageResponses" to loadedImages, "decodedImageResponses" to decodedImages, "strictSearch" to (site?.search == true), "searchResultLinks" to searchResultLinks, "loadedStyleSheetResponses" to loadedStyleSheets) }
-        fun diagnosticState(result: MethodChannel.Result) {
-            // Android disables even app-requested script evaluation when JavaScript is off.
-            // Do not briefly enable it for diagnostics; decoded native image responses are counted instead.
-            result.success(state().toMutableMap().apply { put("imagesTotal", null); put("imagesComplete", null) })
+        fun acceptRequest(value: Long) { check(value >= requestId); requestId = value }
+        fun state(): Map<String, Any?> = mapOf("viewId" to id, "requestId" to requestId, "url" to currentUrl, "title" to title, "progress" to progress, "isLoading" to loading, "error" to error, "blockedResources" to blocked, "requestAttempts" to attempted, "hasRenderer" to (web != null), "private" to privateMode, "javascript" to (web?.settings?.javaScriptEnabled ?: false), "engineNetworkBlocked" to false, "strictSearch" to currentUrl.startsWith("https://safe.duckduckgo.com/"), "canGoBack" to (web?.canGoBack() ?: false), "canGoForward" to (web?.canGoForward() ?: false))
+        fun emit() { container.post { if (!disposed) channel.invokeMethod("pageState", state()) } }
+        fun block(url: String, reason: String?) {
+            web?.stopLoading(); loading = false
+            // Retain the previous permitted committed page; the shell shows the denied destination separately.
+            if (lastBlocked != url) channel.invokeMethod("navigationBlocked", mapOf("viewId" to id, "requestId" to requestId, "url" to url, "reason" to (reason ?: "Blocked by protection.")))
+            lastBlocked = url
+            emit()
         }
-        private fun emit() { container.post { if (!disposed) channel.invokeMethod("pageState", state()) } }
-        fun open(raw: String, request: Long) {
-            val canonical = canonical(raw) ?: throw IllegalStateException()
-            val match = policy.document(canonical) ?: throw IllegalStateException()
-            openScope(raw, request, match)
+        fun setVisibilityActive(value: Boolean) {
+            active = value
+            web?.visibility = if (value && !denied) View.VISIBLE else View.INVISIBLE
+            if (value && foreground && !denied) web?.onResume() else web?.onPause()
         }
-        fun openScope(raw: String, request: Long, match: Site) {
-            check(!disposed && mayOpen() && tabId.isNotEmpty() && tabId.length <= 100 && (!privateMode || privateAvailable()))
-            check(request > requestId)
-            release()
-            synchronized(lock) { currentUrl = raw; requestId = request; site = match; epoch++; active = true; requests = 0; networkRequests = 0; byteCount = 0; reservedBytes = 0; loaded = 0; loadedImages = 0; decodedImages = 0; searchResultLinks = null; loadedStyleSheets = 0; blocked = 0; error = null; progress = 0; loading = true; title = match.title; deadlineNanos = System.nanoTime() + 45_000_000_000L }
-            val view = object : WebView(container.context) {
-                override fun onCreateInputConnection(outAttrs: EditorInfo): InputConnection? = null
-                override fun onCheckIsTextEditor() = false
-            }
-            web = view
+        fun history(offset: Int) {
+            val w = web ?: return
+            val list = w.copyBackForwardList(); val position = list.currentIndex + offset
+            if (position !in 0 until list.size) return
+            val destination = list.getItemAtIndex(position).url
+            val decision = policy.decide(destination)
+            if (decision.allowed) w.goBackOrForward(offset) else block(destination, decision.reason)
+        }
+        fun open(raw: String) {
+            check(!disposed && mayOpen() && tabId.isNotBlank() && tabId.length <= 100)
+            val decision = policy.decide(raw)
+            if (!decision.allowed) { block(raw, decision.reason); throw IllegalArgumentException() }
+            if (web != null && currentUrl == decision.url && error == null) { setVisibilityActive(true); emit(); return }
+            val w = web ?: createWeb()
+            error = null; lastBlocked = null; currentUrl = decision.url; loading = true; progress = 0
+            setVisibilityActive(true); emit(); w.loadUrl(decision.url)
+        }
+        private fun createWeb(): WebView {
+            check(!privateMode || privateAvailable())
+            val w = WebView(container.context)
+            web = w
             WebView.setWebContentsDebuggingEnabled(false)
-            if (privateAvailable()) {
-                // Both modes use disposable cookie-free profiles; application saves live in Flutter.
+            if (privateMode) {
                 val name = "wingman_private_${UUID.randomUUID()}"
-                WebViewCompat.setProfile(view, name)
-                profileName = name
-                loadedProfiles[name] = WebViewCompat.getProfile(view)
-            } else check(!privateMode)
-            with(view.settings) {
-                // Only our native exact-URL fetcher may supply network responses.
-                // Chromium still invokes interception with its own network disabled.
-                blockNetworkLoads = true
-                javaScriptEnabled = false; javaScriptCanOpenWindowsAutomatically = false
+                WebViewCompat.setProfile(w, name); profileName = name
+                loadedProfiles[name] = WebViewCompat.getProfile(w)
+                installServiceWorkerPolicy(loadedProfiles[name], name)
+            }
+            with(w.settings) {
+                blockNetworkLoads = false; javaScriptEnabled = true; javaScriptCanOpenWindowsAutomatically = false
                 allowFileAccess = false; allowContentAccess = false
                 @Suppress("DEPRECATION")
                 allowFileAccessFromFileURLs = false
                 @Suppress("DEPRECATION")
                 allowUniversalAccessFromFileURLs = false
-                domStorageEnabled = false; databaseEnabled = false
+                domStorageEnabled = true
                 mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
-                cacheMode = WebSettings.LOAD_NO_CACHE
+                cacheMode = WebSettings.LOAD_DEFAULT
                 setSupportMultipleWindows(true); mediaPlaybackRequiresUserGesture = true
-                @Suppress("DEPRECATION")
-                saveFormData = false
-                setGeolocationEnabled(false)
-                disabledActionModeMenuItems = WebSettings.MENU_ITEM_SHARE or WebSettings.MENU_ITEM_WEB_SEARCH or WebSettings.MENU_ITEM_PROCESS_TEXT
+                setGeolocationEnabled(true); builtInZoomControls = true; displayZoomControls = false
+                useWideViewPort = true; loadWithOverviewMode = true
+                disabledActionModeMenuItems = WebSettings.MENU_ITEM_WEB_SEARCH or WebSettings.MENU_ITEM_PROCESS_TEXT
             }
-            if (WebViewFeature.isFeatureSupported(WebViewFeature.SAFE_BROWSING_ENABLE)) WebSettingsCompat.setSafeBrowsingEnabled(view.settings, true)
-            val cookies = if (profileName != null) WebViewCompat.getProfile(view).cookieManager else CookieManager.getInstance()
-            cookies.setAcceptCookie(false); cookies.setAcceptThirdPartyCookies(view, false)
-            view.isLongClickable = false
-            view.setOnLongClickListener { true }
-            if (Build.VERSION.SDK_INT >= 26) view.importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
-            view.webChromeClient = object : WebChromeClient() {
+            if (WebViewFeature.isFeatureSupported(WebViewFeature.SAFE_BROWSING_ENABLE)) WebSettingsCompat.setSafeBrowsingEnabled(w.settings, true)
+            cookieManager().apply { setAcceptCookie(true); setAcceptThirdPartyCookies(w, false) }
+            w.webChromeClient = object : WebChromeClient() {
                 override fun onConsoleMessage(message: ConsoleMessage?) = true
-                override fun onProgressChanged(view: WebView, value: Int) { if (view === web && active) { progress = value; emit() } }
-                override fun onReceivedTitle(view: WebView, value: String?) { /* Only reviewed titles enter application metadata. */ }
-                override fun onCreateWindow(view: WebView?, isDialog: Boolean, isUserGesture: Boolean, resultMsg: android.os.Message?) = false
-                override fun onPermissionRequest(request: PermissionRequest) { request.deny() }
-                override fun onGeolocationPermissionsShowPrompt(origin: String?, callback: GeolocationPermissions.Callback) { callback.invoke(origin, false, false) }
-                override fun onShowFileChooser(view: WebView?, callback: ValueCallback<Array<Uri>>?, params: FileChooserParams?): Boolean { callback?.onReceiveValue(null); return true }
-            }
-            val generation = synchronized(lock) { epoch }
-            view.webViewClient = object : WebViewClient() {
-                override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse = intercept(request, generation, view)
-                override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
-                    if (view === web && active && request.isForMainFrame && request.hasGesture() && request.method == "GET") {
-                        canonical(request.url.toString())?.let { channel.invokeMethod("navigationRequested", mapOf("viewId" to id, "requestId" to requestId, "url" to request.url.toString())) }
+                override fun onProgressChanged(view: WebView, newProgress: Int) { if (view === web) { progress = newProgress; emit() } }
+                override fun onReceivedTitle(view: WebView, value: String?) { if (view === web) { title = value.orEmpty().filter { it.code >= 32 }.take(160); emit() } }
+                override fun onCreateWindow(view: WebView, isDialog: Boolean, isUserGesture: Boolean, resultMsg: Message): Boolean {
+                    if (!isUserGesture || !active || !mayOpen()) return false
+                    // A network-disabled transport captures the popup's requested address before any content loads.
+                    val popup = WebView(container.context)
+                    popup.settings.blockNetworkLoads = true; popup.settings.javaScriptEnabled = false
+                    popup.settings.allowFileAccess = false; popup.settings.allowContentAccess = false
+                    var delivered = false
+                    fun destination(raw: String): Boolean {
+                        if (delivered) return true
+                        delivered = true
+                        val decision = policy.decide(raw)
+                        if (decision.allowed) channel.invokeMethod("newWindowRequested", mapOf("viewId" to id, "requestId" to requestId, "url" to decision.url)) else block(raw, decision.reason)
+                        container.post { popup.destroy() }
+                        return true
                     }
+                    popup.webViewClient = object : WebViewClient() {
+                        override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest) = destination(request.url.toString())
+                        override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) { destination(url) }
+                        override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse { container.post { destination(request.url.toString()) }; return deniedResponse() }
+                    }
+                    (resultMsg.obj as? WebView.WebViewTransport)?.webView = popup
+                    resultMsg.sendToTarget()
+                    container.postDelayed({ if (!delivered) { delivered = true; popup.destroy() } }, 15000)
                     return true
                 }
-                @Suppress("DEPRECATION")
-                override fun shouldOverrideUrlLoading(view: WebView, url: String) = true
-                override fun onPageFinished(view: WebView, url: String) { if (view === web && active && error == null) { loading = false; progress = 100; emit() } }
-                override fun onReceivedSslError(view: WebView?, handler: SslErrorHandler, error: SslError?) { handler.cancel(); if (view === web) fail() }
-                override fun onReceivedHttpAuthRequest(view: WebView?, handler: HttpAuthHandler, host: String?, realm: String?) { handler.cancel() }
-                override fun onReceivedClientCertRequest(view: WebView?, request: ClientCertRequest) { request.cancel() }
-                override fun onReceivedError(view: WebView, request: WebResourceRequest, failure: WebResourceError) { if (view === web && request.isForMainFrame) fail() }
-                override fun onSafeBrowsingHit(view: WebView, request: WebResourceRequest, threatType: Int, callback: SafeBrowsingResponse) { callback.backToSafety(false); if (view === web && request.isForMainFrame) fail() }
+                override fun onPermissionRequest(request: PermissionRequest) { requestMediaPermission(this@ProtectedView, request) }
+                override fun onPermissionRequestCanceled(request: PermissionRequest) { permissionCompletion = null }
+                override fun onGeolocationPermissionsShowPrompt(origin: String, callback: GeolocationPermissions.Callback) { requestLocation(this@ProtectedView, origin, callback) }
+                override fun onShowFileChooser(view: WebView, callback: ValueCallback<Array<Uri>>, params: FileChooserParams): Boolean { chooseFiles(this@ProtectedView, callback, params); return true }
+                override fun onShowCustomView(view: View, callback: CustomViewCallback) {
+                    if (!active || !mayOpen()) { callback.onCustomViewHidden(); return }
+                    hideFullscreen(); fullscreen = view; fullscreenCallback = callback
+                    if (Build.VERSION.SDK_INT >= 33) {
+                        val back = android.window.OnBackInvokedCallback { hideFullscreen() }
+                        fullscreenBack = back
+                        activity.onBackInvokedDispatcher.registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_OVERLAY, back)
+                    }
+                    (activity.window.decorView as ViewGroup).addView(view, ViewGroup.LayoutParams(-1, -1))
+                }
+                override fun onHideCustomView() { hideFullscreen() }
+            }
+            w.webViewClient = object : WebViewClient() {
+                override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
+                    val decision = policy.decide(request.url.toString(), request.isForMainFrame, currentUrl)
+                    synchronized(this@ProtectedView) { attempted++; if (!decision.allowed) blocked++ }
+                    // A WebView POST can skip shouldOverrideUrlLoading. Never let a
+                    // provider rewrite decision authorize the original non-strict endpoint.
+                    val needsRewrite = request.isForMainFrame && decision.allowed && decision.url != request.url.toString()
+                    val strictPost = request.method == "POST" && request.url.scheme == "https" && request.url.host == "safe.duckduckgo.com"
+                    if (view !== web || !liveAvailable() || !decision.allowed || denied || cleanupPending || (needsRewrite && !strictPost)) {
+                        if (request.isForMainFrame) container.post {
+                            if (view === web && ready && needsRewrite && request.method == "GET" && !denied && !cleanupPending) view.loadUrl(decision.url)
+                            else block(request.url.toString(), decision.reason ?: "This form cannot change the strict search endpoint.")
+                        }
+                        return deniedResponse()
+                    }
+                    // Chromium handles methods, request bodies, cookies, redirects, cache and TLS.
+                    return null
+                }
+                override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+                    val decision = policy.decide(request.url.toString(), request.isForMainFrame, currentUrl)
+                    if (!decision.allowed || !mayOpen()) { if (request.isForMainFrame) block(request.url.toString(), decision.reason); return true }
+                    if (request.isForMainFrame && decision.url != request.url.toString()) {
+                        if (request.method != "GET") { block(request.url.toString(), "This form cannot change the strict search endpoint."); return true }
+                        view.loadUrl(decision.url); return true
+                    }
+                    return false
+                }
+                override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
+                    if (view !== web || !ready) return
+                    val decision = policy.decide(url)
+                    if (!decision.allowed) { block(url, decision.reason); return }
+                    if (decision.url != url) { view.stopLoading(); view.loadUrl(decision.url); return }
+                    currentUrl = url; error = null; loading = true; progress = 0; lastBlocked = null; emit()
+                }
+                override fun doUpdateVisitedHistory(view: WebView, url: String, isReload: Boolean) {
+                    if (view !== web || !ready) return
+                    val decision = policy.decide(url)
+                    if (decision.allowed) { currentUrl = url; emit() } else block(url, decision.reason)
+                }
+                override fun onPageFinished(view: WebView, url: String) {
+                    if (view !== web || !policy.decide(url).allowed) return
+                    currentUrl = url; loading = false; progress = 100; cookieManager().flush(); emit()
+                }
+                override fun onReceivedSslError(view: WebView, handler: SslErrorHandler, sslError: SslError) { handler.cancel(); fail("The site's TLS certificate is invalid. The connection was blocked.") }
+                override fun onReceivedError(view: WebView, request: WebResourceRequest, failure: WebResourceError) { if (request.isForMainFrame) fail("The page could not connect (${failure.errorCode}).") }
+                override fun onReceivedHttpError(view: WebView, request: WebResourceRequest, response: WebResourceResponse) { if (request.isForMainFrame && response.statusCode >= 500) { error = "The website returned HTTP ${response.statusCode}."; emit() } }
+                override fun onReceivedHttpAuthRequest(view: WebView, handler: HttpAuthHandler, host: String, realm: String) { handler.cancel() }
+                override fun onReceivedClientCertRequest(view: WebView, request: ClientCertRequest) { request.cancel() }
+                override fun onSafeBrowsingHit(view: WebView, request: WebResourceRequest, threatType: Int, callback: SafeBrowsingResponse) { callback.backToSafety(false); if (request.isForMainFrame) fail("The platform blocked a known security threat.") }
                 override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean { if (view === web) { release(); channel.invokeMethod("rendererGone", mapOf("viewId" to id, "requestId" to requestId)) }; return true }
             }
-            view.setDownloadListener { _, _, _, _, _ -> if (view === web) fail() }
-            container.addView(view, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-            emit()
-            val expiry = Runnable { if (web === view) fail() }
-            expiryTask = expiry
-            container.postDelayed(expiry, (match.expires - System.currentTimeMillis()).coerceAtLeast(1L))
-            view.loadUrl(raw)
+            w.setFindListener { position, count, done -> channel.invokeMethod("findResult", mapOf("viewId" to id, "requestId" to requestId, "activeMatch" to position, "matches" to count, "done" to done)) }
+            w.setDownloadListener { url, _, disposition, mime, _ -> requestDownload(this, url, disposition, mime) }
+            container.addView(w, FrameLayout.LayoutParams(-1, -1))
+            return w
         }
-        private fun intercept(request: WebResourceRequest, capture: Long, owner: WebView): WebResourceResponse {
-            fun deny(): WebResourceResponse {
-                synchronized(lock) { if (capture == epoch) blocked++ }
-                if (request.isForMainFrame) container.post { if (capture == epoch) fail() } else emit()
-                return WebResourceResponse("text/plain", "UTF-8", 403, "Unavailable", mapOf("Cache-Control" to "no-store"), ByteArrayInputStream(ByteArray(0)))
-            }
-            val url = canonical(request.url.toString()) ?: return deny()
-            val entry = synchronized(lock) {
-                if (owner !== web || !active || !mayOpen() || capture != epoch || request.method != "GET" || ++requests > MAX_REQUESTS) null
-                else if (request.isForMainFrame && url == canonical(currentUrl)) site?.documents?.get(url)
-                else if (policy.resourceDenied(url, currentUrl)) null else site?.resources?.get(url)
-            } ?: return deny()
-            // Never return null: Chromium has no fallback network permission for a resource.
-            var connection: HttpURLConnection? = null
-            try {
-                check(java.net.CookieHandler.getDefault() == null)
-                connection = URI(url).toURL().openConnection() as HttpURLConnection
-                synchronized(lock) { check(active && capture == epoch); connections.add(connection) }
-                connection.instanceFollowRedirects = false
-                connection.connectTimeout = 12_000; connection.readTimeout = 12_000
-                connection.useCaches = false
-                connection.requestMethod = "GET"
-                connection.setRequestProperty("Accept", entry.mimeTypes.joinToString(","))
-                connection.setRequestProperty("Accept-Encoding", "identity")
-                connection.setRequestProperty("DNT", "1")
-                connection.setRequestProperty("Sec-GPC", "1")
-                connection.setRequestProperty("User-Agent", "Wingman/0.8 (Protected Visual Browsing)")
-                connection.setRequestProperty("Cache-Control", "no-store")
-                // Redirects are deliberately rejected; they must be explicitly reviewed as a document URL.
-                synchronized(lock) { check(active && capture == epoch && mayOpen()); networkRequests++ }
-                check(connection.responseCode == 200)
-                val mime = connection.contentType?.substringBefore(';')?.trim()?.lowercase() ?: ""
-                check(mime in entry.mimeTypes)
-                check(connection.getHeaderField("Content-Disposition")?.lowercase()?.contains("attachment") != true)
-                check(connection.contentLengthLong <= entry.maxBytes)
-                val bytes = connection.inputStream.use { input ->
-                    val output = java.io.ByteArrayOutputStream()
-                    val buffer = ByteArray(16 * 1024)
-                    while (true) {
-                        val size = synchronized(lock) {
-                            check(active && capture == epoch && mayOpen() && System.nanoTime() < deadlineNanos)
-                            val available = MAX_PAGE_BYTES - byteCount - reservedBytes
-                            check(available > 0)
-                            minOf(buffer.size, available).also { reservedBytes += it }
-                        }
-                        val count: Int
-                        try { count = input.read(buffer, 0, size) }
-                        catch (failure: Exception) { synchronized(lock) { if (capture == epoch) reservedBytes -= size }; throw failure }
-                        synchronized(lock) {
-                            check(active && capture == epoch && mayOpen())
-                            reservedBytes -= size
-                            if (count > 0) byteCount += count
-                        }
-                        if (count < 0) break
-                        check(output.size() + count <= entry.maxBytes)
-                        output.write(buffer, 0, count)
-                    }
-                    output.toByteArray()
-                }
-                val resultLinks = if (request.isForMainFrame && site?.search == true) Regex("""<a\b[^>]*\bclass\s*=\s*["'][^"']*\bresult-link\b""", RegexOption.IGNORE_CASE).findAll(String(bytes, Charsets.UTF_8)).count() else null
-                var decodedRaster = false
-                if (mime.startsWith("image/") && mime != "image/svg+xml") {
-                    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
-                    check(bounds.outWidth in 1..10_000 && bounds.outHeight in 1..10_000 && bounds.outWidth.toLong() * bounds.outHeight <= 40_000_000)
-                    val options = BitmapFactory.Options().apply { inSampleSize = 1 }
-                    while (bounds.outWidth / options.inSampleSize > 512 || bounds.outHeight / options.inSampleSize > 512) options.inSampleSize *= 2
-                    val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
-                    check(bitmap != null)
-                    decodedRaster = true
-                    bitmap.recycle()
-                }
-                synchronized(lock) { check(active && capture == epoch && mayOpen()); loaded++; if (mime == "text/css") loadedStyleSheets++; if (resultLinks != null) searchResultLinks = resultLinks; if (mime.startsWith("image/")) loadedImages++; if (decodedRaster) decodedImages++ }
-                val headers = mutableMapOf("Cache-Control" to "no-store", "X-Content-Type-Options" to "nosniff", "Referrer-Policy" to "no-referrer", "Content-Security-Policy" to CSP)
-                connection.getHeaderField("Content-Security-Policy")?.let { headers["Content-Security-Policy"] = "$CSP, $it" }
-                emit()
-                return WebResourceResponse(mime, if (mime.startsWith("text/")) "UTF-8" else null, 200, "OK", headers, ByteArrayInputStream(bytes))
-            } catch (_: Exception) { return deny() }
-            finally { connection?.disconnect(); synchronized(lock) { connections.remove(connection) } }
-        }
-        private fun fail() { release(); error = if (site?.search == true) "Strict search is unavailable. Wingman did not open another search endpoint." else "This page could not load within its reviewed website scope."; emit() }
-        fun suspendView() { release() }
-        fun activate() { /* Resuming requires an explicit new open and current policy checks. */ }
+        fun cookieManager(): CookieManager = profileName?.let { loadedProfiles[it]?.cookieManager } ?: CookieManager.getInstance()
+        private fun fail(message: String) { web?.stopLoading(); loading = false; error = message; emit() }
         fun release() {
-            val pendingConnections = synchronized(lock) { active = false; epoch++; loading = false; connections.toList().also { connections.clear() } }
-            pendingConnections.forEach { it.disconnect() }
-            expiryTask?.let { container.removeCallbacks(it) }; expiryTask = null
-            val old = web; web = null
-            old?.stopLoading(); old?.visibility = View.INVISIBLE
-            container.removeAllViews()
-            old?.removeAllViews(); old?.destroy()
-            val name = profileName; profileName = null
-            if (name != null && privateAvailable()) {
-                // Destruction is immediate; storage cleanup is separately acknowledged.
-                purgeProfile(name)
-            }
+            downloadEpoch++
+            if (download?.owner === this) download = null
+            if (uploadOwner === this) cancelUpload()
+            val retired = web
+            web = null; loading = false
+            profileName?.let { retiringProfiles.add(it) }
+            retired?.let { it.stopLoading(); it.visibility = View.INVISIBLE; container.removeView(it); it.destroy() }
+            profileName?.let { purgeProfile(it) }; profileName = null
         }
     }
-
-    private data class Entry(val url: String, val mimeTypes: Set<String>, val maxBytes: Int)
-    private data class Site(val title: String, val expires: Long, val documents: Map<String, Entry>, val resources: Map<String, Entry>, val search: Boolean = false)
-    private class Catalog(context: Context) {
-        private var sites = emptyList<Site>()
-        private var expires = 0L
-        private var privacyDomains = emptySet<String>()
-        init {
-            try {
-                val path = FlutterInjector.instance().flutterLoader().getLookupKeyForAsset(CATALOG_ASSET)
-                val bytes = context.assets.open(path).use { it.readBytes() }
-                check(bytes.size <= 512 * 1024)
-                val hash = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
-                check(hash == CATALOG_SHA256)
-                val json = JSONObject(String(bytes, Charsets.UTF_8))
-                check(json.getInt("schemaVersion") == 1 && json.getInt("policyVersion") == 1 && json.getInt("sequence") > 0)
-                expires = timestamp(json.getString("expiresAt"))
-                check(timestamp(json.getString("reviewedAt")) <= System.currentTimeMillis())
-                val domains = json.getJSONObject("privacy").getJSONArray("domains")
-                privacyDomains = (0 until domains.length()).map { domains.getString(it) }.toSet()
-                val rows = json.getJSONArray("sites")
-                sites = (0 until rows.length()).mapNotNull { index ->
-                    val row = rows.getJSONObject(index)
-                    if (!row.getBoolean("enabled")) return@mapNotNull null
-                    fun entries(name: String): Map<String, Entry> {
-                        val data = row.getJSONArray(name)
-                        return (0 until data.length()).map { i ->
-                            val item = data.getJSONObject(i)
-                            val url = item.getString("url")
-                            check(canonical(url) == url)
-                            val types = item.getJSONArray("mimeTypes")
-                            val mime = (0 until types.length()).map { types.getString(it) }.toSet()
-                            check(mime.isNotEmpty() && mime.all { it in setOf("text/html", "text/css", "image/jpeg", "image/png", "image/webp", "image/gif", "image/svg+xml", "font/woff", "font/woff2", "application/font-woff", "application/octet-stream") })
-                            val max = item.getInt("maxBytes"); check(max in 1..(4 * 1024 * 1024))
-                            if (name == "resources") check(item.getString("type") in setOf("image", "styleSheet", "font"))
-                            url to Entry(url, mime, max)
-                        }.toMap()
-                    }
-                    check(timestamp(row.getString("reviewedAt")) <= System.currentTimeMillis())
-                    Site(row.getString("title"), minOf(timestamp(row.getString("expiresAt")), expires), entries("documents"), entries("resources"))
+    private fun origin(raw: String) = canonicalWeb(raw)?.let { "${it.scheme}://${it.encodedAuthority}" }
+    private fun permissionEligible(owner: ProtectedView, requestedOrigin: String) = owner.web != null && owner.active && mayOpen() && origin(owner.currentUrl) == origin(requestedOrigin) && requestedOrigin.startsWith("https://") && policy.decide(owner.currentUrl).allowed
+    // Android returns OS permission results before Activity.onResume. Validate
+    // retained ownership here; temporary OS-dialog inactivity is not a tab change.
+    private fun permissionStillBound(owner: ProtectedView, requestedOrigin: String, epoch: Long) =
+        owner.web != null && owner.downloadEpoch == epoch && liveAvailable() && !denied &&
+            origin(owner.currentUrl) == origin(requestedOrigin) && requestedOrigin.startsWith("https://") && policy.decide(owner.currentUrl).allowed
+    private fun requestMediaPermission(owner: ProtectedView, request: PermissionRequest) {
+        val requestedOrigin = request.origin.toString()
+        val epoch = owner.downloadEpoch
+        val resources = request.resources.filter { it == PermissionRequest.RESOURCE_AUDIO_CAPTURE || it == PermissionRequest.RESOURCE_VIDEO_CAPTURE }
+        if (!permissionEligible(owner, requestedOrigin) || resources.isEmpty() || resources.size != request.resources.size) { request.deny(); return }
+        AlertDialog.Builder(activity).setTitle("Website permission").setMessage("$requestedOrigin wants ${resources.joinToString { if (it == PermissionRequest.RESOURCE_VIDEO_CAPTURE) "camera" else "microphone" }} access for this page.")
+            .setNegativeButton("Deny") { _, _ -> request.deny() }.setOnCancelListener { request.deny() }
+            .setPositiveButton("Allow") { _, _ ->
+                val permissions = resources.map { if (it == PermissionRequest.RESOURCE_VIDEO_CAPTURE) Manifest.permission.CAMERA else Manifest.permission.RECORD_AUDIO }
+                withPermissions(permissions) {
+                    if (permissionStillBound(owner, requestedOrigin, epoch) && permissions.all { activity.checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED }) request.grant(resources.toTypedArray()) else request.deny()
                 }
-            } catch (_: Exception) { sites = emptyList(); expires = 0L }
+            }.show()
+    }
+    private fun requestLocation(owner: ProtectedView, requestedOrigin: String, callback: GeolocationPermissions.Callback) {
+        val epoch = owner.downloadEpoch
+        if (!permissionEligible(owner, requestedOrigin)) { callback.invoke(requestedOrigin, false, false); return }
+        AlertDialog.Builder(activity).setTitle("Website location").setMessage("Allow $requestedOrigin to access location for this page?")
+            .setNegativeButton("Deny") { _, _ -> callback.invoke(requestedOrigin, false, false) }.setOnCancelListener { callback.invoke(requestedOrigin, false, false) }
+            .setPositiveButton("Allow") { _, _ -> withPermissions(listOf(Manifest.permission.ACCESS_COARSE_LOCATION)) { callback.invoke(requestedOrigin, permissionStillBound(owner, requestedOrigin, epoch) && activity.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED, false) } }.show()
+    }
+    private fun withPermissions(permissions: List<String>, completion: () -> Unit) {
+        if (permissions.all { activity.checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED }) { completion(); return }
+        if (permissionCompletion != null) { completion(); return }
+        permissionCompletion = completion; activity.requestPermissions(permissions.toTypedArray(), PERMISSION_REQUEST)
+    }
+    fun onRequestPermissionsResult(requestCode: Int): Boolean {
+        if (requestCode != PERMISSION_REQUEST) return false
+        val completion = permissionCompletion; permissionCompletion = null; completion?.invoke(); return true
+    }
+    private fun cancelUpload() { uploadCallback?.onReceiveValue(null); uploadCallback = null; uploadOwner = null; uploadOrigin = null }
+    private fun chooseFiles(owner: ProtectedView, callback: ValueCallback<Array<Uri>>, params: WebChromeClient.FileChooserParams) {
+        cancelUpload()
+        if (!owner.active || !mayOpen() || !policy.decide(owner.currentUrl).allowed) { callback.onReceiveValue(null); return }
+        uploadCallback = callback; uploadOwner = owner; uploadOrigin = origin(owner.currentUrl)
+        val types = params.acceptTypes.filter { it.matches(Regex("^[a-zA-Z0-9.+*-]+/[a-zA-Z0-9.+*-]+$")) }.toTypedArray()
+        try {
+            activity.startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                addCategory(Intent.CATEGORY_OPENABLE); type = if (types.size == 1) types[0] else "*/*"
+                if (types.size > 1) putExtra(Intent.EXTRA_MIME_TYPES, types)
+                putExtra(Intent.EXTRA_ALLOW_MULTIPLE, params.mode == WebChromeClient.FileChooserParams.MODE_OPEN_MULTIPLE)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }, UPLOAD_REQUEST)
+        } catch (_: Exception) { cancelUpload() }
+    }
+    private fun requestDownload(owner: ProtectedView, url: String, disposition: String?, mime: String?) {
+        val decision = policy.decide(url)
+        if (!decision.allowed || !owner.active || !mayOpen()) { owner.block(url, decision.reason); return }
+        val filename = URLUtil.guessFileName(url, disposition, mime).replace(Regex("[^A-Za-z0-9._ -]"), "_").take(160)
+        if (filename.substringAfterLast('.', "").lowercase() in setOf("apk", "exe", "msi", "dmg", "pkg", "bat", "cmd", "sh", "ps1", "js", "jar")) { owner.block(url, "Executable downloads are not supported."); return }
+        AlertDialog.Builder(activity).setTitle("Save download?").setMessage("${origin(url)}\n$filename" + if (owner.privateMode) "\nThe saved file remains after closing this private tab." else "")
+            .setNegativeButton("Cancel", null).setPositiveButton("Save") { _, _ ->
+                download = Download(owner, decision.url, mime ?: "application/octet-stream", filename, if (origin(url) == origin(owner.currentUrl)) owner.cookieManager().getCookie(url) else null, owner.downloadEpoch)
+                try { activity.startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).apply { addCategory(Intent.CATEGORY_OPENABLE); type = mime ?: "application/octet-stream"; putExtra(Intent.EXTRA_TITLE, filename) }, DOWNLOAD_REQUEST) }
+                catch (_: Exception) { download = null }
+            }.show()
+    }
+    fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?): Boolean {
+        if (requestCode == UPLOAD_REQUEST) {
+            val owner = uploadOwner
+            val chosen = if (resultCode == Activity.RESULT_OK && owner != null && origin(owner.currentUrl) == uploadOrigin && !denied && policy.decide(owner.currentUrl).allowed) {
+                val values = mutableListOf<Uri>(); data?.data?.let { values.add(it) }
+                data?.clipData?.let { clips -> for (i in 0 until minOf(clips.itemCount, 20)) values.add(clips.getItemAt(i).uri) }
+                values.distinct().filter { it.scheme == "content" && it.authority != context.packageName }.toTypedArray().takeIf { it.isNotEmpty() }
+            } else null
+            uploadCallback?.onReceiveValue(chosen); uploadCallback = null; uploadOwner = null; uploadOrigin = null; return true
         }
-        fun valid() = System.currentTimeMillis() < expires && sites.any { System.currentTimeMillis() < it.expires }
-        fun expiry() = expires
-        fun document(url: String) = if (!valid()) null else sites.firstOrNull { System.currentTimeMillis() < it.expires && url in it.documents }
-        fun resourceDenied(url: String, document: String): Boolean {
-            val host = URI(url).host ?: return true
-            if (host == URI(document).host) return false
-            return privacyDomains.any { host == it || host.endsWith(".$it") }
+        if (requestCode == DOWNLOAD_REQUEST) {
+            val item = download; download = null
+            val target = data?.data
+            if (resultCode == Activity.RESULT_OK && item != null && target?.scheme == "content") saveDownload(item, target)
+            return true
+        }
+        return false
+    }
+    private fun saveDownload(item: Download, target: Uri) {
+        downloads.execute {
+            var okay = false
+            val temporary = java.io.File.createTempFile("wingman-download-", ".part", context.cacheDir)
+            try {
+                var url = item.url
+                var redirects = 0
+                while (true) {
+                    check(item.owner.downloadEpoch == item.epoch && !denied && !cleanupPending && policy.decide(url).allowed)
+                    val connection = URI(url).toURL().openConnection() as HttpURLConnection
+                    connection.instanceFollowRedirects = false; connection.connectTimeout = 15000; connection.readTimeout = 15000
+                    if (origin(url) == origin(item.url)) item.cookie?.let { connection.setRequestProperty("Cookie", it) }
+                    try {
+                        val code = connection.responseCode
+                        if (code in listOf(301, 302, 303, 307, 308)) {
+                            check(++redirects <= 8)
+                            val next = URI(url).resolve(connection.getHeaderField("Location") ?: error("redirect")).toString()
+                            check(!(url.startsWith("https:") && !next.startsWith("https:")))
+                            check(policy.decide(next).allowed); url = next; continue
+                        }
+                        check(code in 200..299 && connection.contentLengthLong <= 100L * 1024 * 1024)
+                        connection.inputStream.use { input -> temporary.outputStream().use { output ->
+                            val buffer = ByteArray(16384); var total = 0L
+                            while (true) { check(item.owner.downloadEpoch == item.epoch && !denied && !cleanupPending); val count = input.read(buffer); if (count < 0) break; total += count; check(total <= 100L * 1024 * 1024); output.write(buffer, 0, count) }
+                        } }
+                        check(item.owner.downloadEpoch == item.epoch && !denied && !cleanupPending)
+                        context.contentResolver.openOutputStream(target, "wt")!!.use { output -> temporary.inputStream().use { it.copyTo(output) } }
+                        okay = true; break
+                    } finally { connection.disconnect() }
+                }
+            } catch (_: Exception) { /* The picker destination is never opened or executed. */ }
+            finally { temporary.delete(); activity.runOnUiThread { Toast.makeText(context, if (okay) "Download saved" else "Download could not complete safely", Toast.LENGTH_LONG).show() } }
         }
     }
-}
-
-private fun canonical(raw: String): String? {
-    if (raw.isEmpty() || raw.length > 16_384 || raw.any { it.code < 33 || it.code > 126 || it == '\\' }) return null
-    return try {
-        val uri = URI(raw)
-        if (uri.scheme != "https" || uri.rawUserInfo != null || uri.port != -1 || uri.host.isNullOrEmpty() || uri.host != uri.host.lowercase() || uri.host.endsWith('.') || Regex("%(00|0a|0d|2f|5c)", RegexOption.IGNORE_CASE).containsMatchIn(uri.rawPath) || uri.path.split('/').any { it == "." || it == ".." } || uri.normalize().rawPath != uri.rawPath) null
-        else if (uri.rawPath.isEmpty()) "https://${uri.rawAuthority}/" + (uri.rawQuery?.let { "?$it" } ?: "") else raw.substringBefore('#')
-    } catch (_: Exception) { null }
-}
-
-private fun timestamp(raw: String): Long {
-    check(raw.matches(Regex("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$")))
-    val format = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ROOT)
-    format.timeZone = TimeZone.getTimeZone("UTC")
-    format.isLenient = false
-    return checkNotNull(format.parse(raw)).time
+    fun hideFullscreen(): Boolean {
+        val view = fullscreen ?: return false
+        if (Build.VERSION.SDK_INT >= 33) fullscreenBack?.let { activity.onBackInvokedDispatcher.unregisterOnBackInvokedCallback(it) }
+        fullscreenBack = null
+        (view.parent as? ViewGroup)?.removeView(view); fullscreen = null
+        fullscreenCallback?.onCustomViewHidden(); fullscreenCallback = null
+        return true
+    }
 }

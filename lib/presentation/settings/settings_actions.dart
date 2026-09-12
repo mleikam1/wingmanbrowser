@@ -57,7 +57,7 @@ extension PrivacyDataLabel on PrivacyDataCategory {
     PrivacyDataCategory.readingList => 'Reading list and read status',
     PrivacyDataCategory.launchpad => 'Your Launchpad and sources',
     PrivacyDataCategory.legacyHistory => 'Quarantined earlier history',
-    PrivacyDataCategory.websiteStorage => 'Legacy website data',
+    PrivacyDataCategory.websiteStorage => 'Website cookies and storage',
     PrivacyDataCategory.trustReceipt => 'This Trust Receipt journal',
     PrivacyDataCategory.session => 'This discovery session',
   };
@@ -71,7 +71,7 @@ extension PrivacyDataLabel on PrivacyDataCategory {
     PrivacyDataCategory.legacyHistory =>
       'Deletes earlier history records without displaying their titles or addresses. Other quarantined records stay.',
     PrivacyDataCategory.websiteStorage =>
-      'Removes legacy site cookies, cache and storage together. Completed download files are not deleted.',
+      'Signs you out of websites and removes site cookies, cache and storage. Live pages may need reloading. Completed downloads stay on your device.',
     PrivacyDataCategory.trustReceipt =>
       'Clears this journal only. Copies already exported to the clipboard or files remain outside Wingman.',
     PrivacyDataCategory.session =>

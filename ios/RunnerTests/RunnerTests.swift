@@ -1,10 +1,151 @@
 @testable import Runner
 import Network
+import CryptoKit
 import UIKit
 import WebKit
 import XCTest
 
 final class RunnerTests: XCTestCase {
+  private func consumerPolicy() throws -> ConsumerNativePolicy {
+    let app = try XCTUnwrap(Bundle(path: Bundle.main.bundlePath + "/Frameworks/App.framework"))
+    let asset = try XCTUnwrap(app.path(forResource: "consumer_protection", ofType: "json", inDirectory: "flutter_assets/assets/policy"))
+    return ConsumerNativePolicy(path: asset, expectedDigest: ProtectedWebBridge.protectionSHA256)
+  }
+
+  func testConsumerNativePolicyUnknownStrictAndMixedPaths() throws {
+    let policy = try consumerPolicy()
+    XCTAssertTrue(policy.valid)
+    XCTAssertGreaterThan(policy.domainCount, 300000)
+    for raw in ["https://www.weather.gov/", "https://www.nasa.gov/", "https://www.espn.com/nba/", "https://www.walmart.com/shop/electronics", "http://127.0.0.1:8123/fixture"] {
+      XCTAssertNotNil(policy.check(raw).url, raw)
+    }
+    for raw in ["https://sexual-explicit.protection.test/", "https://gambling.protection.test/", "https://security-threat.protection.test/", "https://www.espn.com/espn/betting/", "https://mixed.protection.test/promotion/alcohol/", "file:///etc/passwd", "https://user:pass@example.com/"] {
+      XCTAssertNil(policy.check(raw).url, raw)
+    }
+    XCTAssertEqual(policy.check("https://duckduckgo.com/?q=space&kp=-2").url?.host, "safe.duckduckgo.com")
+    XCTAssertEqual(policy.check("https://google.com/search?q=space").url?.host, "safe.duckduckgo.com")
+    XCTAssertNil(policy.check("https://safe.duckduckgo.com/?q=!g+space").url)
+    XCTAssertNotNil(policy.check("https://safe.duckduckgo.com/?q=Hello!").url)
+    XCTAssertEqual(strictSearchURL("C++!"), "https://safe.duckduckgo.com/?q=C%2B%2B%21&kp=1&kac=-1")
+    XCTAssertNil(policy.check("https://safe.duckduckgo.com/l/?uddg=https%3A%2F%2Fgambling.protection.test%2F").url)
+    let corrupt = ConsumerNativePolicy(path: "/missing", expectedDigest: "0")
+    XCTAssertFalse(corrupt.valid)
+    XCTAssertNil(corrupt.check("https://www.nasa.gov/").url)
+  }
+
+  func testDialogReplyCompletesOnceAcrossDismissalAndLateAction() {
+    var replies = [Bool]()
+    let reply = ConsumerReply<Bool> { replies.append($0) }
+    reply.resolve(false) // Renderer release cancels a pending dialog.
+    reply.resolve(true) // A late UIKit action must not call WebKit again.
+    XCTAssertEqual(replies, [false])
+  }
+
+  func testExpectedPolicyCancellationNeverSuppressesCertificateOrNetworkErrors() {
+    XCTAssertTrue(consumerExpectedNavigationCancellation(NSError(domain: NSURLErrorDomain, code: NSURLErrorCancelled), policyCancellationExpected: false))
+    let interrupted = NSError(domain: "WebKitErrorDomain", code: 102)
+    XCTAssertTrue(consumerExpectedNavigationCancellation(interrupted, policyCancellationExpected: true))
+    XCTAssertFalse(consumerExpectedNavigationCancellation(interrupted, policyCancellationExpected: false))
+    XCTAssertFalse(consumerExpectedNavigationCancellation(NSError(domain: NSURLErrorDomain, code: NSURLErrorServerCertificateUntrusted), policyCancellationExpected: true))
+    XCTAssertFalse(consumerExpectedNavigationCancellation(NSError(domain: NSURLErrorDomain, code: NSURLErrorNotConnectedToInternet), policyCancellationExpected: true))
+  }
+
+  func testConsumerSameCurrentRestorePreservesRollbackPredecessor() {
+    let previous: [String: Any] = ["sequence": 2, "sha256": "previous-digest"]
+    let restored = consumerActivationReceipt(currentSequence: 3, currentDigest: "active-digest", previous: previous,
+      sequence: 3, digest: "active-digest", highWater: 5)
+    XCTAssertEqual(restored["highest"] as? Int, 5)
+    XCTAssertEqual((restored["previous"] as? [String: Any])?["sequence"] as? Int, 2)
+    XCTAssertEqual((restored["previous"] as? [String: Any])?["sha256"] as? String, "previous-digest")
+    let upgraded = consumerActivationReceipt(currentSequence: 3, currentDigest: "active-digest", previous: previous,
+      sequence: 6, digest: "new-digest", highWater: 5)
+    XCTAssertEqual(upgraded["highest"] as? Int, 6)
+    XCTAssertEqual((upgraded["previous"] as? [String: Any])?["sequence"] as? Int, 3)
+  }
+
+  func testConsumerSignedUpdateAuthenticityAndMetadata() throws {
+    let privateKey = Curve25519.Signing.PrivateKey()
+    let keys = ["test-ephemeral": privateKey.publicKey.rawRepresentation.base64EncodedString()]
+    let generated = ISO8601DateFormatter().string(from: Date().addingTimeInterval(-60))
+    let categories = Dictionary(uniqueKeysWithValues: ["sexual-explicit", "gambling", "alcohol-promotion", "recreational-drug-promotion", "tobacco-nicotine", "security-threat"].map { ($0, [$0 + ".protection.test"]) })
+    let body: [String: Any] = ["schemaVersion": 1, "sequence": 2, "version": "test.2", "generatedAt": generated,
+      "categories": categories, "trackers": [String](), "pathRules": [[String: String]]()]
+    let bytes = try JSONSerialization.data(withJSONObject: body, options: [.sortedKeys])
+    let digest = SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined()
+    var meta: [String: Any] = ["purpose": "wingman-consumer-protection-v1", "schemaVersion": 1,
+      "sequence": 2, "version": "test.2", "generatedAt": generated, "minimumAppVersion": "0.10.0",
+      "filename": "consumer-2.json", "sha256": digest, "bytes": bytes.count, "license": "Test-only synthetic data"]
+    func envelope(_ metadata: [String: Any], corruptSignature: Bool = false) throws -> Data {
+      let payload = try JSONSerialization.data(withJSONObject: metadata, options: [.sortedKeys])
+      var signature = try privateKey.signature(for: payload)
+      if corruptSignature { signature[0] ^= 0xff }
+      return try JSONSerialization.data(withJSONObject: ["keyId": "test-ephemeral", "payload": payload.base64EncodedString(), "signature": signature.base64EncodedString()])
+    }
+    let signed = try envelope(meta)
+    let verified = try ConsumerNativeUpdate(envelope: signed, data: bytes, keys: keys)
+    XCTAssertEqual(verified.sequence, 2)
+    XCTAssertFalse(verified.prepared, "Signature verification alone cannot activate uncompiled rules")
+    XCTAssertNotNil(verified.policy.check("https://www.nasa.gov/").url)
+    XCTAssertNil(verified.policy.check("https://gambling.protection.test/").url)
+    XCTAssertThrowsError(try ConsumerNativeUpdate(envelope: signed, data: bytes, keys: [:]))
+    XCTAssertThrowsError(try ConsumerNativeUpdate(envelope: envelope(meta, corruptSignature: true), data: bytes, keys: keys))
+    XCTAssertThrowsError(try ConsumerNativeUpdate(envelope: signed, data: bytes + Data([32]), keys: keys))
+    meta["sequence"] = 3
+    XCTAssertThrowsError(try ConsumerNativeUpdate(envelope: envelope(meta), data: bytes, keys: keys))
+    meta["sequence"] = 2; meta["minimumAppVersion"] = "999.0.0"
+    XCTAssertThrowsError(try ConsumerNativeUpdate(envelope: envelope(meta), data: bytes, keys: keys))
+    meta["minimumAppVersion"] = "0.10.0"; meta["generatedAt"] = "2099-01-01T00:00:00Z"
+    XCTAssertThrowsError(try ConsumerNativeUpdate(envelope: envelope(meta), data: bytes, keys: keys))
+  }
+
+  @MainActor
+  func testConsumerNativeRuleCompilerBlocksSyntheticAndAllowsNeutralResources() throws {
+    let policy = try consumerPolicy()
+    // Production compiler is exercised; fixed synthetic rules are included in
+    // the signed baseline. We don't fetch prohibited sites to test their rules.
+    let groups = policy.contentRuleGroups()
+    XCTAssertFalse(groups.isEmpty)
+    XCTAssertGreaterThan(groups.count, 10)
+    XCTAssertFalse(groups.joined().contains("block-cookies"))
+    XCTAssertFalse(groups.joined().contains("ignore-previous-rules"))
+    let complete = expectation(description: "Consumer rule chunk compiles")
+    let identifier = "wingman-consumer-xctest-" + UUID().uuidString
+    WKContentRuleListStore.default().compileContentRuleList(forIdentifier: identifier, encodedContentRuleList: try XCTUnwrap(groups.first)) { list, error in
+      XCTAssertNil(error)
+      XCTAssertNotNil(list)
+      WKContentRuleListStore.default().removeContentRuleList(forIdentifier: identifier) { _ in complete.fulfill() }
+    }
+    wait(for: [complete], timeout: 120)
+  }
+
+  @MainActor
+  func testConsumerConfigurationPreservesNormalCookiesSeparatesPrivateAndEnablesJavaScript() throws {
+    let normal = consumerWebConfiguration(privateMode: false, rules: [])
+    let privateSession = consumerWebConfiguration(privateMode: true, rules: [])
+    XCTAssertTrue(normal.websiteDataStore.isPersistent)
+    XCTAssertFalse(privateSession.websiteDataStore.isPersistent)
+    XCTAssertTrue(normal.defaultWebpagePreferences.allowsContentJavaScript)
+    XCTAssertFalse(normal.preferences.javaScriptCanOpenWindowsAutomatically)
+    XCTAssertTrue(normal.preferences.isFraudulentWebsiteWarningEnabled)
+    if #available(iOS 15.4, *) { XCTAssertTrue(normal.preferences.isElementFullscreenEnabled) }
+    let cookie = try XCTUnwrap(HTTPCookie(properties: [.domain: "session.protection.test", .path: "/", .name: "wingman_native_fixture", .value: "synthetic", .expires: Date().addingTimeInterval(60)]))
+    let stored = expectation(description: "Normal fixture cookie stored")
+    normal.websiteDataStore.httpCookieStore.setCookie(cookie) { stored.fulfill() }
+    wait(for: [stored], timeout: 10)
+    let continuity = expectation(description: "New normal configuration shares cookies")
+    consumerWebConfiguration(privateMode: false, rules: []).websiteDataStore.httpCookieStore.getAllCookies { cookies in
+      XCTAssertTrue(cookies.contains(where: { $0.name == cookie.name && $0.domain == cookie.domain })); continuity.fulfill()
+    }
+    let isolated = expectation(description: "Private session has no normal fixture cookie")
+    privateSession.websiteDataStore.httpCookieStore.getAllCookies { cookies in
+      XCTAssertFalse(cookies.contains(where: { $0.name == cookie.name && $0.domain == cookie.domain })); isolated.fulfill()
+    }
+    wait(for: [continuity, isolated], timeout: 10)
+    let cleaned = expectation(description: "Only synthetic test cookie removed")
+    normal.websiteDataStore.httpCookieStore.delete(cookie) { cleaned.fulfill() }
+    wait(for: [cleaned], timeout: 10)
+  }
+
   /// This fixture uses the actual production rule builder with test-owned
   /// loopback URLs. There is no production manifest override or app-channel
   /// loader for localhost, arbitrary HTML or caller-supplied JavaScript.

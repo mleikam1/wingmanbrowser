@@ -9,7 +9,7 @@ import 'state/browser_state_test.dart' show RecordingRepository;
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   test(
-    'retired controller grant, allowlist, tracking-exception and rollback APIs cannot authorize content',
+    'retired override APIs remain inert while consumer baseline permits ordinary destinations',
     () async {
       final state = BrowserState(repository: RecordingRepository());
       await state.init();
@@ -48,7 +48,7 @@ void main() {
         expect(
           (await guard.evaluate(
             GuardRequest(
-              uri: Uri.parse('https://unreviewed.test'),
+              uri: Uri.parse('https://gambling.protection.test'),
               tabId: 't',
               isPrivate: private,
               hasAllowOnceGrant: true,
@@ -57,6 +57,15 @@ void main() {
           true,
         );
       }
+      expect(
+        (await guard.evaluate(
+          GuardRequest(
+            uri: Uri.parse('https://unreviewed.test'),
+            tabId: 'ordinary',
+          ),
+        )).isBlocked,
+        false,
+      );
       guard.dispose();
       state.dispose();
     },
