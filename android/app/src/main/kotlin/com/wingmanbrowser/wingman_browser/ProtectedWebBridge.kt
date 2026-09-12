@@ -491,7 +491,7 @@ class ProtectedWebBridge(private val context: Context, private val channel: Meth
         layout.addView(username); layout.addView(password)
         val safeRealm = realm.filter { it.code >= 32 && it.code != 127 }.take(160)
         pending.show(AlertDialog.Builder(activity).setTitle("Website sign-in")
-            .setMessage("${origin(owner.currentUrl)}\n$safeRealm\nCredentials are sent only to this HTTPS site.")
+            .setMessage("$host\n$safeRealm\nThis HTTPS page requested sign-in for this host. The browser does not identify the request port.")
             .setView(layout).setNegativeButton("Cancel") { _, _ -> pending.cancel() }
             .setOnCancelListener { pending.cancel() }
             .setPositiveButton("Sign in") { _, _ ->
@@ -536,17 +536,21 @@ class ProtectedWebBridge(private val context: Context, private val channel: Meth
         if (!decision.allowed || !owner.active || !mayOpen()) { owner.block(url, decision.reason); return }
         val filename = URLUtil.guessFileName(url, disposition, mime).replace(Regex("[^A-Za-z0-9._ -]"), "_").take(160)
         if (filename.substringAfterLast('.', "").lowercase() in setOf("apk", "exe", "msi", "dmg", "pkg", "bat", "cmd", "sh", "ps1", "js", "jar")) { owner.block(url, "Executable downloads are not supported."); return }
-        val ticket = owner.documentScope.issue(owner.currentUrl)
-        AlertDialog.Builder(activity).setTitle("Save download?").setMessage("${origin(url)}\n$filename" + if (owner.privateMode) "\nThe saved file remains after closing this private tab." else "")
-            .setNegativeButton("Cancel", null).setPositiveButton("Save") { _, _ ->
-                if (!owner.documentScope.owns(ticket, owner.currentUrl) || owner.web == null || !liveAvailable() || denied) return@setPositiveButton
-                download = Download(owner, decision.url, mime ?: "application/octet-stream", filename,
-                    if (origin(url) == origin(owner.currentUrl)) owner.cookieManager() else null,
-                    userAgent ?: owner.web?.settings?.userAgentString.orEmpty(), owner.downloadEpoch)
-                try { activity.startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).apply { addCategory(Intent.CATEGORY_OPENABLE); type = mime ?: "application/octet-stream"; putExtra(Intent.EXTRA_TITLE, filename) }, DOWNLOAD_REQUEST) }
-                catch (_: Exception) { download = null }
-            }.show()
+        val pending = siteRequest(owner, Any()) {} ?: return
+        pending.show(AlertDialog.Builder(activity).setTitle("Save download?").setMessage("${origin(url)}\n$filename" + if (owner.privateMode) "\nThe saved file remains after closing this private tab." else "")
+            .setNegativeButton("Cancel") { _, _ -> pending.cancel() }.setOnCancelListener { pending.cancel() }
+            .setPositiveButton("Save") { _, _ ->
+                if (!pending.stillBound()) { pending.cancel(); return@setPositiveButton }
+                pending.finish {
+                    download = Download(owner, decision.url, mime ?: "application/octet-stream", filename,
+                        if (origin(url) == origin(owner.currentUrl)) owner.cookieManager() else null,
+                        userAgent ?: owner.web?.settings?.userAgentString.orEmpty(), owner.downloadEpoch)
+                    try { activity.startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).apply { addCategory(Intent.CATEGORY_OPENABLE); type = mime ?: "application/octet-stream"; putExtra(Intent.EXTRA_TITLE, filename) }, DOWNLOAD_REQUEST) }
+                    catch (_: Exception) { download = null }
+                }
+            })
     }
+
     fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?): Boolean {
         if (requestCode == UPLOAD_REQUEST) {
             val owner = uploadOwner
