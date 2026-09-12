@@ -69,10 +69,9 @@ class LaunchpadCatalog {
                  reviewedAt: site.reviewedAt,
                  reviewExpiresAt: site.expiresAt,
                  provenanceUrls: [site.entryUrl],
-                 scope:
-                     'Only the listed reviewed pages and passive image/style resources.',
+                 scope: 'Publisher website shortcut.',
                  limitation:
-                     'Native Android/iOS support is checked when opening. Scripts, accounts and downloads remain unavailable.',
+                     'Current destination rules apply when opening. Website content and functionality can change.',
                ),
              ),
          ...resources
@@ -183,7 +182,7 @@ class LaunchpadCatalog {
     provenanceUrls: [url, ...evidence.where((e) => e != url)],
     scope: scope,
     limitation:
-        'This catalog does not grant website access. An unsupported destination can only be saved as a local review record. Live browsing requires separate, current native permission.',
+        'Current destination rules apply when opening. Native Wingman opens supported websites in its browser; the web companion opens them in the host browser.',
   );
   static final websites = List<StarterCatalogEntry>.unmodifiable([
     _website(

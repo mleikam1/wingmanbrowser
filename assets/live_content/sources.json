@@ -1,0 +1,92 @@
+{
+  "schemaVersion": 1,
+  "sources": [
+    {
+      "id": "nasa-technology",
+      "name": "NASA",
+      "homepageUrl": "https://www.nasa.gov/technology/",
+      "language": "en",
+      "topics": [
+        "technology",
+        "science"
+      ],
+      "allowedArticleHosts": [
+        "www.nasa.gov",
+        "science.nasa.gov"
+      ],
+      "articlePathPrefixes": [
+        "/"
+      ],
+      "eligibilityScope": "technology-reporting",
+      "rights": {
+        "titles": true,
+        "excerpts": true,
+        "images": false,
+        "attribution": "Source: NASA. No endorsement implied.",
+        "licenseUrl": "https://www.nasa.gov/nasa-brand-center/images-and-media/"
+      },
+      "enabled": true,
+      "verifiedAt": "2026-09-11T00:00:00Z"
+    },
+    {
+      "id": "noaa-news",
+      "name": "NOAA",
+      "homepageUrl": "https://www.noaa.gov/news",
+      "language": "en",
+      "topics": [
+        "environment",
+        "science"
+      ],
+      "allowedArticleHosts": [
+        "www.noaa.gov"
+      ],
+      "articlePathPrefixes": [
+        "/news/",
+        "/news-release/",
+        "/stories/",
+        "/education/"
+      ],
+      "eligibilityScope": "public-information",
+      "rights": {
+        "titles": true,
+        "excerpts": true,
+        "images": false,
+        "attribution": "Source: NOAA. No endorsement implied.",
+        "licenseUrl": "https://www.noaa.gov/office-education/outreach-communication/faq"
+      },
+      "enabled": true,
+      "verifiedAt": "2026-09-11T00:00:00Z"
+    },
+    {
+      "id": "usgs-news",
+      "name": "USGS",
+      "homepageUrl": "https://www.usgs.gov/news",
+      "language": "en",
+      "topics": [
+        "science",
+        "environment"
+      ],
+      "allowedArticleHosts": [
+        "www.usgs.gov"
+      ],
+      "articlePathPrefixes": [
+        "/news/",
+        "/centers/",
+        "/programs/",
+        "/observatories/",
+        "/mission-areas/",
+        "/special-topics/"
+      ],
+      "eligibilityScope": "science-reporting",
+      "rights": {
+        "titles": true,
+        "excerpts": true,
+        "images": false,
+        "attribution": "Source: USGS. No endorsement implied.",
+        "licenseUrl": "https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits"
+      },
+      "enabled": true,
+      "verifiedAt": "2026-09-11T00:00:00Z"
+    }
+  ]
+}

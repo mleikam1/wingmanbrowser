@@ -4,6 +4,17 @@
 
 **Built for discovery. Designed with boundaries.**
 
+Version **0.11.0+11** adds a shared live-content backend and local feed preferences,
+cache, saved publisher links and explicit Launchpad pinning. NASA, NOAA and USGS
+supply current English science, technology and environment coverage. Publisher
+articles open in the existing native consumer browser; the web companion opens
+them in the host browser. Bundled articles remain labelled evergreen/offline.
+No production feed service or broad-news license has been deployed or purchased.
+See [Live content acceptance and commands](docs/LIVE_CONTENT_ACCEPTANCE.md),
+[Architecture](docs/LIVE_CONTENT_ARCHITECTURE.md),
+[Source rights](docs/CONTENT_SOURCES_AND_RIGHTS.md), and
+[Operating costs and approvals](docs/CONTENT_OPERATING_COSTS.md).
+
 Version **0.10.0+10** restores consumer browsing through Android System WebView and iOS WKWebView while preserving Wingman's existing interface, Launchpad, Spaces and local tools. Ordinary search opens DuckDuckGo's normal Strict experience; permitted result destinations do not require inclusion in the reviewed catalog. JavaScript, forms, first-party storage and native navigation are enabled behind local category/threat controls. The web companion submits search by leaving for the strict provider in the host browser.
 
 This recovery is not production-complete. Protection coverage, native interception limitations, incomplete update infrastructure and measured device acceptance are documented in [Consumer recovery](docs/CONSUMER_BROWSER_RECOVERY.md), [Search acceptance](docs/SEARCH_ACCEPTANCE.md), [Browser engine contract](docs/BROWSER_ENGINE_CONTRACT.md) and [Protection coverage](docs/PROTECTION_COVERAGE.md). A permitted destination is not a claim of verified safety. School allowlisting remains separate; users cannot disable the consumer mandatory baseline.

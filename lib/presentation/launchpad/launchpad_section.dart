@@ -206,6 +206,8 @@ class _LaunchpadSectionState extends State<LaunchpadSection> {
         ? 'Inactive'
         : shortcut.target.kind == LaunchpadKind.tool
         ? 'Tool'
+        : shortcut.target.kind == LaunchpadKind.website
+        ? 'Website'
         : 'Offline';
     return Semantics(
       key: ValueKey('launchpad-tile-${item.id}'),
@@ -246,6 +248,8 @@ class _LaunchpadSectionState extends State<LaunchpadSection> {
                   Text(
                     title,
                     textAlign: TextAlign.center,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                   const SizedBox(height: 2),

@@ -1,0 +1,34 @@
+# TEMPLATE ONLY. Replace every REPLACE_* value in a NEW dedicated project.
+# Nothing in this repository authorizes creating resources or attaching billing.
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: wingman-content-read
+  namespace: REPLACE_NEW_DEDICATED_PROJECT_NUMBER
+  annotations:
+    run.googleapis.com/maxScale: '2'
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/minScale: '0'
+        autoscaling.knative.dev/maxScale: '2'
+        run.googleapis.com/cpu-throttling: 'true'
+    spec:
+      serviceAccountName: content-reader@REPLACE_NEW_DEDICATED_PROJECT_ID.iam.gserviceaccount.com
+      containerConcurrency: 32
+      timeoutSeconds: 30
+      containers:
+      - image: REPLACE_IMAGE_DIGEST
+        args: ['serve']
+        ports:
+        - containerPort: 8080
+        env:
+        - name: CONTENT_PROJECT
+          value: REPLACE_NEW_DEDICATED_PROJECT_ID
+        - name: CONTENT_BUCKET
+          value: REPLACE_PRIVATE_CONTENT_BUCKET
+        resources:
+          limits:
+            cpu: '1'
+            memory: 256Mi

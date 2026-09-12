@@ -41,6 +41,10 @@ import 'settings/settings_screen.dart';
 import 'protection/protection_screen.dart';
 import 'protection/help_now_screen.dart';
 import 'protection/policy_state_view.dart';
+import '../live_content/live_content.dart';
+import 'live_content/live_content_section.dart';
+import 'live_content/live_content_preferences_screen.dart';
+import 'live_content/live_reading_list.dart';
 
 const _collections = <String, String>{
   'science': 'Science',
@@ -64,12 +68,14 @@ class BrowserShell extends StatefulWidget {
     this.signatures,
     this.session,
     this.handoff,
+    this.liveContent,
   });
   final BrowserState state;
   final PolicyRuntime policy;
   final SignatureServices? signatures;
   final DiscoverySession? session;
   final HandoffController? handoff;
+  final LiveContentController? liveContent;
   @override
   State<BrowserShell> createState() => _BrowserShellState();
 }
@@ -81,7 +87,11 @@ class _BrowserShellState extends State<BrowserShell>
   late final DiscoverySession _session;
   List<DiscoveryTab> get _tabs => _session.tabs;
   int get _activeTab => _session.active;
-  set _activeTab(int v) => _session.active = v;
+  set _activeTab(int v) {
+    _session.active = v;
+    _syncLiveContentContext();
+  }
+
   int get _destination => _session.destination;
   set _destination(int v) => _session.destination = v;
   String get _query => _session.query;
@@ -102,6 +112,52 @@ class _BrowserShellState extends State<BrowserShell>
   final List<String> _liveOrder = [];
   // Four live renderers; other tabs restore their last address on selection.
   static const _maximumLiveTabs = 4;
+  DateTime? _lastFeedAttempt;
+
+  int _featureRouteDepth = 0;
+  void _recheckLiveContent() => widget.liveContent?.recheckEligibility();
+
+  void _syncLiveContentContext() {
+    widget.liveContent?.setContext(
+      widget.handoff?.blocksOwner == true
+          ? LiveContentContext.handoff
+          : _ephemeral
+          ? LiveContentContext.private
+          : _covered
+          ? LiveContentContext.inactive
+          : LiveContentContext.owner,
+    );
+  }
+
+  Future<void> _refreshHomeContent() async {
+    final feed = widget.liveContent;
+    if (feed == null ||
+        !mounted ||
+        _ephemeral ||
+        _covered ||
+        widget.handoff?.blocksOwner == true ||
+        (_lastFeedAttempt != null &&
+            DateTime.now().difference(_lastFeedAttempt!) <
+                const Duration(minutes: 15))) {
+      return;
+    }
+    _lastFeedAttempt = DateTime.now();
+    try {
+      await feed.initialize();
+      if (mounted &&
+          !_ephemeral &&
+          !_covered &&
+          widget.handoff?.blocksOwner != true &&
+          _tab.website == null &&
+          _tab.resourceId == null &&
+          _destination == 0 &&
+          _query.isEmpty) {
+        await feed.refresh();
+      }
+    } catch (_) {
+      // The feed exposes its own state; browser navigation stays independent.
+    }
+  }
 
   void _retainEngine(DiscoveryTab owner, Uri uri) {
     if (!_webRequests.containsKey(owner.id)) _webRequests[owner.id] = uri;
@@ -118,9 +174,18 @@ class _BrowserShellState extends State<BrowserShell>
   final Map<String, ScrollController> _scrolls = {};
   ScrollController _scrollFor(String page) {
     final owner = _tab, key = '${_tab.id}:$page';
+    // A detached controller creates a new ScrollPosition from its original
+    // initial offset. Recreate it from this tab's latest saved position when
+    // returning from a native article or another Home tab.
+    final previous = _scrolls[key];
+    if (previous != null && !previous.hasClients) {
+      previous.dispose();
+      _scrolls.remove(key);
+    }
     return _scrolls.putIfAbsent(key, () {
       final controller = ScrollController(
         initialScrollOffset: owner.scrollOffsets[page] ?? 0,
+        keepScrollOffset: false,
       );
       controller.addListener(() {
         if (controller.hasClients && _tabs.contains(owner)) {
@@ -191,8 +256,13 @@ class _BrowserShellState extends State<BrowserShell>
     FocusScope.of(context).unfocus();
     final route = WingmanRoute<void>(builder: (_) => page);
     onRoute?.call(route);
-    await Navigator.of(context).push<void>(route);
-    if (mounted) setState(() {});
+    setState(() => _featureRouteDepth++);
+    try {
+      await Navigator.of(context).push<void>(route);
+    } finally {
+      _featureRouteDepth--;
+      if (mounted) setState(() {});
+    }
   }
 
   void _openFeatureResource(String id) {
@@ -619,14 +689,25 @@ class _BrowserShellState extends State<BrowserShell>
     WidgetsBinding.instance.addObserver(this);
     widget.state.addListener(_changed);
     widget.policy.addListener(_changed);
+    widget.state.addListener(_recheckLiveContent);
+    widget.policy.addListener(_recheckLiveContent);
+    widget.liveContent?.addListener(_changed);
+    widget.handoff?.addListener(_syncLiveContentContext);
+    _syncLiveContentContext();
+    unawaited(widget.liveContent?.initialize());
     unawaited(_bindIncoming());
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    widget.liveContent?.removeListener(_changed);
+    widget.handoff?.removeListener(_syncLiveContentContext);
+    widget.liveContent?.setContext(LiveContentContext.inactive);
     widget.state.removeListener(_changed);
     widget.policy.removeListener(_changed);
+    widget.state.removeListener(_recheckLiveContent);
+    widget.policy.removeListener(_recheckLiveContent);
     widget.signatures?.removeListener(_changed);
     widget.signatures?.workspaces.removeListener(_changed);
     widget.signatures?.ui.removeListener(_changed);
@@ -713,6 +794,7 @@ class _BrowserShellState extends State<BrowserShell>
     }
     if (state != AppLifecycleState.resumed) unawaited(_session.flush());
     if (mounted) setState(() => _covered = state != AppLifecycleState.resumed);
+    _syncLiveContentContext();
   }
 
   bool _eligible(ApprovedResource r) => widget.policy.policy
@@ -790,6 +872,23 @@ class _BrowserShellState extends State<BrowserShell>
         productEdition == ProductEdition.consumer &&
         const StrictSearchPolicy().acceptsCanonical(uri) &&
         widget.policy.searchAvailable(additional: _additional)) {
+      navigateCompanion(uri);
+      return;
+    }
+    if (kIsWeb && productEdition == ProductEdition.consumer) {
+      final decision = widget.policy.consumerProtection.assessNavigation(
+        uri,
+        additional: _additional,
+      );
+      if (uri.scheme != 'https' ||
+          !decision.isAllowed ||
+          widget.policy.policy
+              .blockedBrowsingUrls(_additional)
+              .contains(uri.toString())) {
+        _deny(decision);
+        return;
+      }
+      // A user-selected destination opens top-level in the host browser.
       navigateCompanion(uri);
       return;
     }
@@ -1274,6 +1373,16 @@ class _BrowserShellState extends State<BrowserShell>
   );
 
   Widget _homeView() {
+    // Owned feature routes can change which Home items remain eligible. Keep
+    // its saved offset, but do not lay out a covered, shrinking viewport: that
+    // can leave clipped accessibility nodes without geometry in Flutter.
+    // _scrollFor restores and clamps the position when Home becomes visible.
+    if (_featureRouteDepth > 0) return const SizedBox.shrink();
+    if (!_ephemeral) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) unawaited(_refreshHomeContent());
+      });
+    }
     final model = _features?.workspaces;
     final service = _features;
     final launchpadActions = _launchpadActions();
@@ -1296,8 +1405,21 @@ class _BrowserShellState extends State<BrowserShell>
               isPrivate: _ephemeral,
             )
           : null,
-      websiteDiscovery: VisualDiscoverySection(
-        destinations: _homeInspiration(),
+      websiteDiscovery: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (!_ephemeral) ...[
+            LiveContentSection(
+              controller: widget.liveContent,
+              onOpen: _openLiveContent,
+              onPin: _pinLiveContent,
+              onPreferences: _liveContentPreferences,
+              onReadingList: () => _library(LibrarySection.readingList),
+            ),
+            const SizedBox(height: 28),
+          ],
+          VisualDiscoverySection(destinations: _homeInspiration()),
+        ],
       ),
       preferences: (_features?.ui.snapshot ?? UiPreferences()).copyWith(
         showSpaces:
@@ -2366,9 +2488,69 @@ class _BrowserShellState extends State<BrowserShell>
         onOpenApprovedResource: _openFeatureResource,
         initialSection: section,
         onPrivacy: _settings,
+        liveReadingList: _ephemeral || widget.liveContent == null
+            ? null
+            : LiveReadingList(
+                controller: widget.liveContent!,
+                onOpen: _openLiveContent,
+                onPin: _pinLiveContent,
+                canContinue: () => _validOrigin(origin) && !_ephemeral,
+              ),
         onPinToLaunchpad: _ephemeral
             ? null
             : (id) => _pinToLaunchpad(id, fromBookmark: true),
+      ),
+    );
+  }
+
+  void _openLiveContent(LiveContentItem item) {
+    if (_ephemeral ||
+        !_validOrigin(_tab) ||
+        widget.liveContent?.canOpen(item) != true) {
+      return;
+    }
+    Navigator.of(context).popUntil((route) => route.isFirst);
+    _navigateWebsite(item.canonicalUrl);
+  }
+
+  void _pinLiveContent(LiveContentItem item) {
+    if (_ephemeral ||
+        !_toolsReady ||
+        !_validOrigin(_tab) ||
+        widget.liveContent?.canOpen(item) != true) {
+      return;
+    }
+    // Launchpad names have an 80-code-unit storage limit. Keep whole grapheme
+    // clusters in this editable prefill; the publisher headline stays intact.
+    final name = StringBuffer();
+    for (final grapheme in item.title.characters) {
+      if (name.length + grapheme.length > 80) break;
+      name.write(grapheme);
+    }
+    final shortcutName = name.isEmpty
+        ? 'Publisher article'
+        : name.toString().trimRight();
+    _pushFeature(
+      LaunchpadEditorScreen(
+        controller: _features!.launchpad,
+        actions: _launchpadActions(),
+        isPrivate: false,
+        initialDraft: LaunchpadPinDraft(
+          title: shortcutName,
+          target: LaunchpadTarget.website(item.canonicalUrl.toString()),
+          localIconKey: 'globe',
+        ),
+      ),
+    );
+  }
+
+  void _liveContentPreferences() {
+    final feed = widget.liveContent, origin = _tab;
+    if (feed == null || _ephemeral || !_validOrigin(origin)) return;
+    _pushFeature(
+      LiveContentPreferencesScreen(
+        controller: feed,
+        canContinue: () => !_ephemeral && _validOrigin(origin),
       ),
     );
   }
@@ -2538,6 +2720,7 @@ class _BrowserShellState extends State<BrowserShell>
             await widget.state.clearReviewedLibrary(bookmarks: true);
           case PrivacyDataCategory.readingList:
             await widget.state.clearReviewedLibrary(readingList: true);
+            await widget.liveContent?.clearSaved();
           case PrivacyDataCategory.legacyHistory:
             await widget.state.clearHistory();
           case PrivacyDataCategory.trustReceipt:

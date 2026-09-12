@@ -18,6 +18,7 @@ import 'signature/privacy/privacy_journal.dart';
 import 'signature/signature_services.dart';
 import 'signature/launchpad/launchpad.dart';
 import 'signature/workspaces/discovery_session.dart';
+import 'live_content/live_content.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -138,16 +139,34 @@ class _SignatureApplicationRootState extends State<SignatureApplicationRoot> {
             )
             .isAllowed,
         resourceLookup: widget.policy.resource,
-        websiteAvailable: () => widget.policy.liveAvailable(),
-        evaluateWebsite: (uri) => widget.policy.policy.evaluate(
-          PolicyRequest.navigation(
-            uri,
-            context: productEdition == ProductEdition.consumer
-                ? ContentContext.general
-                : ContentContext.student,
-          ),
-          additional: state.protectedPreferences.additional,
-        ),
+        websiteAvailable: () => kIsWeb
+            ? productEdition == ProductEdition.consumer &&
+                  widget.policy.consumerProtection.isUsable
+            : widget.policy.liveAvailable(),
+        evaluateWebsite: (uri) {
+          if (kIsWeb && productEdition == ProductEdition.consumer) {
+            if (widget.policy.policy
+                .blockedBrowsingUrls(state.protectedPreferences.additional)
+                .contains(uri.toString())) {
+              return const PolicyDecision(
+                PolicyDecisionCode.blockAdditionalRestriction,
+              );
+            }
+            return widget.policy.consumerProtection.assessNavigation(
+              uri,
+              additional: state.protectedPreferences.additional,
+            );
+          }
+          return widget.policy.policy.evaluate(
+            PolicyRequest.navigation(
+              uri,
+              context: productEdition == ProductEdition.consumer
+                  ? ContentContext.general
+                  : ContentContext.student,
+            ),
+            additional: state.protectedPreferences.additional,
+          );
+        },
       ),
       eligible: (id) => widget.policy.policy
           .evaluate(
@@ -181,7 +200,31 @@ class _SignatureApplicationRootState extends State<SignatureApplicationRoot> {
             .isAllowed,
       );
     }
-    return _OwnerContext(state, signatures, session);
+    LiveContentController? liveContent;
+    if (productEdition == ProductEdition.consumer) {
+      try {
+        liveContent = LiveContentController(
+          store: repository,
+          provider: SnapshotFeedProvider.fromEnvironment(),
+          eligibility: LiveContentEligibility(
+            registry: await LiveSourceRegistry.loadBundled(),
+            canOpenDestination: (uri) =>
+                widget.policy.consumerProtection
+                    .assessNavigation(
+                      uri,
+                      additional: state.protectedPreferences.additional,
+                    )
+                    .isAllowed &&
+                !widget.policy.policy
+                    .blockedBrowsingUrls(state.protectedPreferences.additional)
+                    .contains(uri.toString()),
+          ),
+        );
+      } catch (_) {
+        // Optional feed configuration never holds up browsing or local tools.
+      }
+    }
+    return _OwnerContext(state, signatures, session, liveContent);
   }
 
   @override
@@ -199,6 +242,7 @@ class _SignatureApplicationRootState extends State<SignatureApplicationRoot> {
           signatures: owner.signatures,
           session: owner.session,
           handoff: widget.handoff,
+          liveContent: owner.liveContent,
         );
       },
     ),
@@ -218,11 +262,15 @@ class _SignatureApplicationRootState extends State<SignatureApplicationRoot> {
 }
 
 class _OwnerContext {
-  _OwnerContext(this.state, this.signatures, this.session);
+  _OwnerContext(this.state, this.signatures, this.session, this.liveContent);
   final BrowserState state;
   final SignatureServices signatures;
   final DiscoverySession session;
+  final LiveContentController? liveContent;
   Future<void> close() async {
+    liveContent?.setContext(LiveContentContext.inactive);
+    await liveContent?.flush();
+    liveContent?.dispose();
     await signatures.flush();
     await session.flush();
     session.dispose();
@@ -274,12 +322,14 @@ class WingmanApp extends StatelessWidget {
     this.signatures,
     this.session,
     this.handoff,
+    this.liveContent,
   });
   final BrowserState state;
   final PolicyRuntime policy;
   final SignatureServices? signatures;
   final DiscoverySession? session;
   final HandoffController? handoff;
+  final LiveContentController? liveContent;
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: state,
@@ -302,6 +352,7 @@ class WingmanApp extends StatelessWidget {
               signatures: signatures,
               session: session,
               handoff: handoff,
+              liveContent: liveContent,
             ),
     ),
   );

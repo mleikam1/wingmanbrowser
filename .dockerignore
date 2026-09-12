@@ -1,0 +1,11 @@
+**
+!backend/
+!backend/Dockerfile
+!backend/requirements.txt
+!backend/requirements-cloud.txt
+!backend/sources.json
+!backend/wingman_content/
+!backend/wingman_content/*.py
+!assets/
+!assets/policy/
+!assets/policy/consumer_protection.json

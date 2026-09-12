@@ -20,6 +20,7 @@ class LibraryScreen extends StatefulWidget {
     this.initialSection = LibrarySection.hub,
     this.onPrivacy,
     this.onPinToLaunchpad,
+    this.liveReadingList,
   });
   final BrowserState state;
   final PolicyRuntime policy;
@@ -29,6 +30,7 @@ class LibraryScreen extends StatefulWidget {
   final LibrarySection initialSection;
   final VoidCallback? onPrivacy;
   final ValueChanged<String>? onPinToLaunchpad;
+  final Widget? liveReadingList;
   @override
   State<LibraryScreen> createState() => _LibraryScreenState();
 }
@@ -211,7 +213,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
   Widget _hub() => ListView(
     children: [
       const Text(
-        'Your library stays local. Open only items whose exact reviewed content is still eligible.',
+        'Your library stays local. Offline articles and saved publisher links keep their current content and destination checks.',
       ),
       const SizedBox(height: 20),
       WingmanSettingsRow(
@@ -223,7 +225,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
       WingmanSettingsRow(
         icon: Icons.menu_book_outlined,
         title: 'Reading list',
-        subtitle: 'Unread and read articles available offline',
+        subtitle: 'Saved publisher links and offline articles',
         onTap: () => _select(LibrarySection.readingList),
       ),
       WingmanSettingsRow(
@@ -313,10 +315,14 @@ class _LibraryScreenState extends State<LibraryScreen> {
           ..sort((a, b) => a.title.compareTo(b.title));
     return CustomScrollView(
       slivers: [
+        if (reading && widget.liveReadingList != null)
+          SliverToBoxAdapter(child: widget.liveReadingList!),
         SliverToBoxAdapter(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (reading && widget.liveReadingList != null)
+                const WingmanSection(title: 'Evergreen offline articles'),
               TextField(
                 contextMenuBuilder: _localMenu,
                 key: const ValueKey('library-search'),
@@ -326,9 +332,11 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 enableIMEPersonalizedLearning: false,
                 maxLength: 256,
                 onChanged: (v) => setState(() => _query = v),
-                decoration: const InputDecoration(
-                  labelText: 'Search saved articles',
-                  prefixIcon: Icon(Icons.search),
+                decoration: InputDecoration(
+                  labelText: reading && widget.liveReadingList != null
+                      ? 'Search evergreen articles'
+                      : 'Search saved articles',
+                  prefixIcon: const Icon(Icons.search),
                   counterText: '',
                 ),
               ),
@@ -372,7 +380,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 ],
               ),
               const Text(
-                'Titles come from the reviewed catalog. Custom titles, folders and live-address saves are unavailable.',
+                'Evergreen offline articles come from the reviewed catalog. Publisher links above open the original website; full articles are not downloaded here.',
               ),
               if (unavailable.isNotEmpty) ...[
                 WingmanStatus(

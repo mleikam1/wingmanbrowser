@@ -1,0 +1,17 @@
+{
+  "description": "TEMPLATE ONLY: common Wingman ingestion, no per-user inputs",
+  "schedule": "*/30 * * * *",
+  "timeZone": "Etc/UTC",
+  "attemptDeadline": "180s",
+  "retryConfig": {"retryCount": 0},
+  "httpTarget": {
+    "uri": "https://run.googleapis.com/v2/projects/REPLACE_NEW_DEDICATED_PROJECT_ID/locations/REPLACE_REGION/jobs/wingman-content-ingest:run",
+    "httpMethod": "POST",
+    "headers": {"Content-Type": "application/json"},
+    "body": "e30=",
+    "oauthToken": {
+      "serviceAccountEmail": "content-scheduler@REPLACE_NEW_DEDICATED_PROJECT_ID.iam.gserviceaccount.com",
+      "scope": "https://www.googleapis.com/auth/cloud-platform"
+    }
+  }
+}

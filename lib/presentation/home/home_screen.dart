@@ -336,7 +336,7 @@ class HomeScreen extends StatelessWidget {
                 if (kIsWeb) ...[
                   const SizedBox(height: 12),
                   Text(
-                    'Offline library · Live browsing unavailable',
+                    'Web companion · Website links open in your host browser',
                     style: theme.textTheme.bodySmall,
                   ),
                 ],

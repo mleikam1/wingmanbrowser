@@ -71,8 +71,8 @@ class LaunchpadEligibilityService {
               const PolicyDecision(
                 PolicyDecisionCode.blockUnsupportedCapability,
               );
-          // A decision alone cannot add a renderer. Current native capability
-          // and immutable live scope are supplied by the application policy.
+          // A decision alone cannot provide a native renderer or companion
+          // transport. The application also supplies current capability.
           final capable = websiteAvailable?.call() ?? false;
           final code = capable
               ? decision.code
@@ -89,7 +89,7 @@ class LaunchpadEligibilityService {
             canRetainInactive: retained,
             policyCode: code,
             message: capable && decision.isAllowed
-                ? 'Reviewed live page · Images and page layout supported'
+                ? 'Website shortcut · Current destination rules apply'
                 : retained
                 ? 'Inactive local review record. This destination is outside the supported website scope for this session; nothing is submitted.'
                 : 'This destination cannot be saved as an active shortcut.',

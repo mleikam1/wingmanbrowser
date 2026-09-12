@@ -1,0 +1,28 @@
+# TEMPLATE ONLY. Authenticated scheduled job, separate from the public GET service.
+apiVersion: run.googleapis.com/v1
+kind: Job
+metadata:
+  name: wingman-content-ingest
+  namespace: REPLACE_NEW_DEDICATED_PROJECT_NUMBER
+spec:
+  template:
+    spec:
+      taskCount: 1
+      parallelism: 1
+      template:
+        spec:
+          serviceAccountName: content-writer@REPLACE_NEW_DEDICATED_PROJECT_ID.iam.gserviceaccount.com
+          maxRetries: 0
+          timeoutSeconds: '300'
+          containers:
+          - image: REPLACE_IMAGE_DIGEST
+            args: ['ingest']
+            env:
+            - name: CONTENT_PROJECT
+              value: REPLACE_NEW_DEDICATED_PROJECT_ID
+            - name: CONTENT_BUCKET
+              value: REPLACE_PRIVATE_CONTENT_BUCKET
+            resources:
+              limits:
+                cpu: '1'
+                memory: 512Mi
