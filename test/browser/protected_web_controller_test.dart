@@ -411,6 +411,110 @@ void main() {
     },
   );
 
+  test(
+    'popup adoption preserves native request and token events are fenced',
+    () async {
+      final windows = <(Uri, String?)>[];
+      var closed = 0;
+      final controller = ProtectedWebController(
+        canOpen: (uri) => uri == moon,
+        onNavigation: (_) {},
+        onNewWindowWithToken: (uri, token) => windows.add((uri, token)),
+        onCloseRequested: () => closed++,
+      )..attach(94);
+      await controller.adoptWindow(moon, 'owned-token-123');
+      final adopt =
+          calls.singleWhere((c) => c.method == 'adoptWindow').arguments as Map;
+      expect(adopt.keys.toSet(), {'viewId', 'requestId', 'windowToken'});
+      expect(adopt['windowToken'], 'owned-token-123');
+      expect(
+        calls.where((c) => c.method == 'open' || c.method == 'openSearch'),
+        isEmpty,
+      );
+      final event = <String, Object?>{
+        'viewId': 94,
+        'requestId': adopt['requestId'],
+        'url': moon.toString(),
+      };
+      await native('newWindowRequested', {
+        ...event,
+        'windowToken': 'child-token',
+      });
+      await native(
+        'newWindowRequested',
+        event,
+      ); // URL-only Android adapter stays supported.
+      await native('newWindowRequested', {
+        ...event,
+        'windowToken': '../invalid',
+      });
+      await native('newWindowRequested', {
+        ...event,
+        'url': 'https://blocked.invalid/',
+        'windowToken': 'child-token',
+      });
+      await controller.suspend();
+      await native('newWindowRequested', {
+        ...event,
+        'windowToken': 'hidden-token',
+      });
+      expect(windows, [(moon, 'child-token'), (moon, null)]);
+      await native('closeRequested', {...event, 'requestId': 0});
+      expect(closed, 0);
+      await native(
+        'closeRequested',
+        event,
+      ); // Script child can close while its tab is hidden.
+      expect(closed, 1);
+      controller.dispose();
+      await native('closeRequested', event);
+      expect(closed, 1);
+    },
+  );
+
+  test(
+    'expired popup never becomes a GET when a covered tab resumes',
+    () async {
+      messenger.setMockMethodCallHandler(ProtectedWebBridge.channel, (
+        call,
+      ) async {
+        calls.add(call);
+        if (call.method == 'adoptWindow') {
+          throw PlatformException(code: 'expired');
+        }
+        return null;
+      });
+      final controller = ProtectedWebController(
+        canOpen: (_) => true,
+        onNavigation: (_) {},
+      )..attach(96);
+      await controller.adoptWindow(moon, 'expired-token');
+      await controller.suspend();
+      await controller.resume(moon);
+      expect(
+        calls.where((c) => c.method == 'open' || c.method == 'openSearch'),
+        isEmpty,
+      );
+      expect(controller.status.error, contains('expired'));
+      await controller.open(
+        moon,
+      ); // An explicit address action may start a new request.
+      expect(calls.where((c) => c.method == 'open'), hasLength(1));
+      controller.dispose();
+    },
+  );
+
+  test('revoked popup is closed without replaying its POST as GET', () async {
+    final controller = ProtectedWebController(
+      canOpen: (_) => false,
+      onNavigation: (_) {},
+    )..attach(95);
+    await controller.adoptWindow(moon, 'owned-token');
+    expect(calls.map((c) => c.method), ['close']);
+    expect(controller.status.error, isNotNull);
+    controller.dispose();
+  });
+
   test('native capability requires the consumer engine contract', () async {
     messenger.setMockMethodCallHandler(
       ProtectedWebBridge.channel,

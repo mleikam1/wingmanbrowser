@@ -108,6 +108,9 @@ class _BrowserShellState extends State<BrowserShell>
   final Map<String, ProtectedWebStatus> _webStatuses = {};
   final Map<String, int> _webRevisions = {};
   final Map<String, Uri> _webRequests = {};
+  // In-memory ownership only. Window transfer tokens never enter tab restore.
+  final Map<String, String> _webWindowTokens = {};
+  final Map<String, String> _webWindowOpeners = {};
   final Map<String, BrowserEngine> _webControllers = {};
   final List<String> _liveOrder = [];
   // Four live renderers; other tabs restore their last address on selection.
@@ -167,6 +170,7 @@ class _BrowserShellState extends State<BrowserShell>
       final evicted = _liveOrder.removeAt(0);
       _webControllers.remove(evicted);
       _webRequests.remove(evicted);
+      _webWindowTokens.remove(evicted);
     }
   }
 
@@ -776,6 +780,8 @@ class _BrowserShellState extends State<BrowserShell>
     _webStatuses.removeWhere((id, _) => !validTabs.contains(id));
     _webRevisions.removeWhere((id, _) => !validTabs.contains(id));
     _webRequests.removeWhere((id, _) => !validTabs.contains(id));
+    _webWindowTokens.removeWhere((id, _) => !validTabs.contains(id));
+    _webWindowOpeners.removeWhere((id, _) => !validTabs.contains(id));
     _webControllers.removeWhere((id, _) => !validTabs.contains(id));
     _liveOrder.removeWhere((id) => !validTabs.contains(id));
     _persistSession();
@@ -858,7 +864,12 @@ class _BrowserShellState extends State<BrowserShell>
         additional: _additional,
       );
 
-  void _navigateWebsite(Uri uri, {bool newTab = false}) {
+  void _navigateWebsite(
+    Uri uri, {
+    bool newTab = false,
+    String? windowToken,
+    String? openerTabId,
+  }) {
     if (!_validOrigin(_tab)) return;
     try {
       uri =
@@ -911,6 +922,8 @@ class _BrowserShellState extends State<BrowserShell>
       if (newTab) {
         _tabs.add(DiscoveryTab(isPrivate: _tab.isPrivate));
         _activeTab = _tabs.length - 1;
+        if (windowToken != null) _webWindowTokens[_tab.id] = windowToken;
+        if (openerTabId != null) _webWindowOpeners[_tab.id] = openerTabId;
       }
       _tab.visitWebsite(uri);
       _webRequests[_tab.id] = uri;
@@ -934,6 +947,7 @@ class _BrowserShellState extends State<BrowserShell>
       isPrivate: owner.isPrivate,
       active: active,
       revision: _webRevisions[owner.id] ?? 0,
+      windowToken: _webWindowTokens[owner.id],
       restrictions: widget.policy.nativeConsumerConfiguration(_additional),
       policyChanges: _launchpadChanges,
       canOpen: (target) =>
@@ -941,15 +955,40 @@ class _BrowserShellState extends State<BrowserShell>
           _tabs.contains(owner) &&
           !(widget.handoff?.blocksOwner ?? false) &&
           _websiteDecision(target, isPrivate: owner.isPrivate).isAllowed,
-      onController: (controller) => _webControllers[owner.id] = controller,
+      onController: (controller) {
+        _webControllers[owner.id] = controller;
+        _webWindowTokens.remove(owner.id);
+      },
       onNavigation: (target) {
         if (!_validOrigin(owner)) return;
         final destination =
             const StrictSearchPolicy().unwrapResultLink(target) ?? target;
         _navigateWebsite(destination);
       },
-      onNewWindow: (target) {
-        if (_validOrigin(owner)) _navigateWebsite(target, newTab: true);
+      onNewWindowWithToken: (target, token) {
+        if (_validOrigin(owner)) {
+          _navigateWebsite(
+            target,
+            newTab: true,
+            windowToken: token,
+            openerTabId: owner.id,
+          );
+        }
+      },
+      onCloseRequested: () {
+        if (!mounted ||
+            !_tabs.contains(owner) ||
+            (widget.handoff?.blocksOwner ?? false)) {
+          return;
+        }
+        final openerId = _webWindowOpeners[owner.id];
+        if (openerId == null) return;
+        final wasActive = owner == _tab;
+        _removeTabs([owner]);
+        final openerIndex = _tabs.indexWhere((tab) => tab.id == openerId);
+        if (wasActive && openerIndex >= 0) {
+          setState(() => _activeTab = openerIndex);
+        }
       },
       onBlocked: (message) {
         if (_validOrigin(owner)) {
@@ -1268,100 +1307,109 @@ class _BrowserShellState extends State<BrowserShell>
         Expanded(child: _contentBody(resource, website)),
       ],
     );
-    return Scaffold(
-      body: SafeArea(
-        bottom: false,
-        child: wide
-            ? Row(
-                children: [
-                  NavigationRail(
-                    selectedIndex: null,
-                    labelType: NavigationRailLabelType.all,
-                    leading: const Padding(
-                      padding: EdgeInsets.all(12),
-                      child: WingmanBrand(wordmark: false),
+    // The main route consumes Back only when browser history can move. A
+    // pushed feature route has its own Navigator pop and never advances a tab.
+    final canGoBack =
+        _tab.position > 0 || _webStatuses[_tab.id]?.canGoBack == true;
+    return PopScope<Object?>(
+      canPop: !canGoBack,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop && !_covered && _featureRouteDepth == 0 && canGoBack) {
+          _historyStep(false);
+        }
+      },
+      child: Scaffold(
+        body: SafeArea(
+          bottom: false,
+          child: wide
+              ? Row(
+                  children: [
+                    NavigationRail(
+                      selectedIndex: null,
+                      labelType: NavigationRailLabelType.all,
+                      leading: const Padding(
+                        padding: EdgeInsets.all(12),
+                        child: WingmanBrand(wordmark: false),
+                      ),
+                      onDestinationSelected: (value) => switch (value) {
+                        0 => _home(),
+                        1 => _library(),
+                        2 => _workspaces(),
+                        3 => _showTabs(),
+                        _ => _menu(),
+                      },
+                      destinations: const [
+                        NavigationRailDestination(
+                          icon: Icon(Icons.home_outlined),
+                          label: Text('Home'),
+                        ),
+                        NavigationRailDestination(
+                          icon: Icon(Icons.bookmark_border),
+                          label: Text('Library'),
+                        ),
+                        NavigationRailDestination(
+                          icon: Icon(Icons.dashboard_outlined),
+                          label: Text('Spaces'),
+                        ),
+                        NavigationRailDestination(
+                          icon: Icon(Icons.tab_outlined),
+                          label: Text('Sessions'),
+                        ),
+                        NavigationRailDestination(
+                          icon: Icon(Icons.menu),
+                          label: Text('Menu'),
+                        ),
+                      ],
                     ),
-                    onDestinationSelected: (value) => switch (value) {
-                      0 => _home(),
-                      1 => _library(),
-                      2 => _workspaces(),
-                      3 => _showTabs(),
-                      _ => _menu(),
-                    },
-                    destinations: const [
-                      NavigationRailDestination(
-                        icon: Icon(Icons.home_outlined),
-                        label: Text('Home'),
-                      ),
-                      NavigationRailDestination(
-                        icon: Icon(Icons.bookmark_border),
-                        label: Text('Library'),
-                      ),
-                      NavigationRailDestination(
-                        icon: Icon(Icons.dashboard_outlined),
-                        label: Text('Spaces'),
-                      ),
-                      NavigationRailDestination(
-                        icon: Icon(Icons.tab_outlined),
-                        label: Text('Sessions'),
-                      ),
-                      NavigationRailDestination(
-                        icon: Icon(Icons.menu),
-                        label: Text('Menu'),
-                      ),
-                    ],
-                  ),
-                  const VerticalDivider(width: 1),
-                  Expanded(child: body),
-                ],
-              )
-            : body,
-      ),
-      bottomNavigationBar: wide && kIsWeb
-          ? null
-          : BrowserDock(
-              onHome: _home,
-              onTabs: _showTabs,
-              onMenu: _menu,
-              onLibrary: _library,
-              onSpaces: () => _workspaces(),
-              tabCount: _tabs.length,
-              isPrivate: _tab.isPrivate,
-              resourceTitle: website != null
-                  ? websiteAllowed
-                        ? website.host
-                        : 'Unavailable website'
-                  : resource == null
-                  ? null
-                  : 'Reviewed offline article',
-              isLive: website != null,
-              isLoading: _webStatuses[_tab.id]?.loading == true,
-              onReload: websiteAllowed
-                  ? () {
-                      final engine = _webControllers[_tab.id];
-                      if (engine == null) {
-                        _navigateWebsite(website);
-                        return;
+                    const VerticalDivider(width: 1),
+                    Expanded(child: body),
+                  ],
+                )
+              : body,
+        ),
+        bottomNavigationBar: wide && kIsWeb
+            ? null
+            : BrowserDock(
+                onHome: _home,
+                onTabs: _showTabs,
+                onMenu: _menu,
+                onLibrary: _library,
+                onSpaces: () => _workspaces(),
+                tabCount: _tabs.length,
+                isPrivate: _tab.isPrivate,
+                resourceTitle: website != null
+                    ? websiteAllowed
+                          ? website.host
+                          : 'Unavailable website'
+                    : resource == null
+                    ? null
+                    : 'Reviewed offline article',
+                isLive: website != null,
+                isLoading: _webStatuses[_tab.id]?.loading == true,
+                onReload: websiteAllowed
+                    ? () {
+                        final engine = _webControllers[_tab.id];
+                        if (engine == null) {
+                          _navigateWebsite(website);
+                          return;
+                        }
+                        unawaited(
+                          _webStatuses[_tab.id]?.loading == true
+                              ? engine.stop()
+                              : engine.reload(),
+                        );
                       }
-                      unawaited(
-                        _webStatuses[_tab.id]?.loading == true
-                            ? engine.stop()
-                            : engine.reload(),
-                      );
-                    }
-                  : null,
-              onAddress: _focusedSearch,
-              onPageInfo: () => _pageInfo(resource),
-              onBack:
-                  _tab.position > 0 || _webStatuses[_tab.id]?.canGoBack == true
-                  ? () => _historyStep(false)
-                  : null,
-              onForward:
-                  _tab.position + 1 < _tab.trail.length ||
-                      _webStatuses[_tab.id]?.canGoForward == true
-                  ? () => _historyStep(true)
-                  : null,
-            ),
+                    : null,
+                onAddress: _focusedSearch,
+                onPageInfo: () => _pageInfo(resource),
+                onBack: canGoBack ? () => _historyStep(false) : null,
+                onForward:
+                    _tab.position + 1 < _tab.trail.length ||
+                        _webStatuses[_tab.id]?.canGoForward == true
+                    ? () => _historyStep(true)
+                    : null,
+              ),
+      ),
     );
   }
 

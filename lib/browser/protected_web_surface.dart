@@ -99,15 +99,20 @@ class ProtectedWebController extends ChangeNotifier implements BrowserEngine {
     required this.canOpen,
     required this.onNavigation,
     this.onNewWindow,
+    this.onNewWindowWithToken,
+    this.onCloseRequested,
     this.onBlocked,
   });
   final bool Function(Uri) canOpen;
   final ValueChanged<Uri> onNavigation;
   final ValueChanged<Uri>? onNewWindow;
+  final void Function(Uri, String?)? onNewWindowWithToken;
+  final VoidCallback? onCloseRequested;
   final ValueChanged<String>? onBlocked;
   int? _viewId;
   int _requestId = 0;
   bool _disposed = false, _active = true;
+  bool _failedWindowAdoption = false;
   @override
   Uri? get currentUrl => status.url;
   @override
@@ -130,10 +135,41 @@ class ProtectedWebController extends ChangeNotifier implements BrowserEngine {
     ProtectedWebBridge._attach(id, this);
   }
 
+  /// Adopt WebKit's existing child window without replacing its request with
+  /// GET or severing its opener. The token is native-owned and single-use.
+  Future<void> adoptWindow(Uri uri, String token) async {
+    final id = _viewId;
+    if (_disposed || !_active || id == null) return;
+    _failedWindowAdoption = false;
+    final request = ++_requestId;
+    if (!canOpen(uri)) {
+      _failedWindowAdoption = true;
+      _failure('The new window is outside the current supported scope.');
+      await command('close');
+      return;
+    }
+    status = ProtectedWebStatus(url: uri, loading: true);
+    notifyListeners();
+    try {
+      await ProtectedWebBridge.channel.invokeMethod<void>('adoptWindow', {
+        'viewId': id,
+        'requestId': request,
+        'windowToken': token,
+      });
+    } catch (_) {
+      if (!_disposed && request == _requestId) {
+        _failedWindowAdoption = true;
+        _failure('The new window expired or its owning session changed.');
+        await command('close');
+      }
+    }
+  }
+
   @override
   Future<void> open(Uri uri) async {
     final id = _viewId;
     if (_disposed || !_active || id == null) return;
+    _failedWindowAdoption = false;
     final request = ++_requestId;
     if (!canOpen(uri)) {
       final stopping = suspend();
@@ -169,9 +205,15 @@ class ProtectedWebController extends ChangeNotifier implements BrowserEngine {
               'url': uri.toString(),
             'requestId': request,
           });
-    } catch (_) {
+    } catch (error) {
       if (!_disposed && request == _requestId) {
-        _failure('This page could not open with the required protections.');
+        _failure(
+          error is PlatformException &&
+                  error.message ==
+                      "This site's encoded address cannot be checked safely. Use its standard address."
+              ? error.message!
+              : 'This page could not open with the required protections.',
+        );
       }
     }
   }
@@ -197,6 +239,7 @@ class ProtectedWebController extends ChangeNotifier implements BrowserEngine {
   Future<void> resume(Uri uri) async {
     if (_disposed) return;
     _active = true;
+    if (_failedWindowAdoption) return;
     if (status.url == null || status.error != null) {
       await open(uri);
     } else {
@@ -251,18 +294,37 @@ class ProtectedWebController extends ChangeNotifier implements BrowserEngine {
       _failure('The page stopped. Reload to try again.');
       return;
     }
+    if (method == 'closeRequested') {
+      onCloseRequested?.call();
+      return;
+    }
     final raw = value['url'];
     final uri = raw is String && raw.length <= 4096 ? Uri.tryParse(raw) : null;
     if (method == 'navigationBlocked') {
       if (_active) {
         onBlocked?.call(
-          'This destination is blocked by your protection policy.',
+          value['reason'] ==
+                  "This site's encoded address cannot be checked safely. Use its standard address."
+              ? "This site's encoded address cannot be checked safely. Use its standard address."
+              : 'This destination is blocked by your protection policy.',
         );
       }
       return;
     }
     if (method == 'newWindowRequested') {
-      if (_active && uri != null && canOpen(uri)) onNewWindow?.call(uri);
+      final token = value['windowToken'];
+      if (token != null &&
+          (token is! String ||
+              !RegExp(r'^[A-Za-z0-9-]{1,100}$').hasMatch(token))) {
+        return;
+      }
+      if (_active && uri != null && canOpen(uri)) {
+        if (onNewWindowWithToken != null) {
+          onNewWindowWithToken!(uri, token as String?);
+        } else {
+          onNewWindow?.call(uri);
+        }
+      }
       return;
     }
     if (method == 'navigationRequested') {
@@ -348,6 +410,9 @@ class ProtectedWebSurface extends StatefulWidget {
     this.active = true,
     this.onController,
     this.onNewWindow,
+    this.onNewWindowWithToken,
+    this.onCloseRequested,
+    this.windowToken,
     this.onBlocked,
     this.restrictions = const {},
   });
@@ -362,6 +427,9 @@ class ProtectedWebSurface extends StatefulWidget {
   final bool active;
   final ValueChanged<ProtectedWebController>? onController;
   final ValueChanged<Uri>? onNewWindow;
+  final void Function(Uri, String?)? onNewWindowWithToken;
+  final VoidCallback? onCloseRequested;
+  final String? windowToken;
   final ValueChanged<String>? onBlocked;
   final Map<String, Object?> restrictions;
 
@@ -381,6 +449,14 @@ class _ProtectedWebSurfaceState extends State<ProtectedWebSurface>
       canOpen: (uri) => mounted && widget.canOpen(uri),
       onNavigation: (uri) => widget.onNavigation(uri),
       onNewWindow: (uri) => widget.onNewWindow?.call(uri),
+      onNewWindowWithToken: (uri, token) {
+        if (widget.onNewWindowWithToken != null) {
+          widget.onNewWindowWithToken!(uri, token);
+        } else {
+          widget.onNewWindow?.call(uri);
+        }
+      },
+      onCloseRequested: () => widget.onCloseRequested?.call(),
       onBlocked: (message) => widget.onBlocked?.call(message),
     )..addListener(_changed);
     WidgetsBinding.instance.addObserver(this);
@@ -484,12 +560,18 @@ class _ProtectedWebSurfaceState extends State<ProtectedWebSurface>
       'private': widget.isPrivate,
       'edition': productEdition.name,
       ...widget.restrictions,
+      if (widget.windowToken != null) 'windowToken': widget.windowToken,
     };
     void created(int id) {
+      final token = widget.windowToken;
       _controller.attach(id);
       widget.onController?.call(_controller);
       if (widget.active && !_covered && !_background) {
-        unawaited(_controller.open(widget.url));
+        unawaited(
+          token == null
+              ? _controller.open(widget.url)
+              : _controller.adoptWindow(widget.url, token),
+        );
       }
     }
 
