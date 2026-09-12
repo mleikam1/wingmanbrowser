@@ -6,6 +6,7 @@ import 'package:cryptography/cryptography.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'package:wingman_browser/config/app_version.dart';
 import 'package:wingman_browser/policy/consumer_protection_policy.dart';
 import 'package:wingman_browser/policy/consumer_protection_repository.dart';
 import 'package:wingman_browser/policy/policy_models.dart';
@@ -176,6 +177,37 @@ void main() {
     addTearDown(repo.close);
     return repo;
   }
+
+  test(
+    'update version gate uses the current release and rejects the next release',
+    () async {
+      expect(
+        File('pubspec.yaml').readAsStringSync(),
+        contains('version: ${AppVersion.name}+${AppVersion.build}'),
+      );
+      expect(signer.verifier.appVersion, AppVersion.name);
+      final current = await signer.release(
+        2,
+        payload: {'minimumAppVersion': AppVersion.name},
+      );
+      final native = Installer();
+      final repo = repository(installer: native);
+      final accepted = await repo.importUpdate(current.envelope, current.data);
+      expect(accepted.outcome, ConsumerUpdateOutcome.updated);
+      expect(native.activations, 1);
+
+      final parts = AppVersion.name.split('.').map(int.parse).toList();
+      final nextVersion = '${parts[0]}.${parts[1] + 1}.0';
+      final future = await signer.release(
+        3,
+        payload: {'minimumAppVersion': nextVersion},
+      );
+      final rejected = await repo.importUpdate(future.envelope, future.data);
+      expect(rejected.outcome, ConsumerUpdateOutcome.rejected);
+      expect(repo.policy.sequence, 2);
+      expect(native.activations, 1);
+    },
+  );
 
   test(
     'authenticated candidate activates only after native acknowledgement and durable commit',

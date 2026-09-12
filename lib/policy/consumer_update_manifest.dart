@@ -3,6 +3,8 @@ import 'dart:typed_data';
 
 import 'package:cryptography/cryptography.dart';
 
+import '../config/app_version.dart';
+
 class ConsumerUpdateException implements Exception {
   const ConsumerUpdateException(this.code);
   final String code;
@@ -40,7 +42,7 @@ final class VerifiedConsumerUpdate {
 class ConsumerUpdateVerifier {
   ConsumerUpdateVerifier({
     required Map<String, List<int>> trustedKeys,
-    this.appVersion = '0.10.0',
+    this.appVersion = AppVersion.name,
     DateTime Function()? clock,
   }) : trustedKeys = Map.unmodifiable({
          for (final entry in trustedKeys.entries)
