@@ -13,8 +13,15 @@ import android.os.Build
 import android.os.Message
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowManager
+import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputConnection
+import android.text.InputType
+import android.text.InputFilter
 import android.webkit.*
 import android.widget.FrameLayout
+import android.widget.EditText
+import android.widget.LinearLayout
 import android.widget.Toast
 import androidx.webkit.*
 import io.flutter.plugin.common.MethodCall
@@ -27,6 +34,9 @@ import java.net.HttpURLConnection
 import java.net.URI
 import java.util.UUID
 import java.util.concurrent.Executors
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 /** Native networking and origin sandbox, with local mandatory policy before navigation. No page JS bridge. */
 class ProtectedWebBridge(private val context: Context, private val channel: MethodChannel) {
@@ -56,9 +66,12 @@ class ProtectedWebBridge(private val context: Context, private val channel: Meth
     private var uploadCallback: ValueCallback<Array<Uri>>? = null
     private var uploadOwner: ProtectedView? = null
     private var uploadOrigin: String? = null
-    private data class Download(val owner: ProtectedView, val url: String, val mime: String, val filename: String, val cookie: String?, val epoch: Long)
+    private var uploadTicket: BrowserDocumentTicket? = null
+    private data class Download(val owner: ProtectedView, val url: String, val mime: String, val filename: String,
+                                val cookies: CookieManager?, val userAgent: String, val epoch: Long)
     private var download: Download? = null
     private var permissionCompletion: (() -> Unit)? = null
+    private val siteRequests = mutableSetOf<SiteRequest>()
     private var fullscreen: View? = null
     private var fullscreenBack: android.window.OnBackInvokedCallback? = null
     private var fullscreenCallback: WebChromeClient.CustomViewCallback? = null
@@ -155,7 +168,13 @@ class ProtectedWebBridge(private val context: Context, private val channel: Meth
                 "updateRestrictions" -> { policy.setAdditionalRestrictions(call.argument<List<String>>("blockedResourceIds") ?: emptyList(), call.argument<List<String>>("blockedCollections") ?: emptyList(), call.argument<List<String>>("blockedDomains") ?: emptyList(), call.argument<List<String>>("blockedUrls") ?: emptyList(), call.argument<Boolean>("searchBlocked") == true); if (view.currentUrl.isNotEmpty() && !policy.decide(view.currentUrl).allowed) view.block(view.currentUrl, "Blocked by an additional restriction."); result.success(null) }
                 "open" -> { view.open(call.argument<String>("url") ?: ""); result.success(null) }
                 "openSearch" -> { view.open(strictSearchURL(call.argument<String>("query") ?: "") ?: throw IllegalArgumentException()); result.success(null) }
-                "reload" -> { check(mayOpen()); if (policy.decide(view.currentUrl).allowed) view.web?.reload(); result.success(null) }
+                "reload" -> {
+                    check(mayOpen())
+                    if (policy.decide(view.currentUrl).allowed) {
+                        if (view.web == null) view.open(view.currentUrl) else view.web?.reload()
+                    }
+                    result.success(null)
+                }
                 "back" -> { check(mayOpen()); view.history(-1); result.success(null) }
                 "forward" -> { check(mayOpen()); view.history(1); result.success(null) }
                 "stop" -> { view.web?.stopLoading(); view.loading = false; view.emit(); result.success(null) }
@@ -188,6 +207,8 @@ class ProtectedWebBridge(private val context: Context, private val channel: Meth
         private var blocked = 0
         private var attempted = 0
         private var lastBlocked: String? = null
+        val documentScope = BrowserDocumentScope()
+        private val popupViews = mutableSetOf<WebView>()
         override fun getView(): View = container
         override fun dispose() { release(); disposed = true; views.remove(id) }
         fun acceptRequest(value: Long) { check(value >= requestId); requestId = value }
@@ -224,10 +245,16 @@ class ProtectedWebBridge(private val context: Context, private val channel: Meth
         }
         private fun createWeb(): WebView {
             check(!privateMode || privateAvailable())
-            val w = WebView(container.context)
+            val w = object : WebView(container.context) {
+                override fun onCreateInputConnection(outAttrs: EditorInfo): InputConnection? =
+                    super.onCreateInputConnection(outAttrs).also {
+                        if (privateMode && Build.VERSION.SDK_INT >= 26) outAttrs.imeOptions = outAttrs.imeOptions or EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING
+                    }
+            }
             web = w
             WebView.setWebContentsDebuggingEnabled(false)
             if (privateMode) {
+                if (Build.VERSION.SDK_INT >= 26) w.importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
                 val name = "wingman_private_${UUID.randomUUID()}"
                 WebViewCompat.setProfile(w, name); profileName = name
                 loadedProfiles[name] = WebViewCompat.getProfile(w)
@@ -255,32 +282,42 @@ class ProtectedWebBridge(private val context: Context, private val channel: Meth
                 override fun onProgressChanged(view: WebView, newProgress: Int) { if (view === web) { progress = newProgress; emit() } }
                 override fun onReceivedTitle(view: WebView, value: String?) { if (view === web) { title = value.orEmpty().filter { it.code >= 32 }.take(160); emit() } }
                 override fun onCreateWindow(view: WebView, isDialog: Boolean, isUserGesture: Boolean, resultMsg: Message): Boolean {
-                    if (!isUserGesture || !active || !mayOpen()) return false
+                    if (!isUserGesture || view !== web || !active || !mayOpen()) return false
+                    val transport = resultMsg.obj as? WebView.WebViewTransport ?: return false
+                    val ticket = documentScope.issue(currentUrl) ?: return false
                     // A network-disabled transport captures the popup's requested address before any content loads.
                     val popup = WebView(container.context)
+                    profileName?.let { WebViewCompat.setProfile(popup, it) }
+                    popupViews.add(popup)
                     popup.settings.blockNetworkLoads = true; popup.settings.javaScriptEnabled = false
                     popup.settings.allowFileAccess = false; popup.settings.allowContentAccess = false
                     var delivered = false
+                    fun destroyPopup() { if (popupViews.remove(popup)) popup.destroy() }
                     fun destination(raw: String): Boolean {
                         if (delivered) return true
+                        if (raw == "about:blank") return false
                         delivered = true
+                        if (!documentScope.owns(ticket, currentUrl) || web == null || !active || !mayOpen()) {
+                            container.post { destroyPopup() }; return true
+                        }
                         val decision = policy.decide(raw)
                         if (decision.allowed) channel.invokeMethod("newWindowRequested", mapOf("viewId" to id, "requestId" to requestId, "url" to decision.url)) else block(raw, decision.reason)
-                        container.post { popup.destroy() }
+                        container.post { destroyPopup() }
                         return true
                     }
                     popup.webViewClient = object : WebViewClient() {
                         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest) = destination(request.url.toString())
                         override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) { destination(url) }
                         override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse { container.post { destination(request.url.toString()) }; return deniedResponse() }
+                        override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean { destroyPopup(); return true }
                     }
-                    (resultMsg.obj as? WebView.WebViewTransport)?.webView = popup
+                    transport.webView = popup
                     resultMsg.sendToTarget()
-                    container.postDelayed({ if (!delivered) { delivered = true; popup.destroy() } }, 15000)
+                    container.postDelayed({ if (!delivered) { delivered = true; destroyPopup() } }, 15000)
                     return true
                 }
                 override fun onPermissionRequest(request: PermissionRequest) { requestMediaPermission(this@ProtectedView, request) }
-                override fun onPermissionRequestCanceled(request: PermissionRequest) { permissionCompletion = null }
+                override fun onPermissionRequestCanceled(request: PermissionRequest) { siteRequests.filter { it.key === request }.toList().forEach { it.finish {} } }
                 override fun onGeolocationPermissionsShowPrompt(origin: String, callback: GeolocationPermissions.Callback) { requestLocation(this@ProtectedView, origin, callback) }
                 override fun onShowFileChooser(view: WebView, callback: ValueCallback<Array<Uri>>, params: FileChooserParams): Boolean { chooseFiles(this@ProtectedView, callback, params); return true }
                 override fun onShowCustomView(view: View, callback: CustomViewCallback) {
@@ -324,6 +361,7 @@ class ProtectedWebBridge(private val context: Context, private val channel: Meth
                 }
                 override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
                     if (view !== web || !ready) return
+                    invalidateDocument()
                     val decision = policy.decide(url)
                     if (!decision.allowed) { block(url, decision.reason); return }
                     if (decision.url != url) { view.stopLoading(); view.loadUrl(decision.url); return }
@@ -341,19 +379,27 @@ class ProtectedWebBridge(private val context: Context, private val channel: Meth
                 override fun onReceivedSslError(view: WebView, handler: SslErrorHandler, sslError: SslError) { handler.cancel(); fail("The site's TLS certificate is invalid. The connection was blocked.") }
                 override fun onReceivedError(view: WebView, request: WebResourceRequest, failure: WebResourceError) { if (request.isForMainFrame) fail("The page could not connect (${failure.errorCode}).") }
                 override fun onReceivedHttpError(view: WebView, request: WebResourceRequest, response: WebResourceResponse) { if (request.isForMainFrame && response.statusCode >= 500) { error = "The website returned HTTP ${response.statusCode}."; emit() } }
-                override fun onReceivedHttpAuthRequest(view: WebView, handler: HttpAuthHandler, host: String, realm: String) { handler.cancel() }
+                override fun onReceivedHttpAuthRequest(view: WebView, handler: HttpAuthHandler, host: String, realm: String) {
+                    if (view !== web) handler.cancel() else requestHttpAuthentication(this@ProtectedView, handler, host, realm)
+                }
                 override fun onReceivedClientCertRequest(view: WebView, request: ClientCertRequest) { request.cancel() }
                 override fun onSafeBrowsingHit(view: WebView, request: WebResourceRequest, threatType: Int, callback: SafeBrowsingResponse) { callback.backToSafety(false); if (request.isForMainFrame) fail("The platform blocked a known security threat.") }
                 override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean { if (view === web) { release(); channel.invokeMethod("rendererGone", mapOf("viewId" to id, "requestId" to requestId)) }; return true }
             }
             w.setFindListener { position, count, done -> channel.invokeMethod("findResult", mapOf("viewId" to id, "requestId" to requestId, "activeMatch" to position, "matches" to count, "done" to done)) }
-            w.setDownloadListener { url, _, disposition, mime, _ -> requestDownload(this, url, disposition, mime) }
+            w.setDownloadListener { url, userAgent, disposition, mime, _ -> requestDownload(this, url, disposition, mime, userAgent) }
             container.addView(w, FrameLayout.LayoutParams(-1, -1))
             return w
         }
         fun cookieManager(): CookieManager = profileName?.let { loadedProfiles[it]?.cookieManager } ?: CookieManager.getInstance()
         private fun fail(message: String) { web?.stopLoading(); loading = false; error = message; emit() }
+        private fun invalidateDocument() {
+            documentScope.advance()
+            cancelSiteRequests(this)
+            if (uploadOwner === this) cancelUpload()
+        }
         fun release() {
+            invalidateDocument()
             downloadEpoch++
             if (download?.owner === this) download = null
             if (uploadOwner === this) cancelUpload()
@@ -361,10 +407,36 @@ class ProtectedWebBridge(private val context: Context, private val channel: Meth
             web = null; loading = false
             profileName?.let { retiringProfiles.add(it) }
             retired?.let { it.stopLoading(); it.visibility = View.INVISIBLE; container.removeView(it); it.destroy() }
+            popupViews.toList().forEach { it.destroy() }; popupViews.clear()
             profileName?.let { purgeProfile(it) }; profileName = null
         }
     }
-    private fun origin(raw: String) = canonicalWeb(raw)?.let { "${it.scheme}://${it.encodedAuthority}" }
+    private fun origin(raw: String) = browserOrigin(raw)
+    private inner class SiteRequest(val owner: ProtectedView, val key: Any, val ticket: BrowserDocumentTicket,
+                                    private val decline: () -> Unit) {
+        var dialog: AlertDialog? = null
+        private var resolved = false
+        fun stillBound() = !resolved && owner.web != null && liveAvailable() && !denied &&
+            owner.documentScope.owns(ticket, owner.currentUrl) && policy.decide(owner.currentUrl).allowed
+        fun finish(action: () -> Unit) {
+            if (resolved) return
+            resolved = true; siteRequests.remove(this); dialog?.dismiss(); dialog = null
+            runCatching(action)
+        }
+        fun cancel() = finish(decline)
+        fun show(builder: AlertDialog.Builder) {
+            dialog = builder.create().also {
+                it.window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                it.show()
+            }
+        }
+    }
+    private fun cancelSiteRequests(owner: ProtectedView) { siteRequests.filter { it.owner === owner }.toList().forEach { it.cancel() } }
+    private fun siteRequest(owner: ProtectedView, key: Any, cancel: () -> Unit): SiteRequest? {
+        val ticket = owner.documentScope.issue(owner.currentUrl)
+        if (ticket == null || siteRequests.isNotEmpty()) { cancel(); return null }
+        return SiteRequest(owner, key, ticket, cancel).also { siteRequests.add(it) }
+    }
     private fun permissionEligible(owner: ProtectedView, requestedOrigin: String) = owner.web != null && owner.active && mayOpen() && origin(owner.currentUrl) == origin(requestedOrigin) && requestedOrigin.startsWith("https://") && policy.decide(owner.currentUrl).allowed
     // Android returns OS permission results before Activity.onResume. Validate
     // retained ownership here; temporary OS-dialog inactivity is not a tab change.
@@ -376,21 +448,58 @@ class ProtectedWebBridge(private val context: Context, private val channel: Meth
         val epoch = owner.downloadEpoch
         val resources = request.resources.filter { it == PermissionRequest.RESOURCE_AUDIO_CAPTURE || it == PermissionRequest.RESOURCE_VIDEO_CAPTURE }
         if (!permissionEligible(owner, requestedOrigin) || resources.isEmpty() || resources.size != request.resources.size) { request.deny(); return }
-        AlertDialog.Builder(activity).setTitle("Website permission").setMessage("$requestedOrigin wants ${resources.joinToString { if (it == PermissionRequest.RESOURCE_VIDEO_CAPTURE) "camera" else "microphone" }} access for this page.")
-            .setNegativeButton("Deny") { _, _ -> request.deny() }.setOnCancelListener { request.deny() }
+        val pending = siteRequest(owner, request) { request.deny() } ?: return
+        pending.show(AlertDialog.Builder(activity).setTitle("Website permission").setMessage("$requestedOrigin wants ${resources.joinToString { if (it == PermissionRequest.RESOURCE_VIDEO_CAPTURE) "camera" else "microphone" }} access for this page.")
+            .setNegativeButton("Deny") { _, _ -> pending.cancel() }.setOnCancelListener { pending.cancel() }
             .setPositiveButton("Allow") { _, _ ->
+                if (!pending.stillBound()) { pending.cancel(); return@setPositiveButton }
                 val permissions = resources.map { if (it == PermissionRequest.RESOURCE_VIDEO_CAPTURE) Manifest.permission.CAMERA else Manifest.permission.RECORD_AUDIO }
                 withPermissions(permissions) {
-                    if (permissionStillBound(owner, requestedOrigin, epoch) && permissions.all { activity.checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED }) request.grant(resources.toTypedArray()) else request.deny()
+                    if (pending.stillBound() && permissionStillBound(owner, requestedOrigin, epoch) && permissions.all { activity.checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED }) pending.finish { request.grant(resources.toTypedArray()) } else pending.cancel()
                 }
-            }.show()
+            })
     }
     private fun requestLocation(owner: ProtectedView, requestedOrigin: String, callback: GeolocationPermissions.Callback) {
         val epoch = owner.downloadEpoch
         if (!permissionEligible(owner, requestedOrigin)) { callback.invoke(requestedOrigin, false, false); return }
-        AlertDialog.Builder(activity).setTitle("Website location").setMessage("Allow $requestedOrigin to access location for this page?")
-            .setNegativeButton("Deny") { _, _ -> callback.invoke(requestedOrigin, false, false) }.setOnCancelListener { callback.invoke(requestedOrigin, false, false) }
-            .setPositiveButton("Allow") { _, _ -> withPermissions(listOf(Manifest.permission.ACCESS_COARSE_LOCATION)) { callback.invoke(requestedOrigin, permissionStillBound(owner, requestedOrigin, epoch) && activity.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED, false) } }.show()
+        val pending = siteRequest(owner, callback) { callback.invoke(requestedOrigin, false, false) } ?: return
+        pending.show(AlertDialog.Builder(activity).setTitle("Website location").setMessage("Allow $requestedOrigin to access location for this page?")
+            .setNegativeButton("Deny") { _, _ -> pending.cancel() }.setOnCancelListener { pending.cancel() }
+            .setPositiveButton("Allow") { _, _ ->
+                if (!pending.stillBound()) { pending.cancel(); return@setPositiveButton }
+                withPermissions(listOf(Manifest.permission.ACCESS_COARSE_LOCATION)) {
+                    if (pending.stillBound() && permissionStillBound(owner, requestedOrigin, epoch) && activity.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED)
+                        pending.finish { callback.invoke(requestedOrigin, true, false) } else pending.cancel()
+                }
+            })
+    }
+    private fun requestHttpAuthentication(owner: ProtectedView, handler: HttpAuthHandler, host: String, realm: String) {
+        if (!owner.active || !mayOpen() || !policy.decide(owner.currentUrl).allowed || !permitsHttpAuthentication(owner.currentUrl, host)) { handler.cancel(); return }
+        val pending = siteRequest(owner, handler) { handler.cancel() } ?: return
+        val layout = LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
+            val padding = (24 * resources.displayMetrics.density).toInt(); setPadding(padding, 0, padding, 0)
+            if (Build.VERSION.SDK_INT >= 26) importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
+        }
+        fun field(label: String, secret: Boolean) = EditText(activity).apply {
+            hint = label; contentDescription = label; isSingleLine = true
+            inputType = InputType.TYPE_CLASS_TEXT or if (secret) InputType.TYPE_TEXT_VARIATION_PASSWORD else InputType.TYPE_TEXT_VARIATION_NORMAL
+            filters = arrayOf(InputFilter.LengthFilter(1024))
+            if (Build.VERSION.SDK_INT >= 26) { importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO; imeOptions = imeOptions or EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING }
+        }
+        val username = field("Username", false); val password = field("Password", true)
+        layout.addView(username); layout.addView(password)
+        val safeRealm = realm.filter { it.code >= 32 && it.code != 127 }.take(160)
+        pending.show(AlertDialog.Builder(activity).setTitle("Website sign-in")
+            .setMessage("${origin(owner.currentUrl)}\n$safeRealm\nCredentials are sent only to this HTTPS site.")
+            .setView(layout).setNegativeButton("Cancel") { _, _ -> pending.cancel() }
+            .setOnCancelListener { pending.cancel() }
+            .setPositiveButton("Sign in") { _, _ ->
+                val user = username.text.toString(); val secret = password.text.toString()
+                username.text.clear(); password.text.clear()
+                if (pending.stillBound() && permitsHttpAuthentication(owner.currentUrl, host)) pending.finish { handler.proceed(user, secret) } else pending.cancel()
+            })
+        pending.dialog?.setOnDismissListener { username.text.clear(); password.text.clear() }
     }
     private fun withPermissions(permissions: List<String>, completion: () -> Unit) {
         if (permissions.all { activity.checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED }) { completion(); return }
@@ -401,11 +510,17 @@ class ProtectedWebBridge(private val context: Context, private val channel: Meth
         if (requestCode != PERMISSION_REQUEST) return false
         val completion = permissionCompletion; permissionCompletion = null; completion?.invoke(); return true
     }
-    private fun cancelUpload() { uploadCallback?.onReceiveValue(null); uploadCallback = null; uploadOwner = null; uploadOrigin = null }
+    private fun finishUpload(chosen: Array<Uri>?) {
+        val callback = uploadCallback
+        uploadCallback = null; uploadOwner = null; uploadOrigin = null; uploadTicket = null
+        callback?.onReceiveValue(chosen)
+    }
+    private fun cancelUpload() = finishUpload(null)
     private fun chooseFiles(owner: ProtectedView, callback: ValueCallback<Array<Uri>>, params: WebChromeClient.FileChooserParams) {
         cancelUpload()
         if (!owner.active || !mayOpen() || !policy.decide(owner.currentUrl).allowed) { callback.onReceiveValue(null); return }
         uploadCallback = callback; uploadOwner = owner; uploadOrigin = origin(owner.currentUrl)
+        uploadTicket = owner.documentScope.issue(owner.currentUrl)
         val types = params.acceptTypes.filter { it.matches(Regex("^[a-zA-Z0-9.+*-]+/[a-zA-Z0-9.+*-]+$")) }.toTypedArray()
         try {
             activity.startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
@@ -416,14 +531,18 @@ class ProtectedWebBridge(private val context: Context, private val channel: Meth
             }, UPLOAD_REQUEST)
         } catch (_: Exception) { cancelUpload() }
     }
-    private fun requestDownload(owner: ProtectedView, url: String, disposition: String?, mime: String?) {
+    private fun requestDownload(owner: ProtectedView, url: String, disposition: String?, mime: String?, userAgent: String?) {
         val decision = policy.decide(url)
         if (!decision.allowed || !owner.active || !mayOpen()) { owner.block(url, decision.reason); return }
         val filename = URLUtil.guessFileName(url, disposition, mime).replace(Regex("[^A-Za-z0-9._ -]"), "_").take(160)
         if (filename.substringAfterLast('.', "").lowercase() in setOf("apk", "exe", "msi", "dmg", "pkg", "bat", "cmd", "sh", "ps1", "js", "jar")) { owner.block(url, "Executable downloads are not supported."); return }
+        val ticket = owner.documentScope.issue(owner.currentUrl)
         AlertDialog.Builder(activity).setTitle("Save download?").setMessage("${origin(url)}\n$filename" + if (owner.privateMode) "\nThe saved file remains after closing this private tab." else "")
             .setNegativeButton("Cancel", null).setPositiveButton("Save") { _, _ ->
-                download = Download(owner, decision.url, mime ?: "application/octet-stream", filename, if (origin(url) == origin(owner.currentUrl)) owner.cookieManager().getCookie(url) else null, owner.downloadEpoch)
+                if (!owner.documentScope.owns(ticket, owner.currentUrl) || owner.web == null || !liveAvailable() || denied) return@setPositiveButton
+                download = Download(owner, decision.url, mime ?: "application/octet-stream", filename,
+                    if (origin(url) == origin(owner.currentUrl)) owner.cookieManager() else null,
+                    userAgent ?: owner.web?.settings?.userAgentString.orEmpty(), owner.downloadEpoch)
                 try { activity.startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).apply { addCategory(Intent.CATEGORY_OPENABLE); type = mime ?: "application/octet-stream"; putExtra(Intent.EXTRA_TITLE, filename) }, DOWNLOAD_REQUEST) }
                 catch (_: Exception) { download = null }
             }.show()
@@ -431,12 +550,12 @@ class ProtectedWebBridge(private val context: Context, private val channel: Meth
     fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?): Boolean {
         if (requestCode == UPLOAD_REQUEST) {
             val owner = uploadOwner
-            val chosen = if (resultCode == Activity.RESULT_OK && owner != null && origin(owner.currentUrl) == uploadOrigin && !denied && policy.decide(owner.currentUrl).allowed) {
+            val chosen = if (resultCode == Activity.RESULT_OK && owner?.web != null && owner.documentScope.owns(uploadTicket, owner.currentUrl) && origin(owner.currentUrl) == uploadOrigin && liveAvailable() && !denied && policy.decide(owner.currentUrl).allowed) {
                 val values = mutableListOf<Uri>(); data?.data?.let { values.add(it) }
                 data?.clipData?.let { clips -> for (i in 0 until minOf(clips.itemCount, 20)) values.add(clips.getItemAt(i).uri) }
                 values.distinct().filter { it.scheme == "content" && it.authority != context.packageName }.toTypedArray().takeIf { it.isNotEmpty() }
             } else null
-            uploadCallback?.onReceiveValue(chosen); uploadCallback = null; uploadOwner = null; uploadOrigin = null; return true
+            finishUpload(chosen); return true
         }
         if (requestCode == DOWNLOAD_REQUEST) {
             val item = download; download = null
@@ -457,9 +576,11 @@ class ProtectedWebBridge(private val context: Context, private val channel: Meth
                     check(item.owner.downloadEpoch == item.epoch && !denied && !cleanupPending && policy.decide(url).allowed)
                     val connection = URI(url).toURL().openConnection() as HttpURLConnection
                     connection.instanceFollowRedirects = false; connection.connectTimeout = 15000; connection.readTimeout = 15000
-                    if (origin(url) == origin(item.url)) item.cookie?.let { connection.setRequestProperty("Cookie", it) }
+                    val cookie = if (origin(url) == origin(item.url)) item.cookies?.getCookie(url) else null
+                    BrowserDownloadHeaders.request(item.url, url, item.userAgent, cookie).forEach { (name, value) -> connection.setRequestProperty(name, value) }
                     try {
                         val code = connection.responseCode
+                        updateDownloadCookies(item, url, connection.headerFields)
                         if (code in listOf(301, 302, 303, 307, 308)) {
                             check(++redirects <= 8)
                             val next = URI(url).resolve(connection.getHeaderField("Location") ?: error("redirect")).toString()
@@ -479,6 +600,23 @@ class ProtectedWebBridge(private val context: Context, private val channel: Meth
             } catch (_: Exception) { /* The picker destination is never opened or executed. */ }
             finally { temporary.delete(); activity.runOnUiThread { Toast.makeText(context, if (okay) "Download saved" else "Download could not complete safely", Toast.LENGTH_LONG).show() } }
         }
+    }
+    private fun updateDownloadCookies(item: Download, url: String, headers: Map<String?, List<String>>) {
+        val manager = item.cookies ?: return
+        val values = BrowserDownloadHeaders.responseCookies(item.url, url, headers)
+        if (values.isEmpty()) return
+        val remaining = CountDownLatch(values.size)
+        val accepted = AtomicBoolean(true)
+        activity.runOnUiThread {
+            if (item.owner.downloadEpoch != item.epoch || denied || cleanupPending || !liveAvailable()) {
+                accepted.set(false); repeat(values.size) { remaining.countDown() }
+            } else values.forEach { cookie ->
+                // This is the manager captured from the initiating profile. A
+                // private owner being released can never fall back to normal.
+                manager.setCookie(url, cookie) { okay -> if (!okay) accepted.set(false); remaining.countDown() }
+            }
+        }
+        check(remaining.await(10, TimeUnit.SECONDS) && accepted.get() && item.owner.downloadEpoch == item.epoch && !denied && !cleanupPending)
     }
     fun hideFullscreen(): Boolean {
         val view = fullscreen ?: return false
