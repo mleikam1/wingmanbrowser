@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../live_content/live_content.dart';
 import '../components/wingman_components.dart';
-import '../design_system/ui_preferences.dart';
-import '../discovery/discovery_photos.dart';
+import 'live_story_image.dart';
 
 String liveContentTopicLabel(String topic) => topic
     .replaceAll('-', ' ')
@@ -297,14 +296,7 @@ class _LiveContentSectionState extends State<LiveContentSection> {
     final source = liveContentSourceName(controller, item.sourceId);
     final saved = controller.isSaved(item.id),
         allowed = _current && controller.canOpen(item);
-    final artwork = item.topics.contains('environment')
-        ? HomeArtwork.forest
-        : item.topics.contains('technology')
-        ? HomeArtwork.creative
-        : item.topics.contains('science')
-        ? HomeArtwork.earthrise
-        : null;
-    final photo = artwork == null ? null : DiscoveryPhoto.forArtwork(artwork);
+    final storyImage = allowed ? StoryImages.forItem(item) : null;
     final topics = item.topics.toList()..sort();
     void open() {
       if (_current && controller.canOpen(item)) widget.onOpen(item);
@@ -341,6 +333,51 @@ class _LiveContentSectionState extends State<LiveContentSection> {
       icon: Icon(saved ? Icons.bookmark : Icons.bookmark_add_outlined),
       label: Text(saved ? 'Saved' : 'Save'),
     );
+    final header = Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(source, style: Theme.of(context).textTheme.labelLarge),
+              headline,
+            ],
+          ),
+        ),
+        PopupMenuButton<String>(
+          key: ValueKey('live-menu-${item.id}'),
+          tooltip: 'Article options',
+          enabled: !_busy && _current,
+          onSelected: (action) {
+            if (!_current) return;
+            if (action == 'pin') {
+              if (controller.canOpen(item)) widget.onPin(item);
+            } else if (action == 'hide') {
+              _change(() => controller.hideSource(item.sourceId));
+            } else if (action == 'dismiss') {
+              _change(() => controller.dismiss(item.id));
+            } else if (action.startsWith('fewer:')) {
+              _change(() => controller.showFewerTopic(action.substring(6)));
+            }
+          },
+          itemBuilder: (_) => [
+            PopupMenuItem(
+              value: 'pin',
+              enabled: allowed,
+              child: const Text('Add to Launchpad'),
+            ),
+            PopupMenuItem(value: 'hide', child: Text('Hide $source')),
+            const PopupMenuItem(value: 'dismiss', child: Text('Dismiss item')),
+            for (final topic in topics)
+              PopupMenuItem(
+                value: 'fewer:$topic',
+                child: Text('Show fewer: ${liveContentTopicLabel(topic)}'),
+              ),
+          ],
+        ),
+      ],
+    );
     return Card(
       key: ValueKey('live-card-${item.id}'),
       margin: EdgeInsets.zero,
@@ -348,18 +385,11 @@ class _LiveContentSectionState extends State<LiveContentSection> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (featured && photo != null) ...[
-            SizedBox(
-              height: 144,
-              width: double.infinity,
-              child: DiscoveryPhotoView(photo: photo, decorative: true),
-            ),
+          if (featured && storyImage != null) ...[
+            LiveStoryImage(image: storyImage),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-              child: Text(
-                'Category image · ${photo.credit}',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
+              child: LiveStoryImageCaption(image: storyImage),
             ),
           ],
           Padding(
@@ -367,90 +397,11 @@ class _LiveContentSectionState extends State<LiveContentSection> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            source,
-                            style: Theme.of(context).textTheme.labelLarge,
-                          ),
-                          if (widget.preview) headline,
-                        ],
-                      ),
-                    ),
-                    PopupMenuButton<String>(
-                      key: ValueKey('live-menu-${item.id}'),
-                      tooltip: 'Article options',
-                      enabled: !_busy && _current,
-                      onSelected: (action) {
-                        if (!_current) return;
-                        if (action == 'pin') {
-                          if (controller.canOpen(item)) widget.onPin(item);
-                        } else if (action == 'hide') {
-                          _change(() => controller.hideSource(item.sourceId));
-                        } else if (action == 'dismiss') {
-                          _change(() => controller.dismiss(item.id));
-                        } else if (action.startsWith('fewer:')) {
-                          _change(
-                            () =>
-                                controller.showFewerTopic(action.substring(6)),
-                          );
-                        }
-                      },
-                      itemBuilder: (_) => [
-                        PopupMenuItem(
-                          value: 'pin',
-                          enabled: allowed,
-                          child: const Text('Add to Launchpad'),
-                        ),
-                        PopupMenuItem(
-                          value: 'hide',
-                          child: Text('Hide $source'),
-                        ),
-                        const PopupMenuItem(
-                          value: 'dismiss',
-                          child: Text('Dismiss item'),
-                        ),
-                        for (final topic in topics)
-                          PopupMenuItem(
-                            value: 'fewer:$topic',
-                            child: Text(
-                              'Show fewer: ${liveContentTopicLabel(topic)}',
-                            ),
-                          ),
-                      ],
-                    ),
-                  ],
-                ),
-                if (!widget.preview)
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(child: headline),
-                      if (!featured &&
-                          MediaQuery.textScalerOf(context).scale(16) < 24) ...[
-                        const SizedBox(width: 12),
-                        ExcludeSemantics(
-                          child: Container(
-                            width: 48,
-                            height: 48,
-                            decoration: BoxDecoration(
-                              color: WingmanTokens.of(context).raised,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Icon(
-                              liveContentTopicIcon(topics.firstOrNull),
-                              color: WingmanTokens.of(context).action,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
+                if (!featured && storyImage != null)
+                  LiveStoryImageHeader(image: storyImage, child: header)
+                else
+                  header,
+                const SizedBox(height: 8),
                 Text(
                   liveContentPublicationLabel(item),
                   style: Theme.of(context).textTheme.bodySmall,
@@ -501,19 +452,6 @@ class _LiveContentSectionState extends State<LiveContentSection> {
     );
   }
 }
-
-IconData liveContentTopicIcon(String? topic) => switch (topic) {
-  'sports' => Icons.sports_basketball_outlined,
-  'entertainment' => Icons.theaters_outlined,
-  'technology' => Icons.memory_outlined,
-  'business' => Icons.business_center_outlined,
-  'fashion' => Icons.checkroom_outlined,
-  'science' => Icons.science_outlined,
-  'food' => Icons.restaurant_outlined,
-  'health' => Icons.favorite_outline,
-  'environment' => Icons.eco_outlined,
-  _ => Icons.article_outlined,
-};
 
 /// Fast single-topic selection. The catalog remains visible even when a topic
 /// temporarily has no eligible stories; empty content is stated honestly.

@@ -1,5 +1,41 @@
 # Privacy architecture
 
+## Bundled story images — 0.13.1+15
+
+Home, Updates and eligible saved articles select actual story photographs from a
+finite local catalog of four reviewed images. Each requires both the exact
+article URL and its locally pinned source ID. Every other article remains
+text-only; no topic or generic photo is substituted. These inputs are processed
+on the device. The photo selector does not send the
+article address, topic, source, save state or selection to a photographer, CDN,
+image search, stock-photo API or classification service.
+
+Native rendering uses `Image.asset`; no image download, remote-image cache,
+cookie, referrer or background image-refresh service is added. A failed asset
+decode renders a local unavailable placeholder rather than fetching a remote
+substitute. The web companion obtains packaged images as ordinary same-origin
+application assets; it does not contact the original image publishers. Original
+download URLs in the rights records are provenance, not runtime endpoints.
+
+The four new image files add 1,180,639 bytes before packaging. Existing
+user-selected Home artwork remains separate and is not a story-image fallback.
+No paid photo subscription, image API or dedicated image
+hosting is configured. Normal application distribution and bandwidth remain
+separate from this absence of an image-service bill.
+
+Source-wide `images:false` and feed-image rejection remain enforced. An RSS
+publisher cannot insert an arbitrary asset path or image URL into the local
+catalog. On story surfaces, display still depends on current item eligibility
+and owner context; a photo does not restore a hidden or withdrawn story. The
+static Photo credits inventory describes packaged public assets, not photos the
+owner viewed or saved. Private and handoff screens do not receive owner story
+content. Credits identify the story image's date or its
+archival date, without implying that an archive photograph depicts a new event.
+Source and media rights are recorded in
+[Story images](STORY_IMAGES.md) and [Content sources and rights](CONTENT_SOURCES_AND_RIGHTS.md).
+This is a source-level data-flow description, not a packet capture or claim of
+completed physical-device validation.
+
 ## Native publisher updates — 0.13
 
 The normal consumer Home/Updates surface downloads the same 12 reviewed public

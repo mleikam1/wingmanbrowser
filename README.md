@@ -4,7 +4,13 @@
 
 **Built for discovery. Designed with boundaries.**
 
-Version **0.13.0+14** adds free publisher content to ordinary Android and iOS
+Version **0.13.1+15** adds credited, freely reusable photographs to matching live
+stories in Home, Updates and the Reading list. Only individually reviewed photos
+from the actual article appear; stories without a cleared photograph stay text-only.
+The photographs are packaged with the app, with no image API or image-hosting bill.
+See [Story images](docs/STORY_IMAGES.md) for the current catalog and reuse evidence.
+
+Version **0.13.0+14** added free publisher content to ordinary Android and iOS
 builds without a feed-server setting or paid API. A compact Home preview opens a
 full Updates screen with Headlines, Sports, Entertainment, Technology, Business,
 Fashion, Science, Food, Health and Environment. Twelve reviewed feeds from Global

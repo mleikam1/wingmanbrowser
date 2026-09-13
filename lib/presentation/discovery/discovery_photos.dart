@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../live_content/live_content.dart';
 import '../components/wingman_components.dart';
 import '../design_system/ui_preferences.dart';
+import '../live_content/live_story_image.dart';
 
 @immutable
 class DiscoveryPhoto {
@@ -156,9 +158,24 @@ class PhotoCreditsScreen extends StatelessWidget {
           const SizedBox(height: 8),
           Text(photo.license),
         ],
+        for (final photo in StoryImages.all.where(
+          (image) => !DiscoveryPhoto.all.any((old) => old.asset == image.asset),
+        )) ...[
+          WingmanSection(title: photo.title),
+          LiveStoryImage(image: photo, height: 180),
+          const SizedBox(height: 12),
+          Text(photo.caption, style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          Text(photo.sourceUrl.toString()),
+          const SizedBox(height: 8),
+          Text(photo.licenseLabel),
+          Text(photo.licenseUrl.toString()),
+          const SizedBox(height: 8),
+          Text(photo.rightsNote),
+        ],
         const SizedBox(height: 24),
         const Text(
-          'Selected and reviewed September 11, 2026. Photographers and source organizations do not sponsor Wingman.',
+          'Credits and usage notes describe the packaged files. Photographers and source organizations do not sponsor Wingman.',
         ),
       ],
     ),

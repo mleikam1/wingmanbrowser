@@ -5,6 +5,7 @@ import 'package:wingman_browser/presentation/live_content/live_content_preferenc
 import 'package:wingman_browser/presentation/live_content/live_content_feed_screen.dart';
 import 'package:wingman_browser/presentation/live_content/live_content_section.dart';
 import 'package:wingman_browser/presentation/live_content/live_reading_list.dart';
+import 'package:wingman_browser/presentation/live_content/live_story_image.dart';
 import 'package:wingman_browser/presentation/theme.dart';
 import 'package:wingman_browser/signature/storage/document_store.dart';
 
@@ -168,6 +169,7 @@ void main() {
       await tester.pumpAndSettle();
       await _tap(tester, _key('live-topic-environment'));
       expect(controller.preferences.selectedTopics, {'environment'});
+      expect(find.byType(LiveStoryImage), findsNothing);
       await _tap(tester, _key('live-save-fixture-2'));
       expect(controller.isSaved('fixture-2'), isTrue);
       expect(
@@ -201,7 +203,8 @@ void main() {
       expect(find.text('Fixture article 3'), findsOneWidget);
       expect(find.text('Fixture article 4'), findsNothing);
       expect(_key('live-feed-load-more'), findsNothing);
-      expect(find.byType(Image), findsNothing);
+      expect(find.byType(LiveStoryImage), findsNothing);
+      expect(find.textContaining('Topic photo'), findsNothing);
       await _tap(tester, _key('live-feed-view-all'));
       expect(viewAll, 1);
       await tester.pumpWidget(
@@ -281,7 +284,7 @@ void main() {
   );
 
   testWidgets(
-    'finite cards show publisher dates, excerpts and local image credits',
+    'finite unreviewed cards show dates and excerpts without substitute photos',
     (tester) async {
       final controller = await _controller();
       addTearDown(controller.dispose);
@@ -294,7 +297,8 @@ void main() {
       expect(find.textContaining('Published 11 Sep 2026'), findsOneWidget);
       expect(find.text('Publisher excerpt'), findsNWidgets(2));
       expect(find.text('Fixture author 1'), findsOneWidget);
-      expect(find.textContaining('Category image ·'), findsOneWidget);
+      expect(find.byType(LiveStoryImage), findsNothing);
+      expect(find.textContaining('Topic photo'), findsNothing);
       expect(find.textContaining('Last checked'), findsOneWidget);
       for (final image in tester.widgetList<Image>(find.byType(Image))) {
         final provider = image.image;
@@ -449,6 +453,14 @@ void main() {
       expect(find.byType(Scrollable), findsOneWidget);
       expect(find.text('Fixture article 1'), findsOneWidget);
       expect(find.text('Saved article unavailable'), findsOneWidget);
+      expect(find.byType(LiveStoryImage), findsNothing);
+      expect(
+        find.descendant(
+          of: _key('live-saved-fixture-withdrawn'),
+          matching: find.byType(LiveStoryImage),
+        ),
+        findsNothing,
+      );
       final tombstone = tester.widget<OutlinedButton>(
         _key('live-saved-open-fixture-withdrawn'),
       );
@@ -466,6 +478,9 @@ void main() {
       canContinue = true;
       await _tap(tester, _key('live-saved-remove-fixture-withdrawn'));
       expect(find.text('Saved article unavailable'), findsNothing);
+      controller.setContext(LiveContentContext.private);
+      await tester.pumpAndSettle();
+      expect(find.byType(LiveStoryImage), findsNothing);
     },
   );
 

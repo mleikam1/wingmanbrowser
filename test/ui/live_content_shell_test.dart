@@ -11,6 +11,7 @@ import 'package:wingman_browser/signature/signature_services.dart';
 import 'package:wingman_browser/signature/launchpad/launchpad.dart';
 import 'package:wingman_browser/presentation/home/home_screen.dart';
 import 'package:wingman_browser/presentation/live_content/live_content_feed_screen.dart';
+import 'package:wingman_browser/presentation/live_content/live_story_image.dart';
 import 'package:wingman_browser/presentation/library/library_screen.dart';
 import '../signature/integrated_workspaces_test.dart' as shared;
 import '../support/protected_test_support.dart';
@@ -214,6 +215,7 @@ void main() {
         );
         await tester.pumpAndSettle();
         expect(find.text(headline), findsNothing);
+        expect(find.byType(LiveStoryImage), findsNothing);
         expect(controller.savedItems.single.item, isNull);
         expect(
           find.byType(ProtectedWebSurface, skipOffstage: false),

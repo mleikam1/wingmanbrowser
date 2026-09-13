@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../live_content/live_content.dart';
 import '../components/wingman_components.dart';
 import 'live_content_section.dart';
+import 'live_story_image.dart';
 
 /// Box content for Library's SliverToBoxAdapter; Library owns scrolling.
 class LiveReadingList extends StatefulWidget {
@@ -97,7 +98,8 @@ class _LiveReadingListState extends State<LiveReadingList> {
     final item = saved.item;
     final allowed =
         widget.canContinue() && item != null && controller.canOpen(item);
-    return Column(
+    final storyImage = allowed ? StoryImages.forItem(item) : null;
+    final header = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
@@ -109,6 +111,15 @@ class _LiveReadingListState extends State<LiveReadingList> {
           item?.title ?? 'Saved article unavailable',
           style: Theme.of(context).textTheme.titleMedium,
         ),
+      ],
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (storyImage != null)
+          LiveStoryImageHeader(image: storyImage, child: header)
+        else
+          header,
         const SizedBox(height: 8),
         Text(
           item == null

@@ -223,19 +223,66 @@ void main() {
         await h.state.saveSettingsPatch(themeMode: ThemeMode.light);
         await tester.pumpAndSettle();
 
+        final storyArticle = snapshot.items.firstWhere(
+          (item) => StoryImages.forItem(item) != null,
+        );
+        final activeController = controller;
+        Future<void> showStory(LiveContentItem article) async {
+          final storyTopic = liveContentTopicOrder.firstWhere(
+            (topic) => topic != 'headlines' && article.topics.contains(topic),
+            orElse: () => 'headlines',
+          );
+          await shared.tap(
+            tester,
+            find.byKey(ValueKey('live-topic-$storyTopic')),
+          );
+          while (!activeController.items.any((item) => item.id == article.id) &&
+              activeController.hasMore) {
+            await shared.tap(
+              tester,
+              find.byKey(const ValueKey('live-feed-load-more')),
+            );
+          }
+          expect(activeController.canOpen(article), isTrue);
+          final storyCard = find.byKey(ValueKey('live-card-${article.id}'));
+          await tester.ensureVisible(storyCard);
+          await tester.pumpAndSettle();
+          expect(
+            find.descendant(
+              of: storyCard,
+              matching: find.text(StoryImages.forItem(article)!.caption),
+            ),
+            findsOneWidget,
+          );
+        }
+
+        await showStory(storyArticle);
+        await capture('feed-story-photo');
+        await h.state.saveSettingsPatch(themeMode: ThemeMode.dark);
+        await tester.pumpAndSettle();
+        await capture('feed-story-photo-dark');
+        await h.state.saveSettingsPatch(themeMode: ThemeMode.light);
+        for (final photo in StoryImages.all) {
+          final article = snapshot.items.firstWhere(
+            (item) => StoryImages.forItem(item) == photo,
+          );
+          await showStory(article);
+          final name = photo.asset.split('/').last.split('.').first;
+          await capture('feed-$name');
+        }
+        await showStory(storyArticle);
+
         await shared.tap(
           tester,
-          find.byKey(ValueKey('live-save-${actualArticle.id}')),
+          find.byKey(ValueKey('live-save-${storyArticle.id}')),
         );
-        expect(controller.isSaved(actualArticle.id), isTrue);
+        expect(controller.isSaved(storyArticle.id), isTrue);
         await shared.tap(
           tester,
           find.byKey(const ValueKey('live-feed-reading-list')),
         );
         expect(find.byType(LibraryScreen), findsOneWidget);
-        final savedCard = find.byKey(
-          ValueKey('live-saved-${actualArticle.id}'),
-        );
+        final savedCard = find.byKey(ValueKey('live-saved-${storyArticle.id}'));
         if (savedCard.evaluate().isEmpty) {
           await tester.scrollUntilVisible(
             savedCard,
@@ -259,7 +306,7 @@ void main() {
             .position
             .jumpTo(0);
         await tester.pumpAndSettle();
-        expect(find.text(actualArticle.title), findsOneWidget);
+        expect(find.text(storyArticle.title), findsOneWidget);
         expect(
           tester.getTopLeft(find.text('Saved publisher articles')).dy,
           greaterThanOrEqualTo(100),
