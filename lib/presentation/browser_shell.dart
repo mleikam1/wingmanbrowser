@@ -43,6 +43,7 @@ import 'protection/help_now_screen.dart';
 import 'protection/policy_state_view.dart';
 import '../live_content/live_content.dart';
 import 'live_content/live_content_section.dart';
+import 'live_content/live_content_feed_screen.dart';
 import 'live_content/live_content_preferences_screen.dart';
 import 'live_content/live_reading_list.dart';
 
@@ -1434,6 +1435,7 @@ class _BrowserShellState extends State<BrowserShell>
     final model = _features?.workspaces;
     final service = _features;
     final launchpadActions = _launchpadActions();
+    final homeOrigin = _tab;
     return HomeScreen(
       launchpad: service?.initialized == true
           ? LaunchpadSection(
@@ -1459,7 +1461,11 @@ class _BrowserShellState extends State<BrowserShell>
           if (!_ephemeral) ...[
             LiveContentSection(
               controller: widget.liveContent,
+              preview: true,
+              canContinue: () => !_ephemeral && _validOrigin(homeOrigin),
+              onViewAll: _liveContentFeed,
               onOpen: _openLiveContent,
+              onOpenUri: _openLiveContentLicense,
               onPin: _pinLiveContent,
               onPreferences: _liveContentPreferences,
               onReadingList: () => _library(LibrarySection.readingList),
@@ -2541,6 +2547,7 @@ class _BrowserShellState extends State<BrowserShell>
             : LiveReadingList(
                 controller: widget.liveContent!,
                 onOpen: _openLiveContent,
+                onOpenUri: _openLiveContentLicense,
                 onPin: _pinLiveContent,
                 canContinue: () => _validOrigin(origin) && !_ephemeral,
               ),
@@ -2559,6 +2566,38 @@ class _BrowserShellState extends State<BrowserShell>
     }
     Navigator.of(context).popUntil((route) => route.isFirst);
     _navigateWebsite(item.canonicalUrl);
+  }
+
+  void _liveContentFeed() {
+    final feed = widget.liveContent, origin = _tab;
+    if (feed == null || _ephemeral || !_validOrigin(origin)) return;
+    _pushFeature(
+      LiveContentFeedScreen(
+        controller: feed,
+        canContinue: () => !_ephemeral && _validOrigin(origin),
+        onOpen: _openLiveContent,
+        onOpenUri: _openLiveContentLicense,
+        onPin: _pinLiveContent,
+        onPreferences: _liveContentPreferences,
+        onReadingList: () => _library(LibrarySection.readingList),
+      ),
+    );
+  }
+
+  void _openLiveContentLicense(Uri uri) {
+    final feed = widget.liveContent;
+    if (feed == null ||
+        _ephemeral ||
+        !_validOrigin(_tab) ||
+        !feed.sources.any(
+          (source) =>
+              source.status != 'revoked' && source.rights.licenseUrl == uri,
+        ) ||
+        !_websiteDecision(uri).isAllowed) {
+      return;
+    }
+    Navigator.of(context).popUntil((route) => route.isFirst);
+    _navigateWebsite(uri);
   }
 
   void _pinLiveContent(LiveContentItem item) {

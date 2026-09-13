@@ -1,5 +1,29 @@
 # Privacy architecture
 
+## Native publisher updates — 0.13
+
+The normal consumer Home/Updates surface downloads the same 12 reviewed public
+feeds on every device. Publishers receive the device IP, a generic Wingman reader
+user agent, conditional cache validators and normal TLS/network metadata. The app
+sends no cookies, referrer, browsing history, queries, selected topics, saves or
+other account/device identifiers. Topic/source selection is entirely local and
+never changes the upstream feed URL. Private, handoff and inactive owner contexts
+cancel network work and suppress feed data. Turning Updates off persists locally.
+There is no background feed refresh service, notification enrollment or image fetch.
+
+Cache, saves, preferences and publisher refresh checkpoints use bounded local
+feature documents. Clearing the disposable article cache does not reset publisher
+Retry-After/backoff or erase saved links. Candidate refresh results may commit only
+while their original owner context remains valid. Saving stores a publisher link
+and permitted excerpt; it does not download full article HTML. Original articles
+load only on the user's action in the existing consumer browser with its existing
+privacy and mandatory protections. A configured snapshot service, when used by
+an explicit build, receives the same common request instead of direct publisher
+traffic. The web companion requires that service; it is not deployed.
+
+The remaining sections retain earlier feature/milestone context; the live-feed
+behavior above supersedes blanket claims that publisher URLs are never fetched.
+
 > **Earlier milestone record (0.5–0.7).** Version 0.8 adds a separate protected native website pilot. This document's no-browsing-network, no-renderer, Android INTERNET and renderer-free cleanup assumptions do not describe that pilot. Use [Live browsing status](LIVE_BROWSING_STATUS.md), [Live browsing policy](LIVE_BROWSING_POLICY.md) and [Cloud cost plan](CLOUD_COST_PLAN.md) for current scope, platform differences and remaining validation. The historical observations below are preserved for their recorded builds; they are not v0.8 test results.
 
 **We've got your back, not your data.** The 0.5 signature-feature milestone builds on the permanent-protection foundation. [The previous architecture](history/PRIVACY_ARCHITECTURE_PHASE3A.md) is historical and does not describe current runtime behavior. Final implementation/platform status is recorded in [Signature features](SIGNATURE_FEATURES_STATUS.md).

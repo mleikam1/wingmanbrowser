@@ -12,10 +12,12 @@ class LiveReadingList extends StatefulWidget {
     required this.onOpen,
     required this.onPin,
     required this.canContinue,
+    this.onOpenUri,
   });
   final LiveContentController controller;
   final ValueChanged<LiveContentItem> onOpen, onPin;
   final bool Function() canContinue;
+  final ValueChanged<Uri>? onOpenUri;
 
   @override
   State<LiveReadingList> createState() => _LiveReadingListState();
@@ -114,6 +116,15 @@ class _LiveReadingListState extends State<LiveReadingList> {
               : liveContentPublicationLabel(item),
           style: Theme.of(context).textTheme.bodySmall,
         ),
+        if (item != null && allowed) ...[
+          const SizedBox(height: 8),
+          LiveContentCredits(
+            controller: controller,
+            item: item,
+            onOpenUri: widget.onOpenUri,
+            canContinue: widget.canContinue,
+          ),
+        ],
         if (item == null || !allowed) ...[
           const SizedBox(height: 8),
           Text(

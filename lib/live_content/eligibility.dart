@@ -22,6 +22,12 @@ class LiveContentEligibility {
         !item.rights.titles ||
         !approved.allowedArticleHosts.contains(item.canonicalUrl.host) ||
         !_approvedPath(item.canonicalUrl, approved.articlePathPrefixes) ||
+        (approved.articleUrlFormat == 'dated-story' &&
+            !RegExp(
+              r'^/[0-9]{4}/[0-9]{2}/[0-9]{2}/[^/]+/?$',
+            ).hasMatch(item.canonicalUrl.path)) ||
+        (approved.requiresAttribution &&
+            (item.attribution?.trim().isEmpty ?? true)) ||
         item.language != approved.source.language ||
         item.topics.isEmpty ||
         !item.topics.every(approved.source.topics.contains) ||
@@ -45,8 +51,12 @@ class LiveContentEligibility {
         item.rights.licenseUrl != approved.source.rights.licenseUrl) {
       return false;
     }
-    if (_prohibitedPromotion(item.title) ||
-        _prohibitedPromotion(item.excerpt ?? '')) {
+    if (!acceptsFeedText(item.title, item.excerpt ?? '') ||
+        !matchesTopicScope(
+          item.title,
+          item.excerpt ?? '',
+          approved.requiredTopicTerms,
+        )) {
       return false;
     }
     try {
@@ -54,6 +64,52 @@ class LiveContentEligibility {
     } catch (_) {
       return false;
     }
+  }
+
+  /// A narrowly scoped search feed must prove its topic from its plain metadata.
+  /// This categorizes already reviewed sources; it does not authorize content.
+  bool matchesTopicScope(String title, String excerpt, Set<String> terms) {
+    if (terms.isEmpty) return true;
+    final text = '$title $excerpt'.toLowerCase();
+    return terms.any(
+      (term) => RegExp(
+        r'\b' + RegExp.escape(term.toLowerCase()) + r'\b',
+      ).hasMatch(text),
+    );
+  }
+
+  /// Applied to full bounded feed metadata before any display truncation, and
+  /// again to each normalized snapshot item. Publisher scope and destination
+  /// policy remain independent requirements.
+  bool acceptsFeedText(String title, String excerpt) {
+    final text = '$title $excerpt'.toLowerCase();
+    if (text.contains('©') || RegExp(r'\bcopyright\s+\d{4}\b').hasMatch(text)) {
+      return false;
+    }
+    if (RegExp(
+      r'\b(?:sponsored(?:\s+content)?|paid\s+(?:post|partnership|advertisement)|'
+      r'affiliate\s+links?|buy\s+now|shop\s+now|promo\s+code|'
+      r'free\s+spins|deposit\s+bonus|place\s+(?:a\s+)?bets?|'
+      r'adult\s+entertainment|sex\s+tapes?|pornographic|'
+      r'cannabis\s+dispensary|all\s+rights\s+reserved)\b',
+    ).hasMatch(text)) {
+      return false;
+    }
+    if (_prohibitedPromotion(title) || _prohibitedPromotion(excerpt)) {
+      return false;
+    }
+    final restricted = RegExp(
+      r'\b(?:casino|sportsbook|sports betting|gambling|vaping|pornography|'
+      r'cannabis|marijuana|tobacco|cigarettes?|vodka|whiskey|whisky|'
+      r'beer|wine|liquor|nicotine)\b',
+    ).hasMatch(text);
+    final reporting = RegExp(
+      r'\b(?:research|study|studies|scientists?|health|pollution|wildlife|'
+      r'survey|geology|environment|hazard|reports?|evidence|regulation|'
+      r'regulator|ban|warning|recovery|treatment|education|prevention|'
+      r'risks?|addiction|policy|investigation)\b',
+    ).hasMatch(text);
+    return !restricted || reporting;
   }
 
   bool _approvedPath(Uri uri, Set<String> prefixes) {

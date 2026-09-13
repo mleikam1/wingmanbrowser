@@ -13,6 +13,7 @@ abstract interface class SignatureDocumentStore {
     'liveContentPreferences',
     'liveContentCache',
     'liveContentSaved',
+    'liveContentRefreshState',
   };
   static const maximumBytes = 512 * 1024;
   Future<Map<String, Object?>?> readDocument(String key);

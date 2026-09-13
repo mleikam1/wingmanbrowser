@@ -500,7 +500,16 @@ class ConfigurationTests(unittest.TestCase):
     def test_reviewed_registry_matches_generated_app_asset(self):
         config = load_config(ROOT / 'backend/sources.json')
         self.assertEqual(registry(config), json.loads((ROOT / 'assets/live_content/sources.json').read_text()))
-        self.assertEqual(len(config["sources"]), 3)
+        self.assertEqual({source["id"] for source in config["sources"]}, {
+            "nasa-technology", "noaa-news", "usgs-news", "globalvoices-sports",
+            "globalvoices-fashion", "globalvoices-food", "globalvoices-health",
+            "globalvoices-science", "globalvoices-technology", "globalvoices-business",
+            "globalvoices-entertainment", "globalvoices-headlines",
+        })
+        self.assertEqual({topic for source in config["sources"] for topic in source["topics"]}, {
+            "sports", "fashion", "food", "health", "science", "technology",
+            "business", "entertainment", "headlines", "environment",
+        })
 
     def test_real_pinned_baseline_loaded_and_mandatory_fixture_denied(self):
         policy = DestinationPolicy(ROOT / 'assets/policy/consumer_protection.json')

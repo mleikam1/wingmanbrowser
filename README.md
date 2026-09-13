@@ -4,16 +4,22 @@
 
 **Built for discovery. Designed with boundaries.**
 
-Version **0.11.0+11** adds a shared live-content backend and local feed preferences,
-cache, saved publisher links and explicit Launchpad pinning. NASA, NOAA and USGS
-supply current English science, technology and environment coverage. Publisher
-articles open in the existing native consumer browser; the web companion opens
-them in the host browser. Bundled articles remain labelled evergreen/offline.
-No production feed service or broad-news license has been deployed or purchased.
-See [Live content acceptance and commands](docs/LIVE_CONTENT_ACCEPTANCE.md),
+Version **0.13.0+14** adds free publisher content to ordinary Android and iOS
+builds without a feed-server setting or paid API. A compact Home preview opens a
+full Updates screen with Headlines, Sports, Entertainment, Technology, Business,
+Fashion, Science, Food, Health and Environment. Twelve reviewed feeds from Global
+Voices, NASA, NOAA and USGS supply attributed titles and excerpts. Topic choices
+and saves stay local; publishers receive ordinary feed-connection metadata.
+Articles open through the existing protected consumer browser. Private browsing
+and turning Updates off stop feed requests. Bundled articles remain evergreen/offline.
+
+The web companion still needs a configured common snapshot service because these
+publishers do not permit browser CORS. No cloud service was deployed. Coverage is
+international and publication frequency varies; no paid news or image license was
+purchased. See [Current content acceptance](docs/CONTENT_DISCOVERY_ACCEPTANCE.md),
 [Architecture](docs/LIVE_CONTENT_ARCHITECTURE.md),
 [Source rights](docs/CONTENT_SOURCES_AND_RIGHTS.md), and
-[Operating costs and approvals](docs/CONTENT_OPERATING_COSTS.md).
+[Operating costs](docs/CONTENT_OPERATING_COSTS.md).
 
 Version **0.10.0+10** restores consumer browsing through Android System WebView and iOS WKWebView while preserving Wingman's existing interface, Launchpad, Spaces and local tools. Ordinary search opens DuckDuckGo's normal Strict experience; permitted result destinations do not require inclusion in the reviewed catalog. JavaScript, forms, first-party storage and native navigation are enabled behind local category/threat controls. The web companion submits search by leaving for the strict provider in the host browser.
 

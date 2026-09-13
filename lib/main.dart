@@ -203,22 +203,32 @@ class _SignatureApplicationRootState extends State<SignatureApplicationRoot> {
     LiveContentController? liveContent;
     if (productEdition == ProductEdition.consumer) {
       try {
+        final registry = await LiveSourceRegistry.loadBundled();
+        final eligibility = LiveContentEligibility(
+          registry: registry,
+          canOpenDestination: (uri) =>
+              widget.policy.consumerProtection
+                  .assessNavigation(
+                    uri,
+                    additional: state.protectedPreferences.additional,
+                  )
+                  .isAllowed &&
+              !widget.policy.policy
+                  .blockedBrowsingUrls(state.protectedPreferences.additional)
+                  .contains(uri.toString()),
+        );
         liveContent = LiveContentController(
           store: repository,
-          provider: SnapshotFeedProvider.fromEnvironment(),
-          eligibility: LiveContentEligibility(
-            registry: await LiveSourceRegistry.loadBundled(),
-            canOpenDestination: (uri) =>
-                widget.policy.consumerProtection
-                    .assessNavigation(
-                      uri,
-                      additional: state.protectedPreferences.additional,
+          provider:
+              SnapshotFeedProvider.fromEnvironment() ??
+              (RssFeedProvider.supported
+                  ? RssFeedProvider(
+                      registry: registry,
+                      eligibility: eligibility,
+                      allowsEditorialText: eligibility.acceptsFeedText,
                     )
-                    .isAllowed &&
-                !widget.policy.policy
-                    .blockedBrowsingUrls(state.protectedPreferences.additional)
-                    .contains(uri.toString()),
-          ),
+                  : null),
+          eligibility: eligibility,
         );
       } catch (_) {
         // Optional feed configuration never holds up browsing or local tools.

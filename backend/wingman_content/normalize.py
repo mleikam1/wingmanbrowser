@@ -91,6 +91,9 @@ def canonical_url(value, source):
         if ("\\" in path or any(c in path for c in ("\x00", "\r", "\n"))
                 or any(part in (".", "..") for part in path.split("/"))):
             return None
+        if source.get('articleUrlFormat') == 'dated-story' and not re.fullmatch(
+                r'/[0-9]{4}/[0-9]{2}/[0-9]{2}/[^/]+/?', path):
+            return None
         if not any(path.startswith(prefix) for prefix in source["articlePathPrefixes"]):
             return None
         query = [(key, value) for key, value in parse_qsl(parsed.query, keep_blank_values=True,
@@ -104,6 +107,13 @@ def canonical_url(value, source):
 
 def item_id(url):
     return hashlib.sha256(url.encode()).hexdigest()[:32]
+
+
+def matches_topic_scope(title, excerpt, source):
+    terms = source.get('requiredTopicTerms', [])
+    text = title + ' ' + excerpt
+    return not terms or any(re.search(r'\b' + re.escape(term) + r'\b', text, re.I)
+                            for term in terms)
 
 
 def item_topics(url, source):
@@ -203,7 +213,9 @@ def parse_feed(data, source, now, destination_policy):
         reason = ("metadata-size-limit" if any(len(value) > 100000 for value in
                                               (title_raw, excerpt_raw, attribution_raw, rights_raw))
                   else "unreviewed-destination" if not url else "destination-policy" if not destination_policy.allows(url)
+                  else "missing-author" if source.get('requiresAttribution') and not plain(attribution_raw, 200)
                   else "promotion-or-rights-ambiguity" if not text_eligible(full_title, review_text + " " + plain(rights_raw, 100000), categories)
+                  else "outside-topic-scope" if not matches_topic_scope(full_title, review_text, source)
                   else None)
         if reason:
             held["count"] += 1
@@ -211,12 +223,14 @@ def parse_feed(data, source, now, destination_policy):
             if len(held["examples"]) < 10:
                 held["examples"].append({"title": title, "reason": reason,
                                          "url": (links[0] or "")[:4096] if links else ""})
-            # A newly ineligible record can revoke a previously cached item by
-            # GUID or URL; ordinary rolling-feed omission is treated separately.
-            if guid:
-                deleted.append(guid[:4096])
-            if url:
-                deleted.append(url)
+            # A topic mismatch is local to this feed. It must not withdraw the
+            # same article from a different approved section (e.g. Sports).
+            # Rights/safety failures still revoke previously cached records.
+            if reason != "outside-topic-scope":
+                if guid:
+                    deleted.append(guid[:4096])
+                if url:
+                    deleted.append(url)
             continue
         published = date_value(entry.findtext(prefix + ("published" if atom else "pubDate")), now)
         # Atom updated is an edit timestamp, not proof of first publication.

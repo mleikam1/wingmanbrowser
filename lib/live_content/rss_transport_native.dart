@@ -1,0 +1,291 @@
+import 'dart:async';
+import 'dart:io';
+import 'dart:typed_data';
+import 'models.dart';
+import 'rss_transport.dart';
+
+RssFeedTransport createRssTransport() => NativeRssFeedTransport();
+
+typedef RssResolver = Future<List<InternetAddress>> Function(String host);
+
+/// Reject the entire DNS answer set, including mapped and translation ranges.
+bool isPublicRssAddress(InternetAddress address) {
+  final b = address.rawAddress;
+  if (b.length == 16) {
+    if (b.take(10).every((x) => x == 0) && b[10] == 255 && b[11] == 255) {
+      return isPublicRssAddress(InternetAddress.fromRawAddress(b.sublist(12)));
+    }
+    // Public native IPv6 unicast only; reject special-use 2001::/23,
+    // 2002::/16, documentation 2001:db8::/32 and 3fff::/20.
+    if (b[0] & 0xe0 != 0x20 ||
+        (b[0] == 0x20 && b[1] == 1 && b[2] < 2) ||
+        (b[0] == 0x20 && b[1] == 1 && b[2] == 0x0d && b[3] == 0xb8) ||
+        (b[0] == 0x20 && b[1] == 2) ||
+        (b[0] == 0x3f && b[1] == 0xff && b[2] < 16)) {
+      return false;
+    }
+    return true;
+  }
+  if (b.length != 4) return false;
+  return !(b[0] == 0 ||
+      b[0] == 10 ||
+      b[0] == 127 ||
+      b[0] >= 224 ||
+      (b[0] == 100 && b[1] >= 64 && b[1] <= 127) ||
+      (b[0] == 169 && b[1] == 254) ||
+      (b[0] == 172 && b[1] >= 16 && b[1] <= 31) ||
+      (b[0] == 192 &&
+          (b[1] == 168 ||
+              (b[1] == 0 && (b[2] == 0 || b[2] == 2)) ||
+              (b[1] == 88 && b[2] == 99))) ||
+      (b[0] == 198 &&
+          (b[1] == 18 || b[1] == 19 || (b[1] == 51 && b[2] == 100))) ||
+      (b[0] == 203 && b[1] == 0 && b[2] == 113));
+}
+
+class NativeRssFeedTransport implements RssFeedTransport {
+  NativeRssFeedTransport({RssResolver? resolver})
+    : _resolver = resolver ?? InternetAddress.lookup;
+  final RssResolver _resolver;
+  final Set<HttpClient> _clients = {};
+  final Set<void Function()> _cancelConnections = {};
+  int _epoch = 0;
+  // DNS itself is an OS future. A timed-out lookup keeps its slot until actual
+  // completion, preventing cancelled/retried refreshes accumulating resolvers.
+  static int _resolving = 0;
+  Future<List<InternetAddress>> _resolve(String host) async {
+    if (_resolving >= 4) throw const RssFailure('dns-capacity');
+    _resolving++;
+    final lookup = Future<List<InternetAddress>>.sync(() => _resolver(host));
+    return lookup
+        .whenComplete(() => _resolving--)
+        .timeout(const Duration(seconds: 4));
+  }
+
+  @override
+  Future<RssFetchResponse> fetch(
+    ApprovedLiveSource source,
+    Map<String, String> validators,
+  ) async {
+    final generation = _epoch;
+    final deadline = DateTime.now().add(rssDeadline);
+    void valid() {
+      if (generation != _epoch) throw const RssFailure('cancelled');
+      if (!DateTime.now().isBefore(deadline)) throw const RssFailure('timeout');
+    }
+
+    var uri = checkedRssUri(
+      source.feedUri ?? (throw const RssFailure('missing-feed')),
+      source,
+    );
+    var conditional = Map<String, String>.of(validators);
+    HttpClient? active;
+    final localStops = <void Function()>{};
+    final timer = Timer(rssDeadline, () {
+      for (final stop in localStops.toList()) {
+        stop();
+      }
+      active?.close(force: true);
+    });
+    try {
+      for (var hop = 0; hop <= 3; hop++) {
+        valid();
+        if (!DateTime.now().isBefore(deadline)) {
+          throw const RssFailure('timeout');
+        }
+        final addresses = await _resolve(uri.host);
+        valid();
+        if (addresses.isEmpty || addresses.any((a) => !isPublicRssAddress(a))) {
+          throw const RssFailure('non-public-dns');
+        }
+        addresses.sort(
+          (a, b) => a.type == InternetAddressType.IPv4
+              ? (b.type == a.type ? 0 : -1)
+              : 1,
+        );
+        final address = addresses.first, origin = uri;
+        final client = HttpClient()
+          ..autoUncompress = false
+          ..findProxy = ((_) => 'DIRECT')
+          ..connectionTimeout = const Duration(seconds: 8);
+        active = client;
+        _clients.add(client);
+        client.connectionFactory = (url, proxyHost, proxyPort) async {
+          valid();
+          if (url.host != origin.host ||
+              proxyHost != null ||
+              proxyPort != null) {
+            throw const RssFailure('connection-origin');
+          }
+          final tcp = await Socket.startConnect(address, 443);
+          Socket? connected;
+          final completion = Completer<Socket>();
+          void stop() {
+            tcp.cancel();
+            try {
+              connected?.destroy();
+            } catch (_) {}
+            if (!completion.isCompleted) {
+              completion.completeError(const RssFailure('cancelled'));
+            }
+          }
+
+          _cancelConnections.add(stop);
+          localStops.add(stop);
+          unawaited(() async {
+            try {
+              connected = await tcp.socket;
+              valid();
+              final tls = await SecureSocket.secure(
+                connected!,
+                host: origin.host,
+              );
+              connected = tls;
+              valid();
+              if (completion.isCompleted) {
+                tls.destroy();
+                return;
+              }
+              completion.complete(tls);
+            } catch (error, stack) {
+              try {
+                connected?.destroy();
+              } catch (_) {}
+              if (!completion.isCompleted) {
+                completion.completeError(error, stack);
+              }
+            } finally {
+              _cancelConnections.remove(stop);
+              localStops.remove(stop);
+            }
+          }());
+          if (generation != _epoch) stop();
+          return ConnectionTask.fromSocket(completion.future, stop);
+        };
+        try {
+          final request = await client.getUrl(origin);
+          valid();
+          request.followRedirects = false;
+          request.persistentConnection = false;
+          request.headers.set(
+            'Accept',
+            'application/rss+xml, application/atom+xml, application/xml, text/xml',
+          );
+          request.headers.set('Accept-Encoding', 'identity');
+          request.headers.set(
+            'User-Agent',
+            'Wingman/0.13 (public editorial feed reader)',
+          );
+          for (final entry in conditional.entries) {
+            if ({'If-None-Match', 'If-Modified-Since'}.contains(entry.key) &&
+                entry.value.length <= 512 &&
+                !RegExp(r'[\x00-\x1f\x7f]').hasMatch(entry.value)) {
+              request.headers.set(entry.key, entry.value);
+            }
+          }
+          final response = await request.close();
+          valid();
+          var headerBytes = 0;
+          final headers = <String, String>{};
+          response.headers.forEach((key, values) {
+            headerBytes +=
+                key.length + values.fold<int>(0, (n, s) => n + s.length);
+            final name = key.toLowerCase();
+            if (name == 'cache-control') {
+              // Cache-Control is a list field: dropping repeated values could
+              // accidentally discard a publisher's no-store directive.
+              headers[name] = values.join(',');
+            } else if (values.length == 1) {
+              headers[name] = values.single;
+            } else if (name == 'retry-after') {
+              throw const RssFailure(
+                'ambiguous-retry-after',
+                headers: {'retry-after': '31622401'},
+              );
+            } else if ({
+              'content-type',
+              'content-encoding',
+              'content-length',
+              'location',
+            }.contains(name)) {
+              throw const RssFailure('ambiguous-response-header');
+            }
+          });
+          if (headerBytes > 32768) throw const RssFailure('headers-too-large');
+          if ({301, 302, 303, 307, 308}.contains(response.statusCode)) {
+            if (hop == 3 || headers['location'] == null) {
+              throw const RssFailure('redirect-limit');
+            }
+            uri = checkedRssUri(origin.resolve(headers['location']!), source);
+            conditional = {};
+            continue;
+          }
+          if (response.statusCode == 304) {
+            return RssFetchResponse(304, Uint8List(0), headers);
+          }
+          if (response.statusCode != 200) {
+            throw RssFailure('http-${response.statusCode}', headers: headers);
+          }
+          final type = (headers['content-type'] ?? '')
+              .split(';')
+              .first
+              .trim()
+              .toLowerCase();
+          if (!{
+            'application/rss+xml',
+            'application/atom+xml',
+            'application/xml',
+            'text/xml',
+          }.contains(type)) {
+            throw const RssFailure('invalid-content-type');
+          }
+          // Identity is requested deliberately. Encoded bodies are rejected,
+          // so an untrusted inflater cannot consume memory before a size check.
+          if (!{
+            '',
+            'identity',
+          }.contains((headers['content-encoding'] ?? '').toLowerCase())) {
+            throw const RssFailure('unsupported-encoding');
+          }
+          if (response.contentLength > rssMaximumWireBytes) {
+            throw const RssFailure('body-too-large');
+          }
+          final bytes = BytesBuilder(copy: false);
+          await for (final chunk in response) {
+            valid();
+            if (bytes.length + chunk.length > rssMaximumWireBytes) {
+              throw const RssFailure('body-too-large');
+            }
+            bytes.add(chunk);
+          }
+          valid();
+          return RssFetchResponse(200, bytes.takeBytes(), headers);
+        } finally {
+          client.close(force: true);
+          _clients.remove(client);
+          if (identical(active, client)) active = null;
+        }
+      }
+      throw const RssFailure('redirect-limit');
+    } on RssFailure {
+      rethrow;
+    } catch (_) {
+      throw const RssFailure('connection-failed');
+    } finally {
+      timer.cancel();
+      active?.close(force: true);
+    }
+  }
+
+  @override
+  void cancel() {
+    _epoch++;
+    for (final stop in _cancelConnections.toList()) {
+      stop();
+    }
+    for (final client in _clients.toList()) {
+      client.close(force: true);
+    }
+    _clients.clear();
+  }
+}

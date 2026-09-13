@@ -13,15 +13,23 @@ class FeedResponse {
     this.notModified = false,
     this.etag,
     this.lastModified,
+    this.providerState,
+    this.warning,
   });
   final LiveSnapshot? snapshot;
   final bool notModified;
   final String? etag, lastModified;
+  final Map<String, dynamic>? providerState;
+  final String? warning;
 }
 
 abstract interface class FeedProvider {
   Future<FeedResponse> fetch({String? etag, String? lastModified});
   void cancel();
+}
+
+abstract interface class ResumableFeedProvider {
+  void restore({LiveSnapshot? snapshot, Map<String, dynamic>? state});
 }
 
 class SnapshotFeedProvider implements FeedProvider {

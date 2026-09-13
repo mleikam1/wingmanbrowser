@@ -10,6 +10,7 @@ import 'package:wingman_browser/policy/policy_runtime.dart';
 import 'package:wingman_browser/signature/signature_services.dart';
 import 'package:wingman_browser/signature/launchpad/launchpad.dart';
 import 'package:wingman_browser/presentation/home/home_screen.dart';
+import 'package:wingman_browser/presentation/live_content/live_content_feed_screen.dart';
 import 'package:wingman_browser/presentation/library/library_screen.dart';
 import '../signature/integrated_workspaces_test.dart' as shared;
 import '../support/protected_test_support.dart';
@@ -135,6 +136,10 @@ void main() {
         final save = find.byKey(const ValueKey('live-save-test-only-article'));
         await shared.tap(tester, save);
         expect(controller.isSaved('test-only-article'), isTrue);
+        // The compact preview opens from its title above the Save action.
+        // Measure the outgoing position after bringing that title into view.
+        await tester.ensureVisible(open);
+        await tester.pumpAndSettle();
         final scroll = tester
             .widget<HomeScreen>(find.byType(HomeScreen))
             .controller!;
@@ -151,6 +156,16 @@ void main() {
           tester.widget<HomeScreen>(find.byType(HomeScreen)).controller!.offset,
           closeTo(offset, 1),
         );
+        await shared.tap(
+          tester,
+          find.byKey(const ValueKey('live-feed-view-all')),
+        );
+        expect(find.byType(LiveContentFeedScreen), findsOneWidget);
+        expect(find.byType(HomeScreen, skipOffstage: false), findsNothing);
+        expect(find.text(headline), findsOneWidget);
+        await shared.tap(tester, find.byTooltip('Back'));
+        expect(find.byType(LiveContentFeedScreen), findsNothing);
+        expect(find.byType(HomeScreen), findsOneWidget);
         await shared.tap(
           tester,
           find.byKey(const ValueKey('live-feed-reading-list')),
@@ -211,7 +226,7 @@ void main() {
         expect(controller.context, LiveContentContext.private);
         expect(controller.items, isEmpty);
         expect(controller.savedItems, isEmpty);
-        expect(find.text('From your sources'), findsNothing);
+        expect(find.text('Publisher updates'), findsNothing);
         await controller.refresh();
         expect(provider.calls, 1);
         expect(tester.takeException(), isNull);

@@ -7,7 +7,9 @@ from urllib.parse import urlsplit
 SCOPES = {"technology-reporting", "science-reporting", "public-information",
           "sports-reporting", "general-reporting", "lifestyle-education"}
 REGISTRY_KEYS = ("id", "name", "homepageUrl", "language", "topics", "allowedArticleHosts",
-                 "articlePathPrefixes", "eligibilityScope", "rights", "enabled", "verifiedAt")
+                 "articlePathPrefixes", "eligibilityScope", "rights", "enabled", "verifiedAt",
+                 "feedUrl", "feedRedirectHosts", "minRefreshSeconds", "retentionSeconds",
+                 "articleUrlFormat", "requiredTopicTerms", "requiresAttribution")
 
 
 def load_config(path):
@@ -43,6 +45,14 @@ def load_config(path):
             raise ValueError("Invalid cache retention")
         if not isinstance(source["enabled"], bool) or not source.get("articlePathPrefixes"):
             raise ValueError("Missing explicit article scope")
+        if source.get("articleUrlFormat", "path-prefix") not in ("path-prefix", "dated-story"):
+            raise ValueError("Invalid article URL format")
+        terms = source.get("requiredTopicTerms", [])
+        if not isinstance(terms, list) or len(terms) > 30 or any(
+                not isinstance(term, str) or not term.strip() or len(term) > 80 for term in terms):
+            raise ValueError("Invalid topic scope terms")
+        if not isinstance(source.get("requiresAttribution", False), bool):
+            raise ValueError("Invalid author attribution requirement")
         if any(not isinstance(prefix, str) or not prefix.startswith("/") or
                any(part in (".", "..") for part in prefix.split("/")) or "\\" in prefix
                for prefix in source["articlePathPrefixes"]):

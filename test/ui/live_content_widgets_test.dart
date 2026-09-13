@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wingman_browser/live_content/live_content.dart';
 import 'package:wingman_browser/presentation/live_content/live_content_preferences_screen.dart';
+import 'package:wingman_browser/presentation/live_content/live_content_feed_screen.dart';
 import 'package:wingman_browser/presentation/live_content/live_content_section.dart';
 import 'package:wingman_browser/presentation/live_content/live_reading_list.dart';
 import 'package:wingman_browser/presentation/theme.dart';
@@ -67,6 +68,7 @@ Future<LiveContentController> _controller({
   bool configured = true,
   int pageSize = 2,
   bool revoked = false,
+  int itemCount = 3,
 }) async {
   final controller = LiveContentController(
     store: store ?? MemorySignatureDocumentStore(),
@@ -89,7 +91,7 @@ Future<LiveContentController> _controller({
               generatedAt: _now,
               expiresAt: _now.add(const Duration(hours: 1)),
               sources: [_source],
-              items: [for (var i = 1; i <= 3; i++) _item(i)],
+              items: [for (var i = 1; i <= itemCount; i++) _item(i)],
               revokedSourceIds: revoked ? {_source.id} : {},
             ),
           )
@@ -102,19 +104,21 @@ Future<LiveContentController> _controller({
   return controller;
 }
 
-Widget _app(Widget child, {bool scroll = true, double textScale = 1}) =>
-    MaterialApp(
-      theme: WingmanTheme.make(Brightness.light),
-      builder: (context, child) => MediaQuery(
-        data: MediaQuery.of(
-          context,
-        ).copyWith(textScaler: TextScaler.linear(textScale)),
-        child: child!,
-      ),
-      home: Scaffold(
-        body: scroll ? SingleChildScrollView(child: child) : child,
-      ),
-    );
+Widget _app(
+  Widget child, {
+  bool scroll = true,
+  double textScale = 1,
+  Brightness brightness = Brightness.light,
+}) => MaterialApp(
+  theme: WingmanTheme.make(brightness),
+  builder: (context, child) => MediaQuery(
+    data: MediaQuery.of(
+      context,
+    ).copyWith(textScaler: TextScaler.linear(textScale)),
+    child: child!,
+  ),
+  home: Scaffold(body: scroll ? SingleChildScrollView(child: child) : child),
+);
 Widget _section(
   LiveContentController controller, {
   ValueChanged<LiveContentItem>? onOpen,
@@ -136,6 +140,146 @@ Future<void> _tap(WidgetTester tester, Finder finder) async {
 Finder _key(String key) => find.byKey(ValueKey(key));
 
 void main() {
+  for (final brightness in Brightness.values) {
+    testWidgets('full feed reflows at 200% text in ${brightness.name}', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(320, 720);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final controller = await _controller();
+      addTearDown(controller.dispose);
+      await tester.pumpWidget(
+        _app(
+          LiveContentFeedScreen(
+            controller: controller,
+            onOpen: (_) {},
+            onPin: (_) {},
+            onPreferences: () {},
+            onReadingList: () {},
+            canContinue: () => true,
+          ),
+          scroll: false,
+          textScale: 2,
+          brightness: brightness,
+        ),
+      );
+      await tester.pumpAndSettle();
+      await _tap(tester, _key('live-topic-environment'));
+      expect(controller.preferences.selectedTopics, {'environment'});
+      await _tap(tester, _key('live-save-fixture-2'));
+      expect(controller.isSaved('fixture-2'), isTrue);
+      expect(
+        tester.getSize(_key('live-save-fixture-2')).height,
+        greaterThanOrEqualTo(48),
+      );
+      expect(tester.getTopLeft(_key('live-topic-scroll')).dy, lessThan(220));
+      expect(tester.takeException(), isNull);
+    });
+  }
+  testWidgets(
+    'Home preview stays finite and full feed uses fixed single-topic choices',
+    (tester) async {
+      final controller = await _controller(pageSize: 5, itemCount: 7);
+      addTearDown(controller.dispose);
+      var viewAll = 0;
+      await tester.pumpWidget(
+        _app(
+          LiveContentSection(
+            controller: controller,
+            preview: true,
+            onViewAll: () => viewAll++,
+            onOpen: (_) {},
+            onPin: (_) {},
+            onPreferences: () {},
+            onReadingList: () {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Fixture article 3'), findsOneWidget);
+      expect(find.text('Fixture article 4'), findsNothing);
+      expect(_key('live-feed-load-more'), findsNothing);
+      expect(find.byType(Image), findsNothing);
+      await _tap(tester, _key('live-feed-view-all'));
+      expect(viewAll, 1);
+      await tester.pumpWidget(
+        _app(
+          LiveContentFeedScreen(
+            controller: controller,
+            onOpen: (_) {},
+            onPin: (_) {},
+            onPreferences: () {},
+            onReadingList: () {},
+            canContinue: () => true,
+          ),
+          scroll: false,
+        ),
+      );
+      await tester.pumpAndSettle();
+      for (final topic in liveContentTopicOrder) {
+        expect(_key('live-topic-$topic'), findsOneWidget);
+      }
+      final headerY = tester.getTopLeft(_key('live-topic-scroll')).dy;
+      await _tap(tester, _key('live-topic-environment'));
+      expect(controller.preferences.selectedTopics, {'environment'});
+      expect(find.text('Fixture article 2'), findsOneWidget);
+      expect(find.text('Fixture article 1'), findsNothing);
+      await _tap(tester, _key('live-topic-science'));
+      expect(controller.preferences.selectedTopics, {'science'});
+      expect(find.text('Fixture article 2'), findsNothing);
+      await _tap(tester, _key('live-topic-fashion'));
+      expect(controller.preferences.selectedTopics, {'fashion'});
+      expect(find.text('No updates match your choices'), findsOneWidget);
+      await _tap(tester, _key('live-topic-headlines'));
+      expect(controller.preferences.selectedTopics, isEmpty);
+      await _tap(tester, _key('live-feed-load-more'));
+      expect(find.text('Fixture article 7'), findsOneWidget);
+      expect(tester.getTopLeft(_key('live-topic-scroll')).dy, headerY);
+      expect(_key('live-feed-load-more'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'title and approved credit links use callbacks and reject stale context',
+    (tester) async {
+      final controller = await _controller();
+      addTearDown(controller.dispose);
+      var current = true;
+      final opened = <String>[];
+      final licenses = <Uri>[];
+      await tester.pumpWidget(
+        _app(
+          LiveContentSection(
+            controller: controller,
+            onOpen: (item) => opened.add(item.id),
+            onPin: (_) {},
+            onPreferences: () {},
+            onReadingList: () {},
+            canContinue: () => current,
+            onOpenUri: licenses.add,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await _tap(tester, _key('live-title-fixture-1'));
+      expect(opened, ['fixture-1']);
+      await _tap(tester, find.text('Source rights').first);
+      expect(licenses, [_rights.licenseUrl]);
+      final stale = tester
+          .widget<TextButton>(_key('live-title-fixture-1'))
+          .onPressed!;
+      current = false;
+      stale();
+      expect(opened, ['fixture-1']);
+      controller.setContext(LiveContentContext.private);
+      await tester.pumpAndSettle();
+      expect(find.text('Fixture article 1'), findsNothing);
+    },
+  );
+
   testWidgets(
     'finite cards show publisher dates, excerpts and local image credits',
     (tester) async {
@@ -150,8 +294,8 @@ void main() {
       expect(find.textContaining('Published 11 Sep 2026'), findsOneWidget);
       expect(find.text('Publisher excerpt'), findsNWidgets(2));
       expect(find.text('Fixture author 1'), findsOneWidget);
-      expect(find.textContaining('Category image ·'), findsNWidgets(2));
-      expect(find.textContaining('Snapshot from'), findsOneWidget);
+      expect(find.textContaining('Category image ·'), findsOneWidget);
+      expect(find.textContaining('Last checked'), findsOneWidget);
       for (final image in tester.widgetList<Image>(find.byType(Image))) {
         final provider = image.image;
         expect(
@@ -225,7 +369,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.text('Sports'), findsNothing);
+      expect(find.text('Sports'), findsOneWidget);
       expect(find.text('Science'), findsOneWidget);
       final region = tester.widget<DropdownButtonFormField<String>>(
         _key('live-region-region-a'),

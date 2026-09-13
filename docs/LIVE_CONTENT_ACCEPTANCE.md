@@ -1,4 +1,9 @@
-# Live content acceptance
+# Historical live content acceptance — 0.11
+
+The September 13 native direct-feed implementation and its current coverage are
+recorded in [Content discovery acceptance](CONTENT_DISCOVERY_ACCEPTANCE.md).
+The endpoint-only setup and three-publisher coverage below describe the earlier
+0.11 milestone; they do not describe ordinary 0.13 native builds.
 
 Wingman 0.11.0+11 extends the consumer-browser recovery at commit
 `a1b4fd683d5bf7f0a58f80463cc8cd83b3f8365a`. This is a local implementation and

@@ -92,7 +92,9 @@ class _LiveContentPreferencesScreenState
     builder: (context, _) {
       final controller = widget.controller,
           preferences = controller.preferences;
-      final topics = controller.availableTopics.toList()..sort();
+      final topics = liveContentTopicOrder.where(
+        (topic) => topic != 'headlines',
+      );
       final sources = controller.sources;
       final languages = controller.availableLanguages.toList()..sort();
       final regions = controller.availableRegions.toList()..sort();
@@ -107,7 +109,7 @@ class _LiveContentPreferencesScreenState
             ),
             const SizedBox(height: 12),
             const Text(
-              'Wingman fetches a common publisher snapshot. It does not send your selected topics, sources or browsing history to publishers. The feed service can see ordinary connection metadata.',
+              'Wingman downloads public feeds directly from publishers. Publishers can see your IP address and ordinary connection information. Your browsing history and chosen topics stay on this device. Feed updates stop in private browsing and when the feed is off.',
             ),
             SwitchListTile(
               key: const ValueKey('live-preferences-enabled'),
@@ -129,25 +131,24 @@ class _LiveContentPreferencesScreenState
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  FilterChip(
+                  ChoiceChip(
                     key: const ValueKey('live-preferences-all-topics'),
-                    label: const Text('All topics'),
+                    label: const Text('Headlines'),
                     selected: preferences.selectedTopics.isEmpty,
                     onSelected: canChange
                         ? (_) => _change(() => controller.selectTopics({}))
                         : null,
                   ),
                   for (final topic in topics)
-                    FilterChip(
+                    ChoiceChip(
                       key: ValueKey('live-preferences-topic-$topic'),
                       label: Text(liveContentTopicLabel(topic)),
-                      selected: preferences.selectedTopics.contains(topic),
+                      selected:
+                          preferences.selectedTopics.length == 1 &&
+                          preferences.selectedTopics.contains(topic),
                       onSelected: canChange
-                          ? (selected) {
-                              final next = {...preferences.selectedTopics};
-                              selected ? next.add(topic) : next.remove(topic);
-                              _change(() => controller.selectTopics(next));
-                            }
+                          ? (_) =>
+                                _change(() => controller.selectTopics({topic}))
                           : null,
                     ),
                 ],

@@ -11,7 +11,7 @@ from .store import encode
 MAX_SHARED_ITEMS = 300
 MAX_SNAPSHOT_BYTES = 512 * 1024
 MAX_FAILURES = 12
-NORMALIZATION_VERSION = 4
+NORMALIZATION_VERSION = 5
 MAX_REVOCATIONS = 5000  # Matches the client envelope limit.
 
 

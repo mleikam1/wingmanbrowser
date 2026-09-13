@@ -2,7 +2,24 @@
 
 Pricing checked September 11, 2026. USD figures below exclude tax and are estimates, not an invoice or a spending authorization. No paid provider was purchased and no production infrastructure was created or deployed.
 
-## Current state
+## Current 0.13 native operation — September 13, 2026
+
+The native app now reads 12 reviewed free feeds from Global Voices, NASA, NOAA
+and USGS directly. No API subscription, new cloud infrastructure, billing change
+or shared-service deployment was added. Global Voices attribution and CC BY 3.0
+conditions are documented in [Source rights](CONTENT_SOURCES_AND_RIGHTS.md).
+Each device has a minimum 30-minute per-source interval and publisher backoff;
+there is no background refresh scheduler. Manual refresh checks persisted due
+state. Publisher bandwidth and device data still have costs; free reuse is not
+unlimited service capacity or a guarantee that every linked page stays free.
+
+The earlier shared-service estimates and commercial alternatives below are
+historical planning evidence for a different deployment shape, not a cost or
+licensing requirement for the current native implementation. Their numeric prices
+have not been refreshed in this milestone. The web companion would still need a
+reviewed CORS-enabled common snapshot endpoint. No production endpoint exists.
+
+## Historical 0.11 state
 
 The selected NASA, NOAA and USGS publisher feeds require no API subscription fee for the scoped attributed public-domain text use documented in [source rights](CONTENT_SOURCES_AND_RIGHTS.md). Local development uses the existing computer. This means no new metered cloud service was provisioned; it does not mean the user's existing cloud account has a zero balance.
 
@@ -60,4 +77,4 @@ A quote must name the content fields, app/web distribution channels, territory/l
 
 For comparison, **NewsAPI.org Business currently lists $449/month billed monthly**, 250,000 requests/month and $0.0018 per excess request. Its pricing page offers a developer tier only for development/testing and no full-article content. More importantly, its terms leave third-party intellectual-property rights with their owners and prohibit using the service to republish copyrighted material without an applicable right. That subscription is **not sufficient evidence of Wingman's publisher redistribution rights** and is not selected. [Pricing](https://newsapi.org/pricing), [terms](https://newsapi.org/terms).
 
-Approval still needed: a concrete publisher agreement and numeric quote for broad coverage, plus a dedicated production infrastructure plan with measured traffic assumptions. Authorized public-source development and acceptance can proceed independently. General news and sports remain coverage gaps until a licensed, tested provider is actually enabled.
+Approval still needed: a concrete publisher agreement and numeric quote for broad coverage, plus a dedicated production infrastructure plan with measured traffic assumptions. Authorized public-source development and acceptance can proceed independently. Global Voices now provides tested general-news and sports coverage in the native app; the commercial options above remain unselected alternatives for broader or more frequent coverage.

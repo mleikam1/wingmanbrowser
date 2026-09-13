@@ -27,12 +27,14 @@ class LiveContentController extends ChangeNotifier {
   LiveContentContext _context = LiveContentContext.inactive;
   LiveContentPreferences _preferences = const LiveContentPreferences();
   LiveSnapshot? _snapshot;
+  Map<String, dynamic>? _providerState;
   List<LiveSavedItem> _saved = [];
   final Set<String> _revokedItems = {}, _revokedSources = {};
   String? _etag, _lastModified, _error, _storageError;
   DateTime? _nextRefreshAt;
   bool _initialized = false, _refreshing = false, _disposed = false;
   bool _preferencesReadable = true, _savedReadable = true;
+  bool _providerStateReadable = true;
   int _epoch = 0, _limit;
   Future<void>? _initializing;
   Future<void> _writes = Future.value();
@@ -289,6 +291,19 @@ class LiveContentController extends ChangeNotifier {
           _error = 'Cached headlines could not be read. Refresh to try again.';
         }
       }
+      if (provider is ResumableFeedProvider) {
+        try {
+          final value = await read('liveContentRefreshState');
+          final state = value == null ? null : _checkedProviderState(value);
+          if (_valid(epoch)) _providerState = state;
+        } catch (_) {
+          if (_valid(epoch)) {
+            _providerStateReadable = false;
+            _storageError =
+                'Publisher refresh settings could not be read. Saved articles remain available.';
+          }
+        }
+      }
     } finally {
       if (_valid(epoch)) {
         _initialized = true;
@@ -319,7 +334,8 @@ class LiveContentController extends ChangeNotifier {
         !_preferences.enabled ||
         _refreshing ||
         !_savedReadable ||
-        !_preferencesReadable) {
+        !_preferencesReadable ||
+        !_providerStateReadable) {
       return;
     }
     if (_nextRefreshAt != null && _now.isBefore(_nextRefreshAt!)) return;
@@ -327,6 +343,13 @@ class LiveContentController extends ChangeNotifier {
     _refreshing = true;
     _notify();
     try {
+      final resumable = provider;
+      if (resumable is ResumableFeedProvider) {
+        (resumable as ResumableFeedProvider).restore(
+          snapshot: _snapshot,
+          state: _providerState,
+        );
+      }
       final response = await provider!.fetch(
         etag: _snapshot == null ? null : _etag,
         lastModified: _snapshot == null ? null : _lastModified,
@@ -400,13 +423,26 @@ class LiveContentController extends ChangeNotifier {
         _revokedItems.addAll(revokedItems);
         _revokedSources.addAll(revokedSources);
         _saved = saved;
+        if (response.providerState != null) {
+          final state = _checkedProviderState(response.providerState!);
+          // Refresh pacing is independent of article-cache deletion. Only the
+          // owner epoch can commit a provider's candidate checkpoint.
+          _providerState = state;
+          try {
+            await store.writeDocument('liveContentRefreshState', state);
+          } catch (_) {
+            _providerStateReadable = false;
+            rethrow;
+          }
+          if (!_valid(epoch)) return;
+        }
         await store.writeDocument('liveContentSaved', _savedDocument(saved));
         if (!_valid(epoch)) return;
         _snapshot = _boundedSnapshot(snapshot);
         _etag = response.etag;
         _lastModified = response.lastModified;
         _limit = pageSize.clamp(1, 30);
-        _error = null;
+        _error = response.warning;
         await store.writeDocument('liveContentCache', _cacheDocument());
       });
       if (_valid(epoch)) _nextRefreshAt = _now.add(const Duration(minutes: 1));
@@ -427,6 +463,14 @@ class LiveContentController extends ChangeNotifier {
         _notify();
       }
     }
+  }
+
+  Map<String, dynamic> _checkedProviderState(Map<String, dynamic> value) {
+    if (value['schemaVersion'] != 1 ||
+        utf8.encode(jsonEncode(value)).length > 450 * 1024) {
+      throw const FormatException('Invalid publisher refresh settings.');
+    }
+    return feedMap(jsonDecode(jsonEncode(value)));
   }
 
   LiveSnapshot _boundedSnapshot(LiveSnapshot snapshot) {

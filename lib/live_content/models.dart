@@ -152,6 +152,14 @@ class ApprovedLiveSource {
     required this.articlePathPrefixes,
     required this.eligibilityScope,
     required this.enabled,
+    this.feedUri,
+    this.feedRedirectHosts = const {},
+    this.minRefreshSeconds = 1800,
+    this.retentionSeconds = 604800,
+    this.verifiedAt,
+    this.articleUrlFormat = 'path-prefix',
+    this.requiredTopicTerms = const {},
+    this.requiresAttribution = false,
   });
   factory ApprovedLiveSource.fromJson(Map<String, dynamic> json) {
     final hosts = feedIds(json['allowedArticleHosts'], max: 20);
@@ -177,18 +185,66 @@ class ApprovedLiveSource {
         )) {
       throw const FormatException('Invalid approved source paths.');
     }
+    final feed = json['feedUrl'] == null
+        ? null
+        : feedArticleUri(json['feedUrl']);
+    final redirects = feedIds(json['feedRedirectHosts'] ?? [], max: 10);
+    if (feed != null &&
+            ((json['feedUrl'] as String).contains('#') ||
+                !redirects.contains(feed.host)) ||
+        redirects.any(
+          (h) => !RegExp(r'^[a-z0-9-]+(?:\.[a-z0-9-]+)+$').hasMatch(h),
+        )) {
+      throw const FormatException('Invalid pinned feed origin.');
+    }
+    int bound(String key, int fallback, int low, int high) {
+      final value = json[key] ?? fallback;
+      if (value is! int || value < low || value > high) {
+        throw const FormatException('Invalid feed schedule.');
+      }
+      return value;
+    }
+
+    final format = json['articleUrlFormat'] ?? 'path-prefix';
+    if (format != 'path-prefix' && format != 'dated-story') {
+      throw const FormatException('Invalid article format.');
+    }
+    final terms = json['requiredTopicTerms'] ?? [];
+    if (terms is! List || terms.length > 30) {
+      throw const FormatException('Invalid topic terms.');
+    }
+    final topicTerms = terms
+        .map((v) => feedText(v, max: 80).toLowerCase())
+        .toSet();
     return ApprovedLiveSource(
       source: LiveSource.fromJson(json),
       allowedArticleHosts: hosts,
       articlePathPrefixes: Set.unmodifiable(paths.cast<String>()),
       eligibilityScope: feedId(json['eligibilityScope']),
       enabled: json['enabled'] == true,
+      requiredTopicTerms: Set.unmodifiable(topicTerms),
+      requiresAttribution: json['requiresAttribution'] == true,
+      articleUrlFormat: format as String,
+      feedUri: feed,
+      feedRedirectHosts: redirects,
+      minRefreshSeconds: bound('minRefreshSeconds', 1800, 1800, 31622400),
+      retentionSeconds: bound('retentionSeconds', 604800, 3600, 2592000),
+      verifiedAt: json['verifiedAt'] == null
+          ? null
+          : feedDate(json['verifiedAt']),
     );
   }
   final LiveSource source;
   final Set<String> allowedArticleHosts, articlePathPrefixes;
   final String eligibilityScope;
   final bool enabled;
+  final Uri? feedUri;
+  final Set<String> feedRedirectHosts;
+  final int minRefreshSeconds, retentionSeconds;
+  final DateTime? verifiedAt;
+  final String articleUrlFormat;
+  final Set<String> requiredTopicTerms;
+  final bool requiresAttribution;
 }
 
 class LiveSourceRegistry {

@@ -2,12 +2,57 @@
 
 ## Implemented boundary
 
-The backend ingests the reviewed NASA technology, NOAA news and USGS news feeds.
-It publishes one common English snapshot covering science, technology and
-environment. It does not claim current sports, health, general-news or broad
-lifestyle coverage. Topic selection, saved items, dismissed items, hidden sources,
-ranking and finite pagination happen on the device. No browsing history, search
-query, selected topic, save or dismissal is sent to the backend or a publisher.
+Version 0.13.0+14 connects ordinary native consumer builds directly to 12 reviewed
+public feeds: NASA, NOAA, USGS and nine Global Voices sections. Home presents a
+three-story preview; Updates has fixed topic controls, one featured story, compact
+following rows and explicit Load more. Coverage includes headlines, sports,
+entertainment, technology, business, fashion, science, food, health and environment.
+Sections have different publication frequencies; sparse coverage stays honest.
+
+Topic selection, saved items, dismissed items, hidden sources, ranking and finite
+pagination happen on the device. Every device requests the same configured feeds,
+independent of interests. No browsing history, search query, selected topic, save
+or dismissal is sent. Publishers can see the device IP and ordinary connection
+metadata. Feed networking and content exposure stop in private/handoff contexts
+or when Updates is off. Article taps use the unchanged consumer destination policy.
+
+`RssFeedProvider` is the default on native platforms. A build explicitly configured
+with `WINGMAN_FEED_URL` continues to use `SnapshotFeedProvider`. The web companion
+requires that common HTTPS service because publishers do not offer suitable CORS.
+There is no deployed Wingman content backend, paid key, arbitrary feed import,
+remote image service or background scheduler. GeckoView is a rendering engine;
+it does not supply editorial content. The browser engine was not changed.
+
+### Native feed path
+
+`rss_transport_native.dart` performs bounded HTTPS requests against the fixed
+registry: public DNS only, numeric connection with original-host TLS verification,
+no proxy environment, no cookies/referrer, three maximum redirects with validation,
+four-second DNS timeout, eight-second connection bound and 25-second source deadline.
+DNS futures retain a concurrency slot until they actually finish. Identity encoding
+is requested; compressed responses are rejected. Bodies are capped at 1 MiB before
+parsing. Three fetch lanes share a 45-second batch deadline; there are no immediate
+retries. Failed sections retain only eligible unexpired cached rows.
+
+`rss_parser.dart` accepts bounded RSS/Atom XML without DTD/entity processing and
+converts only supplied title, description and author metadata to plain text. Rights,
+scope, dates and current destination policy all apply before display. Fashion uses
+one fixed publisher search and requires a specific clothing/design term in metadata;
+an incidental word such as “fashion” cannot establish membership. Topic mismatch
+omits only that section; actual rights/safety withdrawal still revokes the article.
+Specialized sections precede the general feed during canonical-URL deduplication.
+The Headlines tab displays all topics, without inventing personalized ranking.
+
+Each source retains validators, last success, failures and next refresh. A minimum
+30-minute interval, publisher cache directives and Retry-After/backoff survive
+relaunch and cache deletion in `liveContentRefreshState`. The controller alone
+persists the provider's candidate state, guarded by its owner-session generation.
+An unreadable/unwritable checkpoint blocks further requests instead of silently
+resetting publisher pacing. No provider writes directly to storage. Cache, saved
+links and preferences retain their independent bounded local documents.
+
+The following shared-service path remains available for an explicitly configured
+backend/web deployment and has not been deployed by this change:
 
 ```text
 Reviewed source configuration + mandatory destination policy
@@ -32,10 +77,9 @@ boundary. `RssAtomProvider` is the first implementation. Future licensed provide
 must produce the same normalized records and carry independently reviewed rights
 and eligibility; their native response schemas do not reach Home.
 
-The code is local and deployable. **No production feed endpoint or paid cloud
-infrastructure was deployed.** The normal app without an explicitly configured
-feed service keeps an honest unavailable/cached state. The developer localhost
-endpoint is an integration environment, not a production live-service claim.
+The backend code is local and deployable. **No production feed endpoint or paid
+cloud infrastructure was deployed.** Normal native builds work through direct
+RSS without that service. Localhost remains only an optional integration endpoint.
 
 ## Configuration and rights
 
@@ -48,7 +92,8 @@ the reviewed guidance. See `CONTENT_SOURCES_AND_RIGHTS.md` for the source-specif
 evidence and restrictions.
 
 The generated `assets/live_content/sources.json` pins the same approved source
-identity, article hosts and paths, topics, language, rights and scope in the app.
+identity, feed/redirect hosts, pacing, article hosts and paths, topics, language,
+rights and scope in the app.
 A server response cannot grant itself an additional publisher, image right or
 scope. Regenerate it after an approved configuration change:
 
@@ -72,7 +117,9 @@ art is independent of the publisher. No generated text is presented as news.
 
 ## Transport and parser protections
 
-Only ingestion code can select a configured source. Neither the CLI nor GET
+The details in this subsection describe the optional Python ingestion transport;
+native transport differences are documented above. Only ingestion code can select
+a configured source. Neither the CLI nor GET
 service accepts an arbitrary feed URL or article URL. A source fetch:
 
 - Allows HTTPS on port 443, no credentials, fragments, control characters or
@@ -126,8 +173,8 @@ is honored without shortening a publisher's requested wait; values beyond a year
 pause that source for operator review instead of fetching early. Failures back
 off exponentially from 30 minutes to
 six hours, with a bounded failure counter. There are no immediate retries and
-Cloud Run/Scheduler templates also disable platform retries. Client pull-to-refresh
-only reads the current snapshot. It never causes publisher requests.
+Cloud Run/Scheduler templates also disable platform retries. Client pull-to-refresh in shared-service mode only reads the current snapshot.
+Native direct mode checks each publisher’s persisted due time before requesting.
 Successful 304 responses retain an earlier Cache-Control interval when the header
 is omitted. An explicit `private` or `no-store` response prevents shared caching
 and revokes previously stored source text rather than serving it through fallback.
@@ -202,7 +249,8 @@ PYTHONPATH=backend python -m wingman_content serve --store work/live-content/sto
 
 Local integration uses the shared endpoint
 `http://127.0.0.1:8891/v1/snapshot.json`. Native developer builds can opt into this
-loopback endpoint; a normal release requires a reviewed HTTPS service endpoint.
+loopback endpoint. A shared-service release requires a reviewed HTTPS endpoint;
+normal native direct-RSS releases need no define or service account.
 Local operation does not require a cloud account. Do not alter persisted next
 refresh times merely to demonstrate an additional network request.
 
@@ -216,7 +264,9 @@ CORS/common read-only service behavior. Actual ingestion runs and app acceptance
 are recorded in `LIVE_CONTENT_ACCEPTANCE.md`; synthetic unit fixtures are never
 presented as live source data.
 
-The final local backend suite passed 63 deterministic tests. Three actual CLI
+### Historical September 12 backend acceptance
+
+The earlier local backend suite passed 63 deterministic tests. Three actual CLI
 passes were recorded: 00:40:31 UTC initial network ingestion (43 items), 00:47:20
 UTC scheduling pass (all sources not due; no publisher requests), and 01:10:50
 UTC final snapshot after the next permitted network ingestion (48 items, 52,486

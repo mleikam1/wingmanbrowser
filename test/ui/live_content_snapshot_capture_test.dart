@@ -18,6 +18,14 @@ import '../signature/integrated_workspaces_test.dart' as shared;
 // app assets. RepaintBoundary images prove Flutter UI rendering, not a native
 // engine journey. Default host suites skip the entire test and its font setup.
 const _captureEnabled = bool.fromEnvironment('WINGMAN_LIVE_CONTENT_CAPTURES');
+const _snapshotPath = String.fromEnvironment(
+  'WINGMAN_LIVE_CONTENT_SNAPSHOT',
+  defaultValue: 'work/content-discovery/live-snapshot.json',
+);
+const _outputDirectory = String.fromEnvironment(
+  'WINGMAN_LIVE_CONTENT_CAPTURE_OUTPUT',
+  defaultValue: 'work/content-discovery/ui',
+);
 
 class _RecordedPublisherSnapshot implements FeedProvider {
   _RecordedPublisherSnapshot(this.snapshot);
@@ -46,10 +54,10 @@ void main() {
   });
 
   testWidgets(
-    'Flutter render captures actual backend publisher data in Home and reading list',
+    'Flutter render captures actual publisher data in Home and reading list',
     (tester) async {
       final snapshot = (await tester.runAsync(() async {
-        final file = File('work/live-content/store/current.json');
+        final file = File(_snapshotPath);
         expect(
           file.existsSync(),
           isTrue,
@@ -57,7 +65,7 @@ void main() {
               'Run authorized publisher ingestion before this opt-in capture.',
         );
         final bundle = jsonDecode(await file.readAsString()) as Map;
-        return LiveSnapshot.fromJson(feedMap(bundle['snapshot']));
+        return LiveSnapshot.fromJson(feedMap(bundle['snapshot'] ?? bundle));
       }))!;
       final registry = (await tester.runAsync(LiveSourceRegistry.loadBundled))!;
       expect(snapshot.sources.length, greaterThanOrEqualTo(3));
@@ -122,7 +130,7 @@ void main() {
                       vertical: 8,
                     ),
                     child: const Text(
-                      'Flutter render · real backend publisher data\n'
+                      'Flutter render · real publisher data\n'
                       'UI evidence only — no native browser engine journey',
                       style: TextStyle(
                         fontFamily: 'Roboto',
@@ -171,7 +179,7 @@ void main() {
                 format: ui.ImageByteFormat.png,
               );
               final file = File(
-                'docs/ui/screenshots/live-content-$name-flutter-realdata.png',
+                '$_outputDirectory/live-content-$name-flutter-realdata.png',
               );
               await file.parent.create(recursive: true);
               await file.writeAsBytes(bytes!.buffer.asUint8List());
@@ -183,34 +191,51 @@ void main() {
 
         expect(find.byType(HomeScreen), findsOneWidget);
         await capture('home-overview');
+        await tester.ensureVisible(
+          find.byKey(const ValueKey('live-feed-view-all')),
+        );
+        await tester.pumpAndSettle();
+        await capture('home-preview');
+        await shared.tap(
+          tester,
+          find.byKey(const ValueKey('live-feed-view-all')),
+        );
+        await capture('feed-headlines');
         await shared.tap(
           tester,
           find.byKey(const ValueKey('live-topic-technology')),
         );
         expect(controller.preferences.selectedTopics, {'technology'});
-        final actualNasa = controller.items.firstWhere(
-          (item) =>
-              item.sourceId == nasa.sourceId &&
-              item.topics.contains('technology'),
+        final actualArticle = controller.items.firstWhere(
+          (item) => item.topics.contains('technology'),
         );
-        final nasaCard = find.byKey(ValueKey('live-card-${actualNasa.id}'));
-        await tester.ensureVisible(nasaCard);
+        final articleCard = find.byKey(
+          ValueKey('live-card-${actualArticle.id}'),
+        );
+        await tester.ensureVisible(articleCard);
         await tester.pumpAndSettle();
-        expect(find.text(actualNasa.title), findsOneWidget);
-        expect(find.text('Publisher excerpt'), findsWidgets);
-        await capture('home-nasa-technology');
+        expect(find.text(actualArticle.title), findsOneWidget);
+        expect(find.textContaining('Publisher excerpt'), findsWidgets);
+        await capture('feed-technology');
+        await h.state.saveSettingsPatch(themeMode: ThemeMode.dark);
+        await tester.pumpAndSettle();
+        await capture('feed-technology-dark');
+        await h.state.saveSettingsPatch(themeMode: ThemeMode.light);
+        await tester.pumpAndSettle();
 
         await shared.tap(
           tester,
-          find.byKey(ValueKey('live-save-${actualNasa.id}')),
+          find.byKey(ValueKey('live-save-${actualArticle.id}')),
         );
-        expect(controller.isSaved(actualNasa.id), isTrue);
+        expect(controller.isSaved(actualArticle.id), isTrue);
         await shared.tap(
           tester,
           find.byKey(const ValueKey('live-feed-reading-list')),
         );
         expect(find.byType(LibraryScreen), findsOneWidget);
-        final savedCard = find.byKey(ValueKey('live-saved-${actualNasa.id}'));
+        final savedCard = find.byKey(
+          ValueKey('live-saved-${actualArticle.id}'),
+        );
         if (savedCard.evaluate().isEmpty) {
           await tester.scrollUntilVisible(
             savedCard,
@@ -234,7 +259,7 @@ void main() {
             .position
             .jumpTo(0);
         await tester.pumpAndSettle();
-        expect(find.text(actualNasa.title), findsOneWidget);
+        expect(find.text(actualArticle.title), findsOneWidget);
         expect(
           tester.getTopLeft(find.text('Saved publisher articles')).dy,
           greaterThanOrEqualTo(100),
