@@ -2,5 +2,5 @@
 /// A test verifies this matches pubspec.yaml, which supplies native build metadata.
 abstract final class AppVersion {
   static const name = '0.12.0';
-  static const build = '12';
+  static const build = '13';
 }
