@@ -95,7 +95,13 @@ TestFlight upload. Direct simulator UI inspection was unavailable because the
 Mac was locked; the user was asked to unlock it. No native browser journey on
 this new build is claimed by the rendered screenshots. A signed iOS archive
 succeeded and passed deep/strict code-signature verification; archived metadata
-confirms com.wingmanbrowser.app, version 0.13.0, build 14 and the existing team.
+confirms com.wingmanbrowser.app, version 0.13.0, build 14 and the existing team. App Store
+export succeeded; the 30,081,916-byte IPA was inspected and contains all 12 source
+entries and the correct version/bundle metadata. The subsequent upload attempt
+stopped at `exportArchive Failed to Use Accounts` before upload success. **Build
+0.13.0 (14) is not confirmed uploaded or available in TestFlight.** Apple account
+UI repair and new native UI acceptance require the Mac to be unlocked. No external
+beta review was cancelled and no new review acceptance is claimed.
 
 New backend regressions cover Fashion
 classification without cross-source revocation, mandatory author attribution,
