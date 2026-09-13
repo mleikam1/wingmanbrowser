@@ -60,3 +60,15 @@ Related: [Content sources and rights](CONTENT_SOURCES_AND_RIGHTS.md), [Privacy a
 - All four image hashes in the APK and IPA match the reviewed source manifest. Image viewing does not depend on a publisher media request.
 
 Local logs, build/hash receipt and capture evidence are under `work/story-images/`. Build/export success does not itself establish TestFlight availability; upload and internal-group assignment must be confirmed separately in App Store Connect.
+
+## Internal TestFlight delivery
+
+Xcode Organizer uploaded **0.13.1 (15)** using **TestFlight Internal Only** on
+September 13, 2026. The earlier command-line upload returned `Failed to Use
+Accounts`; the signed-in graphical Organizer workflow succeeded. App Store
+Connect completed processing, accepted the existing standard-encryption/no-France
+answers for the user-confirmed U.S.-only beta, and saved the new testing notes.
+The build was assigned to **Wingman Device Testing** and its group row was
+verified as **Testing**, with one internal tester. Testers can update Wingman in
+TestFlight. This confirms availability; it does not claim the new build has
+already been installed or exercised on a physical device.
