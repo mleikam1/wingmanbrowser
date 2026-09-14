@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wingman_browser/live_content/live_content.dart';
@@ -133,6 +136,63 @@ Widget _app(
 );
 
 void main() {
+  testWidgets(
+    'publisher images evict decoded bytes on replacement and disposal',
+    (tester) async {
+      // Distinct response buffers intentionally contain the same valid pixel:
+      // MemoryImage cache keys follow byte-buffer identity, not file contents.
+      final firstBytes = base64Decode(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGMwKFjwHwAEVAJA4zks+QAAAABJRU5ErkJggg==',
+      );
+      final secondBytes = Uint8List.fromList(firstBytes);
+      final firstKey = MemoryImage(firstBytes);
+      final secondKey = MemoryImage(secondBytes);
+      final cache = PaintingBinding.instance.imageCache;
+      addTearDown(() {
+        cache.evict(firstKey);
+        cache.evict(secondKey);
+      });
+
+      Future<void> show(Uint8List bytes) async {
+        await tester.pumpWidget(
+          _app(
+            LivePublisherImage(
+              key: const ValueKey('same-story-image'),
+              bytes: bytes,
+            ),
+          ),
+        );
+        // Await an actual decode outside the widget test's fake clock. Merely
+        // observing an empty cache after teardown would not test withdrawal.
+        await tester.runAsync(
+          () => precacheImage(
+            MemoryImage(bytes),
+            tester.element(find.byType(LivePublisherImage)),
+          ),
+        );
+        await tester.pumpAndSettle();
+      }
+
+      await show(firstBytes);
+      expect(cache.statusForKey(firstKey).keepAlive, isTrue);
+      final originalState = tester.state(find.byType(LivePublisherImage));
+
+      await show(secondBytes);
+      expect(
+        identical(tester.state(find.byType(LivePublisherImage)), originalState),
+        isTrue,
+        reason: 'The replacement must exercise didUpdateWidget, not disposal.',
+      );
+      expect(cache.statusForKey(firstKey).tracked, isFalse);
+      expect(cache.statusForKey(secondKey).keepAlive, isTrue);
+
+      await tester.pumpWidget(_app(const SizedBox.shrink()));
+      await tester.pumpAndSettle();
+      expect(cache.statusForKey(secondKey).tracked, isFalse);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   test('all topics remain photo-free without an exact reviewed story', () {
     for (final topic in liveContentTopicOrder) {
       expect(StoryImages.forItem(_item(topic)), isNull, reason: topic);
@@ -163,15 +223,15 @@ void main() {
       expect(
         tester
             .widgetList<LiveStoryImage>(find.byType(LiveStoryImage))
-            .every((image) => image.height == 72),
-        isTrue,
+            .map((image) => image.height),
+        [192, 72],
       );
       await tester.pumpWidget(section(preview: false));
       await tester.pumpAndSettle();
       final rendered = tester
           .widgetList<LiveStoryImage>(find.byType(LiveStoryImage))
           .toList();
-      expect(rendered.first.height, 168);
+      expect(rendered.first.height, 192);
       expect(rendered.last.height, 72);
       final saved = controller.items.first;
       await controller.save(saved);

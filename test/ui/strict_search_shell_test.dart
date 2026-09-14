@@ -205,7 +205,7 @@ void main() {
     );
     expect(surface.url, policy.buildQuery('$marker moon phases'));
     expect(surface.isPrivate, isFalse);
-    expect(find.byKey(const ValueKey('strict-search-scope')), findsOneWidget);
+    expect(find.byKey(const ValueKey('strict-search-scope')), findsNothing);
     expect(h.session.current.website, surface.url);
     await expectNotStored(h, repository, marker);
     expect(tester.takeException(), isNull);

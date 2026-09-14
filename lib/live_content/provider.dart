@@ -15,12 +15,16 @@ class FeedResponse {
     this.lastModified,
     this.providerState,
     this.warning,
+    this.publisherImagesVerified = false,
   });
   final LiveSnapshot? snapshot;
   final bool notModified;
   final String? etag, lastModified;
   final Map<String, dynamic>? providerState;
   final String? warning;
+
+  /// Set by the direct publisher parser, never read from snapshot JSON.
+  final bool publisherImagesVerified;
 }
 
 abstract interface class FeedProvider {

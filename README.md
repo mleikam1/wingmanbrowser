@@ -4,11 +4,17 @@
 
 **Built for discovery. Designed with boundaries.**
 
-Version **0.13.1+15** adds credited, freely reusable photographs to matching live
-stories in Home, Updates and the Reading list. Only individually reviewed photos
-from the actual article appear; stories without a cleared photograph stay text-only.
-The photographs are packaged with the app, with no image API or image-hosting bill.
-See [Story images](docs/STORY_IMAGES.md) for the current catalog and reuse evidence.
+Version **0.14.0+16** adds current article-associated images, a broader U.S.
+feature mix and a cleaner Discover feed. Source-approved RSS thumbnails accompany
+technology, science and health reporting. Clearly labeled NewsUSA sponsored
+features retain their complete supplied articles and images in a native reader,
+with links to the original publishers. No paid news/image API is added.
+Home is more compact; the persistent Strict-search banner is removed while
+DuckDuckGo's filtering settings remain. See [Content refresh](docs/CONTENT_REFRESH.md)
+for source permissions, privacy, operating limits and verification.
+
+The four bundled photographs from **0.13.1+15** retain their exact article
+associations and credits. See [Story images](docs/STORY_IMAGES.md).
 
 Version **0.13.0+14** added free publisher content to ordinary Android and iOS
 builds without a feed-server setting or paid API. A compact Home preview opens a

@@ -28,6 +28,24 @@ abstract interface class RssFeedTransport {
   void cancel();
 }
 
+abstract interface class ArticleImageTransport {
+  Future<RssFetchResponse> fetchImage(
+    LiveArticleImage image,
+    ApprovedLiveSource source, {
+    required bool Function(Uri) canOpenDestination,
+  });
+  void cancel();
+}
+
+Uri checkedImageUri(Uri uri, ApprovedLiveSource source) {
+  if (!source.enabled ||
+      !source.source.rights.images ||
+      !(source.imagePolicy?.acceptsUri(uri) ?? false)) {
+    throw const RssFailure('unapproved-image-address');
+  }
+  return uri;
+}
+
 Uri checkedRssUri(Uri uri, ApprovedLiveSource source) {
   final text = uri.toString();
   if (text.length > 4096 ||

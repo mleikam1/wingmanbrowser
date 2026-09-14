@@ -1,7 +1,7 @@
 name: wingman_browser
 description: "Wingman Browser. We've got your back, not your data."
 publish_to: none
-version: 0.13.1+15
+version: 0.14.0+16
 
 environment:
   sdk: ^3.12.2

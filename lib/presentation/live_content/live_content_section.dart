@@ -38,6 +38,31 @@ String liveContentPublicationLabel(LiveContentItem item) =>
     ? 'Date not supplied; fetched ${liveContentDate(item.fetchedAt)}'
     : 'Published ${liveContentDate(item.publishedAt!)}';
 
+String liveContentShortDate(DateTime value) {
+  final elapsed = DateTime.now().toUtc().difference(value.toUtc());
+  if (elapsed.isNegative) return 'Just published';
+  if (elapsed.inMinutes < 1) return 'Just now';
+  if (elapsed.inHours < 1) return '${elapsed.inMinutes}m ago';
+  if (elapsed.inDays < 1) return '${elapsed.inHours}h ago';
+  if (elapsed.inDays < 7) return '${elapsed.inDays}d ago';
+  const months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+  final date = value.toLocal();
+  return '${months[date.month - 1]} ${date.day}';
+}
+
 String liveContentSourceName(LiveContentController controller, String id) {
   for (final source in controller.sources) {
     if (source.id == id) return source.name;
@@ -46,7 +71,7 @@ String liveContentSourceName(LiveContentController controller, String id) {
 }
 
 /// A finite section. Home uses a three-item preview; the full feed expands only
-/// after an explicit action. Artwork comes only from the packaged catalog.
+/// after an explicit action. Images require the controller's source approval.
 class LiveContentSection extends StatefulWidget {
   const LiveContentSection({
     super.key,
@@ -134,12 +159,23 @@ class _LiveContentSectionState extends State<LiveContentSection> {
       children: [
         if (widget.showHeading) ...[
           WingmanSection(
-            title: 'Publisher updates',
+            title: 'Discover',
             action: widget.preview && widget.onViewAll != null
-                ? TextButton(
-                    key: const ValueKey('live-feed-view-all'),
-                    onPressed: _action(widget.onViewAll),
-                    child: const Text('View all'),
+                ? Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        key: const ValueKey('live-feed-reading-list'),
+                        tooltip: 'Reading list',
+                        onPressed: _action(widget.onReadingList),
+                        icon: const Icon(Icons.bookmarks_outlined, size: 20),
+                      ),
+                      TextButton(
+                        key: const ValueKey('live-feed-view-all'),
+                        onPressed: _action(widget.onViewAll),
+                        child: const Text('See all'),
+                      ),
+                    ],
                   )
                 : null,
           ),
@@ -165,20 +201,21 @@ class _LiveContentSectionState extends State<LiveContentSection> {
               ),
             ],
           ),
-        if (!widget.showActions && !widget.preview) _refresh(controller),
-        if (controller.refreshing) const LinearProgressIndicator(),
-        Text(
-          _freshness(controller),
-          key: const ValueKey('live-feed-freshness'),
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
-        if (!widget.preview) ...[
-          const SizedBox(height: 8),
-          Text(
-            'Public feeds load directly from publishers, who can see your IP address. Topic choices and browsing history stay on this device.',
-            style: Theme.of(context).textTheme.bodySmall,
+        if (controller.refreshing || controller.imagesLoading)
+          const LinearProgressIndicator(),
+        if (!widget.preview)
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  _freshness(controller),
+                  key: const ValueKey('live-feed-freshness'),
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
+              if (!widget.showActions) _refresh(controller),
+            ],
           ),
-        ],
         if (controller.error != null) ...[
           const SizedBox(height: 12),
           WingmanStatus(
@@ -215,14 +252,19 @@ class _LiveContentSectionState extends State<LiveContentSection> {
             ),
           ],
           const SizedBox(height: 12),
-          if (items.isEmpty && controller.initialized)
+          if (items.isEmpty && controller.imagesLoading)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: Text('Loading story images…'),
+            )
+          else if (items.isEmpty && controller.initialized)
             WingmanEmptyState(
               icon: Icons.article_outlined,
               title: controller.configured
                   ? 'No updates match your choices'
                   : 'Live updates are not configured',
               message: controller.configured
-                  ? 'No eligible articles are available for this selection right now. Try another topic or review your sources.'
+                  ? 'No stories with available images match this selection right now. Check your connection, try another topic or review your sources. Saved articles remain in your reading list.'
                   : 'A live feed service has not been connected. Search, shortcuts and your saved articles are still available.',
               action: TextButton(
                 onPressed: _action(widget.onPreferences),
@@ -231,12 +273,7 @@ class _LiveContentSectionState extends State<LiveContentSection> {
             ),
           for (var index = 0; index < items.length; index++) ...[
             if (index > 0) const SizedBox(height: 12),
-            _card(
-              context,
-              controller,
-              items[index],
-              featured: !widget.preview && index == 0,
-            ),
+            _card(context, controller, items[index], featured: index == 0),
           ],
           if (!widget.preview && controller.hasMore) ...[
             const SizedBox(height: 16),
@@ -254,13 +291,6 @@ class _LiveContentSectionState extends State<LiveContentSection> {
             ),
           ],
         ],
-        if (widget.preview)
-          TextButton.icon(
-            key: const ValueKey('live-feed-reading-list'),
-            onPressed: _action(widget.onReadingList),
-            icon: const Icon(Icons.bookmarks_outlined),
-            label: const Text('Reading list'),
-          ),
       ],
     );
   }
@@ -284,7 +314,7 @@ class _LiveContentSectionState extends State<LiveContentSection> {
     if (controller.fetchedAt == null) {
       return 'Updates haven’t loaded yet.';
     }
-    return '${controller.stale || !controller.configured ? 'Cached updates' : 'Last checked'} · ${liveContentDate(controller.fetchedAt!)}';
+    return '${controller.stale || !controller.configured ? 'Saved updates' : 'Updated'} ${liveContentShortDate(controller.fetchedAt!)}';
   }
 
   Widget _card(
@@ -302,12 +332,11 @@ class _LiveContentSectionState extends State<LiveContentSection> {
       if (_current && controller.canOpen(item)) widget.onOpen(item);
     }
 
-    final excerpt = item.excerpt ?? '';
-    final excerptLimit = featured ? 480 : 180;
-    final shortened = excerpt.characters.length > excerptLimit;
-    final visibleExcerpt = shortened
-        ? '${excerpt.characters.take(excerptLimit).toString().trimRight()}…'
-        : excerpt;
+    final remoteImage = allowed ? controller.imageFor(item) : null;
+    final remoteBytes = allowed ? controller.imageBytesFor(item) : null;
+    final hero = featured && storyImage != null;
+    final theme = Theme.of(context);
+    final colors = WingmanTokens.of(context);
     final headline = TextButton(
       key: ValueKey(
         '${widget.preview ? 'live-open' : 'live-title'}-${item.id}',
@@ -315,67 +344,74 @@ class _LiveContentSectionState extends State<LiveContentSection> {
       onPressed: allowed ? open : null,
       style: TextButton.styleFrom(
         padding: EdgeInsets.zero,
+        minimumSize: const Size(0, 44),
         alignment: Alignment.centerLeft,
-        foregroundColor: WingmanTokens.of(context).text,
+        foregroundColor: colors.text,
+        textStyle:
+            (hero ? theme.textTheme.titleLarge : theme.textTheme.titleMedium)
+                ?.copyWith(fontWeight: FontWeight.w700, height: 1.3),
       ),
-      child: Text(
-        item.title,
-        style: featured
-            ? Theme.of(context).textTheme.titleLarge
-            : Theme.of(context).textTheme.titleMedium,
-      ),
+      child: Text(item.title),
     );
-    final saveButton = TextButton.icon(
+    final saveButton = IconButton(
       key: ValueKey('live-save-${item.id}'),
+      tooltip: saved ? 'Saved to reading list' : 'Save article',
       onPressed: !allowed || saved || _busy
           ? null
           : () => _change(() => controller.save(item)),
-      icon: Icon(saved ? Icons.bookmark : Icons.bookmark_add_outlined),
-      label: Text(saved ? 'Saved' : 'Save'),
+      icon: Icon(saved ? Icons.bookmark : Icons.bookmark_border, size: 21),
+      color: saved ? colors.action : colors.secondaryText,
     );
-    final header = Row(
+    final menu = PopupMenuButton<String>(
+      key: ValueKey('live-menu-${item.id}'),
+      tooltip: 'Article options',
+      enabled: !_busy && _current,
+      onSelected: (action) {
+        if (!_current) return;
+        if (action == 'details') {
+          _details(controller, item);
+        } else if (action == 'pin') {
+          if (controller.canOpen(item)) widget.onPin(item);
+        } else if (action == 'hide') {
+          _change(() => controller.hideSource(item.sourceId));
+        } else if (action == 'dismiss') {
+          _change(() => controller.dismiss(item.id));
+        } else if (action.startsWith('fewer:')) {
+          _change(() => controller.showFewerTopic(action.substring(6)));
+        }
+      },
+      itemBuilder: (_) => [
+        const PopupMenuItem(value: 'details', child: Text('About this story')),
+        PopupMenuItem(
+          value: 'pin',
+          enabled: allowed,
+          child: const Text('Add to Launchpad'),
+        ),
+        PopupMenuItem(value: 'hide', child: Text('Hide $source')),
+        const PopupMenuItem(value: 'dismiss', child: Text('Dismiss item')),
+        for (final topic in topics)
+          PopupMenuItem(
+            value: 'fewer:$topic',
+            child: Text('Show fewer: ${liveContentTopicLabel(topic)}'),
+          ),
+      ],
+    );
+    final titleBlock = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(source, style: Theme.of(context).textTheme.labelLarge),
-              headline,
-            ],
+        Text(
+          item.syndicatedArticle == null
+              ? source
+              : 'Sponsored feature · $source',
+          style: theme.textTheme.labelLarge?.copyWith(color: colors.action),
+        ),
+        const SizedBox(height: 4),
+        headline,
+        if (item.attribution?.isNotEmpty == true && item.attribution != source)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(item.attribution!, style: theme.textTheme.bodySmall),
           ),
-        ),
-        PopupMenuButton<String>(
-          key: ValueKey('live-menu-${item.id}'),
-          tooltip: 'Article options',
-          enabled: !_busy && _current,
-          onSelected: (action) {
-            if (!_current) return;
-            if (action == 'pin') {
-              if (controller.canOpen(item)) widget.onPin(item);
-            } else if (action == 'hide') {
-              _change(() => controller.hideSource(item.sourceId));
-            } else if (action == 'dismiss') {
-              _change(() => controller.dismiss(item.id));
-            } else if (action.startsWith('fewer:')) {
-              _change(() => controller.showFewerTopic(action.substring(6)));
-            }
-          },
-          itemBuilder: (_) => [
-            PopupMenuItem(
-              value: 'pin',
-              enabled: allowed,
-              child: const Text('Add to Launchpad'),
-            ),
-            PopupMenuItem(value: 'hide', child: Text('Hide $source')),
-            const PopupMenuItem(value: 'dismiss', child: Text('Dismiss item')),
-            for (final topic in topics)
-              PopupMenuItem(
-                value: 'fewer:$topic',
-                child: Text('Show fewer: ${liveContentTopicLabel(topic)}'),
-              ),
-          ],
-        ),
       ],
     );
     return Card(
@@ -385,69 +421,114 @@ class _LiveContentSectionState extends State<LiveContentSection> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (featured && storyImage != null) ...[
-            LiveStoryImage(image: storyImage),
+          if (hero) ...[
+            LiveStoryImage(image: storyImage, height: 192),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
               child: LiveStoryImageCaption(image: storyImage),
             ),
           ],
           Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (!featured && storyImage != null)
-                  LiveStoryImageHeader(image: storyImage, child: header)
+                if (remoteImage != null)
+                  LivePublisherImageHeader(
+                    image: remoteImage,
+                    bytes: remoteBytes,
+                    child: titleBlock,
+                  )
+                else if (!hero && storyImage != null)
+                  LiveStoryImageHeader(image: storyImage, child: titleBlock)
                 else
-                  header,
-                const SizedBox(height: 8),
-                Text(
-                  liveContentPublicationLabel(item),
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-                if (!widget.preview &&
-                    item.rights.excerpts &&
-                    visibleExcerpt.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    shortened
-                        ? 'Publisher excerpt · shortened'
-                        : 'Publisher excerpt',
-                    style: Theme.of(context).textTheme.labelSmall,
-                  ),
-                  Text(visibleExcerpt),
-                ],
-                const SizedBox(height: 8),
-                LiveContentCredits(
-                  controller: controller,
-                  item: item,
-                  onOpenUri: widget.onOpenUri,
-                  canContinue: () => _current,
-                  actions: widget.preview ? [saveButton] : const [],
-                ),
+                  titleBlock,
                 if (!allowed)
                   const Text('This article is currently unavailable.'),
-                if (!widget.preview) ...[
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 4,
-                    children: [
-                      OutlinedButton.icon(
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 4,
+                  runSpacing: 4,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Tooltip(
+                      message: liveContentPublicationLabel(item),
+                      child: Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: Text(
+                          item.publishedAt == null
+                              ? 'Date unavailable'
+                              : liveContentShortDate(item.publishedAt!),
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: colors.secondaryText,
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (!widget.preview)
+                      TextButton(
                         key: ValueKey('live-open-${item.id}'),
                         onPressed: allowed ? open : null,
-                        icon: const Icon(Icons.open_in_browser),
-                        label: const Text('Open'),
+                        child: const Text('Read story'),
                       ),
-                      saveButton,
-                    ],
-                  ),
-                ],
+                    saveButton,
+                    menu,
+                  ],
+                ),
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  void _details(LiveContentController controller, LiveContentItem item) {
+    if (!_current || !controller.canOpen(item)) return;
+    showDialog<void>(
+      context: context,
+      builder: (context) => ListenableBuilder(
+        listenable: controller,
+        builder: (context, _) => AlertDialog(
+          title: const Text('About this story'),
+          scrollable: true,
+          content: !_current || !controller.canOpen(item)
+              ? const Text('This story is unavailable in this session.')
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.title,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 12),
+                    Text(liveContentPublicationLabel(item)),
+                    if (item.rights.excerpts &&
+                        item.excerpt?.isNotEmpty == true) ...[
+                      const SizedBox(height: 16),
+                      Text(
+                        'Publisher excerpt',
+                        style: Theme.of(context).textTheme.labelLarge,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(item.excerpt!),
+                    ],
+                    const SizedBox(height: 16),
+                    LiveContentCredits(
+                      controller: controller,
+                      item: item,
+                      onOpenUri: widget.onOpenUri,
+                      canContinue: () => _current,
+                    ),
+                  ],
+                ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Done'),
+            ),
+          ],
+        ),
       ),
     );
   }

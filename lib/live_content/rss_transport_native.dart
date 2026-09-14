@@ -5,6 +5,7 @@ import 'models.dart';
 import 'rss_transport.dart';
 
 RssFeedTransport createRssTransport() => NativeRssFeedTransport();
+ArticleImageTransport createArticleImageTransport() => NativeRssFeedTransport();
 
 typedef RssResolver = Future<List<InternetAddress>> Function(String host);
 
@@ -43,7 +44,8 @@ bool isPublicRssAddress(InternetAddress address) {
       (b[0] == 203 && b[1] == 0 && b[2] == 113));
 }
 
-class NativeRssFeedTransport implements RssFeedTransport {
+class NativeRssFeedTransport
+    implements RssFeedTransport, ArticleImageTransport {
   NativeRssFeedTransport({RssResolver? resolver})
     : _resolver = resolver ?? InternetAddress.lookup;
   final RssResolver _resolver;
@@ -66,7 +68,48 @@ class NativeRssFeedTransport implements RssFeedTransport {
   Future<RssFetchResponse> fetch(
     ApprovedLiveSource source,
     Map<String, String> validators,
-  ) async {
+  ) => _fetch(
+    initialUri: source.feedUri ?? (throw const RssFailure('missing-feed')),
+    checkUri: (uri) => checkedRssUri(uri, source),
+    validators: validators,
+    acceptedTypes: const {
+      'application/rss+xml',
+      'application/atom+xml',
+      'application/xml',
+      'text/xml',
+    },
+    accept:
+        'application/rss+xml, application/atom+xml, application/xml, text/xml',
+    maximumBytes: rssMaximumWireBytes,
+  );
+
+  @override
+  Future<RssFetchResponse> fetchImage(
+    LiveArticleImage image,
+    ApprovedLiveSource source, {
+    required bool Function(Uri) canOpenDestination,
+  }) => _fetch(
+    initialUri: image.url,
+    checkUri: (uri) {
+      if (!canOpenDestination(uri)) {
+        throw const RssFailure('image-destination-denied');
+      }
+      return checkedImageUri(uri, source);
+    },
+    validators: const {},
+    acceptedTypes: const {'image/jpeg', 'image/png', 'image/webp'},
+    accept: 'image/jpeg, image/png, image/webp',
+    maximumBytes: 1024 * 1024,
+  );
+
+  Future<RssFetchResponse> _fetch({
+    required Uri initialUri,
+    required Uri Function(Uri) checkUri,
+    required Map<String, String> validators,
+    required Set<String> acceptedTypes,
+    required String accept,
+    required int maximumBytes,
+  }) async {
     final generation = _epoch;
     final deadline = DateTime.now().add(rssDeadline);
     void valid() {
@@ -74,10 +117,7 @@ class NativeRssFeedTransport implements RssFeedTransport {
       if (!DateTime.now().isBefore(deadline)) throw const RssFailure('timeout');
     }
 
-    var uri = checkedRssUri(
-      source.feedUri ?? (throw const RssFailure('missing-feed')),
-      source,
-    );
+    var uri = checkUri(initialUri);
     var conditional = Map<String, String>.of(validators);
     HttpClient? active;
     final localStops = <void Function()>{};
@@ -167,10 +207,7 @@ class NativeRssFeedTransport implements RssFeedTransport {
           valid();
           request.followRedirects = false;
           request.persistentConnection = false;
-          request.headers.set(
-            'Accept',
-            'application/rss+xml, application/atom+xml, application/xml, text/xml',
-          );
+          request.headers.set('Accept', accept);
           request.headers.set('Accept-Encoding', 'identity');
           request.headers.set(
             'User-Agent',
@@ -216,7 +253,7 @@ class NativeRssFeedTransport implements RssFeedTransport {
             if (hop == 3 || headers['location'] == null) {
               throw const RssFailure('redirect-limit');
             }
-            uri = checkedRssUri(origin.resolve(headers['location']!), source);
+            uri = checkUri(origin.resolve(headers['location']!));
             conditional = {};
             continue;
           }
@@ -231,12 +268,7 @@ class NativeRssFeedTransport implements RssFeedTransport {
               .first
               .trim()
               .toLowerCase();
-          if (!{
-            'application/rss+xml',
-            'application/atom+xml',
-            'application/xml',
-            'text/xml',
-          }.contains(type)) {
+          if (!acceptedTypes.contains(type)) {
             throw const RssFailure('invalid-content-type');
           }
           // Identity is requested deliberately. Encoded bodies are rejected,
@@ -247,13 +279,13 @@ class NativeRssFeedTransport implements RssFeedTransport {
           }.contains((headers['content-encoding'] ?? '').toLowerCase())) {
             throw const RssFailure('unsupported-encoding');
           }
-          if (response.contentLength > rssMaximumWireBytes) {
+          if (response.contentLength > maximumBytes) {
             throw const RssFailure('body-too-large');
           }
           final bytes = BytesBuilder(copy: false);
           await for (final chunk in response) {
             valid();
-            if (bytes.length + chunk.length > rssMaximumWireBytes) {
+            if (bytes.length + chunk.length > maximumBytes) {
               throw const RssFailure('body-too-large');
             }
             bytes.add(chunk);

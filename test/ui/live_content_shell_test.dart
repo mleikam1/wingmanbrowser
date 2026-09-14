@@ -43,12 +43,15 @@ void main() {
           '$prefix👩🏽‍🚀 to improve health and safety on future missions';
       try {
         final registry = (await tester.runAsync(
-          () async => LiveSourceRegistry.fromJson(
-            jsonDecode(
+          () async => LiveSourceRegistry.fromJson({
+            ...jsonDecode(
                   await File('assets/live_content/sources.json').readAsString(),
                 )
                 as Map<String, dynamic>,
-          ),
+            // This navigation fixture deliberately has no licensed photo.
+            // Production image admission is covered by article_images_test.
+            'requireStoryImages': false,
+          }),
         ))!;
         final now = DateTime.utc(2026, 9, 12);
         final source = registry.sources['nasa-technology']!.source;

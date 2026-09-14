@@ -301,7 +301,7 @@ void main() {
         isTrue,
       );
       await home(tester);
-      await tap(tester, find.text('Protection overview'));
+      await tap(tester, find.byTooltip('Protection overview'));
       await tap(tester, find.text('Trust Receipt'));
       await tester.scrollUntilVisible(
         find.textContaining('Wingman analyzed this selection on your device.'),

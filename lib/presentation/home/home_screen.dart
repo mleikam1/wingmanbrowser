@@ -65,13 +65,13 @@ class HomeScreen extends StatelessWidget {
                 subtitle: 'Choose the shortcuts that matter to you',
                 onTap: onCustomize,
               ),
+          if (websiteDiscovery != null) ...[
+            const SizedBox(height: 20),
+            websiteDiscovery!,
+          ],
           if (contentCollections != null) ...[
             const SizedBox(height: 20),
             contentCollections!,
-          ],
-          if (websiteDiscovery != null) ...[
-            const SizedBox(height: 24),
-            websiteDiscovery!,
           ],
         ],
       ),
@@ -264,28 +264,32 @@ class HomeScreen extends StatelessWidget {
                   children: [
                     const Expanded(child: WingmanBrand()),
                     IconButton(
+                      key: const ValueKey('home-protection'),
+                      tooltip: policyUsable
+                          ? 'Protection overview'
+                          : 'Protection needs attention',
+                      onPressed: onProtection,
+                      icon: Icon(
+                        policyUsable
+                            ? Icons.shield_outlined
+                            : Icons.warning_amber_rounded,
+                        color: colors.action,
+                      ),
+                    ),
+                    IconButton(
                       tooltip: 'Settings',
                       onPressed: onSettings,
                       icon: const Icon(Icons.tune),
                     ),
                   ],
                 ),
-                TextButton.icon(
-                  onPressed: onProtection,
-                  icon: const Icon(Icons.shield_outlined, size: 18),
-                  label: Text(
-                    policyUsable
-                        ? 'Protection overview'
-                        : 'Protection needs attention',
+                if (isPrivate) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    'A little space to yourself.',
+                    style: theme.textTheme.titleLarge,
                   ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  isPrivate
-                      ? 'A little space to yourself.'
-                      : 'Where would you like to go?',
-                  style: theme.textTheme.titleLarge,
-                ),
+                ],
                 const SizedBox(height: 8),
                 Text(
                   isPrivate

@@ -205,6 +205,15 @@ void main() {
             ),
           );
           await tester.pumpAndSettle();
+          // Image decoding runs outside the test clock. Wait for the visible
+          // local assets so isolated and full-suite golden runs agree.
+          final images = tester.widgetList<Image>(find.byType(Image)).toList();
+          await tester.runAsync(() async {
+            for (final image in images) {
+              await precacheImage(image.image, boundaryKey.currentContext!);
+            }
+          });
+          await tester.pumpAndSettle();
           expect(tester.takeException(), isNull);
           await expectLater(
             find.byKey(boundaryKey),

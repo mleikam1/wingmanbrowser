@@ -6,3 +6,5 @@ export 'controller.dart';
 export 'topics.dart';
 export 'rss_provider.dart';
 export 'story_images.dart';
+export 'image_loader.dart';
+export 'syndicated_article.dart';

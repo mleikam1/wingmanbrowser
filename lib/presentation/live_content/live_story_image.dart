@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 
 import '../../live_content/live_content.dart';
@@ -93,5 +95,111 @@ class LiveStoryImageHeader extends StatelessWidget {
         ],
       );
     },
+  );
+}
+
+/// The controller supplies already checked bytes. Building a card never starts
+/// an image request, and a missing image never substitutes unrelated artwork.
+class LivePublisherImageHeader extends StatelessWidget {
+  const LivePublisherImageHeader({
+    super.key,
+    required this.image,
+    required this.bytes,
+    required this.child,
+  });
+  final LiveArticleImage image;
+  final Uint8List? bytes;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final thumbnail = image.width > 0 && image.width <= 90;
+      final inline =
+          thumbnail &&
+          constraints.maxWidth >= 270 &&
+          MediaQuery.textScalerOf(context).scale(16) < 24;
+      final visual = ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: SizedBox(
+          width: thumbnail ? 88 : double.infinity,
+          height: thumbnail ? 88 : 192,
+          child: bytes == null
+              ? ColoredBox(color: WingmanTokens.of(context).raised)
+              : LivePublisherImage(
+                  bytes: bytes!,
+                  key: ValueKey('live-publisher-image-${image.url}'),
+                  fit: BoxFit.contain,
+                  semanticLabel: image.caption,
+                ),
+        ),
+      );
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (inline)
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: child),
+                const SizedBox(width: 14),
+                visual,
+              ],
+            )
+          else ...[
+            visual,
+            const SizedBox(height: 12),
+            child,
+          ],
+          const SizedBox(height: 6),
+          Text(image.credit, style: Theme.of(context).textTheme.bodySmall),
+        ],
+      );
+    },
+  );
+}
+
+/// Dispose decoded pixels with their presentation, including publisher images
+/// whose HTTP response permits fresh display but forbids storage or reuse.
+class LivePublisherImage extends StatefulWidget {
+  const LivePublisherImage({
+    super.key,
+    required this.bytes,
+    this.fit = BoxFit.contain,
+    this.semanticLabel,
+  });
+
+  final Uint8List bytes;
+  final BoxFit fit;
+  final String? semanticLabel;
+
+  @override
+  State<LivePublisherImage> createState() => _LivePublisherImageState();
+}
+
+class _LivePublisherImageState extends State<LivePublisherImage> {
+  late MemoryImage _image = MemoryImage(widget.bytes);
+
+  @override
+  void didUpdateWidget(LivePublisherImage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.bytes, widget.bytes)) {
+      _image.evict();
+      _image = MemoryImage(widget.bytes);
+    }
+  }
+
+  @override
+  void dispose() {
+    _image.evict();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Image(
+    image: _image,
+    fit: widget.fit,
+    semanticLabel: widget.semanticLabel,
+    errorBuilder: (_, _, _) => const SizedBox.shrink(),
   );
 }

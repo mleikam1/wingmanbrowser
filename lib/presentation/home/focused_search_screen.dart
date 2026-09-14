@@ -151,18 +151,39 @@ class _FocusedSearchScreenState extends State<FocusedSearchScreen> {
             const SizedBox(height: 20),
             Text(
               _web
-                  ? 'DuckDuckGo · Adult filtering: Strict, required by Wingman. Submitting sends your query and connection information directly to DuckDuckGo. Typing makes no network request; search terms are not saved by Wingman.'
-                  : 'Library and Official searches run on this device. Typing makes no network request. Entering a supported address connects only after you submit.',
+                  ? 'Search with DuckDuckGo'
+                  : 'Search your library on this device',
+              style: Theme.of(context).textTheme.labelLarge,
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 4),
             Text(
               _web
-                  ? kIsWeb
-                        ? 'Web companion: search opens DuckDuckGo in your host browser. Wingman cannot control that browser or enforce its native destination filters after you leave this app.'
-                        : 'Search previews and ads use DuckDuckGo’s adult filter, which can miss content. They are not fully classified against Wingman’s other category rules. Destination filters apply when links open.'
-                  : webAvailable
-                  ? 'Choose Web to search with DuckDuckGo’s required Strict adult filtering.'
-                  : 'Web search is unavailable on this platform or under your current boundaries. The installed library remains available.',
+                  ? 'Your search terms aren’t saved by Wingman.'
+                  : 'Typing stays local. Addresses open after you submit.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            ExpansionTile(
+              key: const ValueKey('search-privacy-details'),
+              tilePadding: EdgeInsets.zero,
+              childrenPadding: const EdgeInsets.only(bottom: 16),
+              title: const Text('Search privacy & protection'),
+              children: [
+                Text(
+                  _web
+                      ? 'Submitting sends your query and connection information directly to DuckDuckGo. Typing makes no network request. Wingman requires DuckDuckGo’s Strict adult filter; previews and ads can contain filtering misses.'
+                      : 'Library and Official searches run on this device. Entering a supported address connects only after you submit.',
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  _web
+                      ? kIsWeb
+                            ? 'Web search opens in your host browser. Wingman cannot enforce its native destination filters after you leave this app.'
+                            : 'Search previews and ads are not fully classified against Wingman’s other category rules. Destination filters apply when links open.'
+                      : webAvailable
+                      ? 'Choose Web to search with DuckDuckGo.'
+                      : 'Web search is unavailable under your current boundaries. The installed library remains available.',
+                ),
+              ],
             ),
             if (widget.isPrivate) ...[
               const SizedBox(height: 12),

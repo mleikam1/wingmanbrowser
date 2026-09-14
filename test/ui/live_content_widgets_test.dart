@@ -269,8 +269,11 @@ void main() {
       await tester.pumpAndSettle();
       await _tap(tester, _key('live-title-fixture-1'));
       expect(opened, ['fixture-1']);
+      await _tap(tester, _key('live-menu-fixture-1'));
+      await _tap(tester, find.text('About this story'));
       await _tap(tester, find.text('Source rights').first);
       expect(licenses, [_rights.licenseUrl]);
+      await _tap(tester, find.text('Done'));
       final stale = tester
           .widget<TextButton>(_key('live-title-fixture-1'))
           .onPressed!;
@@ -283,38 +286,42 @@ void main() {
     },
   );
 
-  testWidgets(
-    'finite unreviewed cards show dates and excerpts without substitute photos',
-    (tester) async {
-      final controller = await _controller();
-      addTearDown(controller.dispose);
-      await tester.pumpWidget(_app(_section(controller)));
-      await tester.pumpAndSettle();
-      expect(find.text('Fixture article 1'), findsOneWidget);
-      expect(find.text('Fixture article 2'), findsOneWidget);
-      expect(find.text('Fixture article 3'), findsNothing);
-      expect(find.textContaining('Date not supplied; fetched'), findsOneWidget);
-      expect(find.textContaining('Published 11 Sep 2026'), findsOneWidget);
-      expect(find.text('Publisher excerpt'), findsNWidgets(2));
-      expect(find.text('Fixture author 1'), findsOneWidget);
-      expect(find.byType(LiveStoryImage), findsNothing);
-      expect(find.textContaining('Topic photo'), findsNothing);
-      expect(find.textContaining('Last checked'), findsOneWidget);
-      for (final image in tester.widgetList<Image>(find.byType(Image))) {
-        final provider = image.image;
-        expect(
-          provider is AssetImage ||
-              provider is ResizeImage && provider.imageProvider is AssetImage,
-          isTrue,
-        );
-      }
-      await _tap(tester, _key('live-feed-load-more'));
-      expect(find.text('Fixture article 3'), findsOneWidget);
-      expect(_key('live-feed-load-more'), findsNothing);
-      expect(find.text('End of this selection.'), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    },
-  );
+  testWidgets('compact cards retain full dates and excerpts in story details', (
+    tester,
+  ) async {
+    final controller = await _controller();
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(_app(_section(controller)));
+    await tester.pumpAndSettle();
+    expect(find.text('Fixture article 1'), findsOneWidget);
+    expect(find.text('Fixture article 2'), findsOneWidget);
+    expect(find.text('Fixture article 3'), findsNothing);
+    expect(find.text('Date unavailable'), findsOneWidget);
+    expect(find.text('Publisher excerpt'), findsNothing);
+    expect(find.text('Fixture author 1'), findsOneWidget);
+    expect(find.byType(LiveStoryImage), findsNothing);
+    expect(find.textContaining('Topic photo'), findsNothing);
+    expect(find.byKey(const ValueKey('live-feed-freshness')), findsOneWidget);
+    await _tap(tester, _key('live-menu-fixture-1'));
+    await _tap(tester, find.text('About this story'));
+    expect(find.textContaining('Date not supplied; fetched'), findsOneWidget);
+    expect(find.text('Publisher excerpt'), findsOneWidget);
+    expect(find.text(_item(1).excerpt!), findsOneWidget);
+    await _tap(tester, find.text('Done'));
+    for (final image in tester.widgetList<Image>(find.byType(Image))) {
+      final provider = image.image;
+      expect(
+        provider is AssetImage ||
+            provider is ResizeImage && provider.imageProvider is AssetImage,
+        isTrue,
+      );
+    }
+    await _tap(tester, _key('live-feed-load-more'));
+    expect(find.text('Fixture article 3'), findsOneWidget);
+    expect(_key('live-feed-load-more'), findsNothing);
+    expect(find.text('End of this selection.'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets(
     'card actions open, save, pin, reduce topic and dismiss locally',
@@ -497,7 +504,7 @@ void main() {
       expect(controller.isSaved('fixture-1'), isFalse);
       expect(find.text('Change not saved'), findsOneWidget);
       expect(
-        tester.widget<TextButton>(_key('live-save-fixture-1')).onPressed,
+        tester.widget<IconButton>(_key('live-save-fixture-1')).onPressed,
         isNotNull,
       );
     },

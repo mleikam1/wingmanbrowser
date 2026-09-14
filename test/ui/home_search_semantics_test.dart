@@ -16,7 +16,7 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
       try {
-        var openedSearch = 0;
+        var openedSearch = 0, openedProtection = 0;
         await tester.pumpWidget(
           MaterialApp(
             theme: WingmanTheme.make(Brightness.light),
@@ -32,7 +32,7 @@ void main() {
                 isPrivate: private,
                 onSearch: () => openedSearch++,
                 onSettings: () {},
-                onProtection: () {},
+                onProtection: () => openedProtection++,
                 onOfficial: () {},
                 onLibrary: () {},
                 onCustomize: () {},
@@ -56,7 +56,7 @@ void main() {
         expect(data.hasAction(ui.SemanticsAction.tap), isTrue);
         final heading = private
             ? 'A little space to yourself.'
-            : 'Where would you like to go?';
+            : "We've got your back, not your data.";
         expect(
           find.bySemanticsLabel(RegExp(RegExp.escape(heading))),
           findsOneWidget,
@@ -80,6 +80,24 @@ void main() {
             .performAction(node.id, ui.SemanticsAction.tap);
         await tester.pump();
         expect(openedSearch, 1);
+        final protection = find.byTooltip('Protection overview');
+        expect(protection, findsOneWidget);
+        expect(
+          tester.getSize(protection).shortestSide,
+          greaterThanOrEqualTo(48),
+        );
+        await tester.tap(protection);
+        await tester.pump();
+        expect(openedProtection, 1);
+        if (!private) {
+          expect(find.text('Where would you like to go?'), findsNothing);
+          expect(
+            tester
+                .getBottomRight(find.byKey(const ValueKey('home-search-entry')))
+                .dy,
+            lessThan(220),
+          );
+        }
         expect(tester.takeException(), isNull);
         await tester.pumpWidget(const SizedBox.shrink());
       } finally {

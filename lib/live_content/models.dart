@@ -1,5 +1,7 @@
 import 'dart:convert';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/services.dart';
+import 'syndicated_article.dart';
 
 String feedText(Object? value, {int max = 500, bool empty = false}) {
   if (value is! String ||
@@ -65,6 +67,175 @@ Set<String> feedIds(Object? value, {int max = 500}) {
 Map<String, dynamic> feedMap(Object? value) {
   if (value is! Map) throw const FormatException('Invalid feed object.');
   return Map<String, dynamic>.from(value);
+}
+
+/// Only a bundled source rule can authorize this publisher's supplied image.
+/// The initial rule deliberately covers exact RSS thumbnails, not article heroes.
+class ApprovedImagePolicy {
+  const ApprovedImagePolicy({
+    required this.kind,
+    required this.allowedHosts,
+    required this.pathPrefixes,
+    required this.licenseUrl,
+    required this.licenseLabel,
+    required this.credit,
+    required this.maximumWidth,
+    required this.maximumHeight,
+    this.allowedQueryKeys = const {},
+  });
+  factory ApprovedImagePolicy.fromJson(Map<String, dynamic> json) {
+    final kind = feedId(json['kind']);
+    if (!{
+      'syndicated-feed-thumbnail',
+      'syndicated-article-photo',
+    }.contains(kind)) {
+      throw const FormatException('Unknown publisher image policy.');
+    }
+    final hosts = feedIds(json['allowedHosts'], max: 10);
+    final paths = json['pathPrefixes'];
+    final width = json['maximumWidth'], height = json['maximumHeight'];
+    if (hosts.isEmpty ||
+        hosts.any(
+          (h) => !RegExp(r'^[a-z0-9-]+(?:\.[a-z0-9-]+)+$').hasMatch(h),
+        ) ||
+        paths is! List ||
+        paths.isEmpty ||
+        paths.length > 10 ||
+        paths.any(
+          (p) =>
+              p is! String ||
+              !p.startsWith('/') ||
+              p.length > 256 ||
+              RegExp(r'[\x00-\x20%\\?#]').hasMatch(p) ||
+              p.contains('..'),
+        ) ||
+        width is! int ||
+        height is! int ||
+        width < 1 ||
+        height < 1 ||
+        width > 2048 ||
+        height > 2048) {
+      throw const FormatException('Invalid publisher image policy.');
+    }
+    return ApprovedImagePolicy(
+      kind: kind,
+      allowedHosts: hosts,
+      pathPrefixes: Set.unmodifiable(paths.cast<String>()),
+      licenseUrl: feedArticleUri(json['licenseUrl']),
+      licenseLabel: feedText(json['licenseLabel'], max: 100),
+      credit: feedText(json['credit'], max: 200),
+      maximumWidth: width,
+      maximumHeight: height,
+      allowedQueryKeys: feedIds(json['allowedQueryKeys'] ?? [], max: 5),
+    );
+  }
+  final String kind, licenseLabel, credit;
+  final Set<String> allowedHosts, pathPrefixes;
+  final Set<String> allowedQueryKeys;
+  final Uri licenseUrl;
+  final int maximumWidth, maximumHeight;
+  bool acceptsUri(Uri uri) {
+    try {
+      if (feedArticleUri(uri.toString()) != uri ||
+          uri.hasFragment ||
+          !allowedHosts.contains(uri.host)) {
+        return false;
+      }
+      final path = Uri.decodeComponent(uri.path);
+      if (RegExp(r'[\x00-\x1f\\%]').hasMatch(path) ||
+          path.split('/').any((p) => p == '.' || p == '..')) {
+        return false;
+      }
+      if (uri.queryParametersAll.entries.any(
+        (e) =>
+            !allowedQueryKeys.contains(e.key) ||
+            e.value.length != 1 ||
+            !RegExp(r'^[A-Za-z0-9_-]{1,128}$').hasMatch(e.value.single),
+      )) {
+        return false;
+      }
+      return pathPrefixes.any(
+        (p) => path == p || path.startsWith(p.endsWith('/') ? p : '$p/'),
+      );
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Map<String, Object?> toJson() => {
+    'kind': kind,
+    'allowedHosts': allowedHosts.toList()..sort(),
+    'pathPrefixes': pathPrefixes.toList()..sort(),
+    'licenseUrl': licenseUrl.toString(),
+    'licenseLabel': licenseLabel,
+    'credit': credit,
+    'maximumWidth': maximumWidth,
+    'maximumHeight': maximumHeight,
+    'allowedQueryKeys': allowedQueryKeys.toList()..sort(),
+  };
+}
+
+class LiveArticleImage {
+  const LiveArticleImage({
+    required this.url,
+    required this.articleUrl,
+    required this.sourceId,
+    required this.credit,
+    required this.caption,
+    required this.licenseUrl,
+    required this.licenseLabel,
+    required this.basis,
+    required this.width,
+    required this.height,
+  });
+  factory LiveArticleImage.fromJson(Map<String, dynamic> json) {
+    final width = json['width'], height = json['height'];
+    if (json['schemaVersion'] != 1 ||
+        width is! int ||
+        height is! int ||
+        width < 0 ||
+        height < 0 ||
+        ((width == 0 || height == 0) &&
+            json['basis'] != 'syndicated-article-photo') ||
+        width > 2048 ||
+        height > 2048) {
+      throw const FormatException('Invalid article image.');
+    }
+    return LiveArticleImage(
+      url: feedArticleUri(json['url']),
+      articleUrl: feedArticleUri(json['articleUrl']),
+      sourceId: feedId(json['sourceId']),
+      credit: feedText(json['credit'], max: 200),
+      caption: feedText(json['caption'], max: 500),
+      licenseUrl: feedArticleUri(json['licenseUrl']),
+      licenseLabel: feedText(json['licenseLabel'], max: 100),
+      basis: feedId(json['basis']),
+      width: width,
+      height: height,
+    );
+  }
+  final Uri url, articleUrl, licenseUrl;
+  final String sourceId, credit, caption, licenseLabel, basis;
+  final int width, height;
+  bool get preserveAspectRatio => true;
+  String get displayLabel => basis == 'syndicated-article-photo'
+      ? 'Supplied story photo'
+      : 'Publisher thumbnail';
+  String get cacheKey =>
+      sha256.convert(utf8.encode(jsonEncode(toJson()))).toString();
+  Map<String, Object?> toJson() => {
+    'schemaVersion': 1,
+    'url': url.toString(),
+    'articleUrl': articleUrl.toString(),
+    'sourceId': sourceId,
+    'credit': credit,
+    'caption': caption,
+    'licenseUrl': licenseUrl.toString(),
+    'licenseLabel': licenseLabel,
+    'basis': basis,
+    'width': width,
+    'height': height,
+  };
 }
 
 class LiveContentRights {
@@ -160,6 +331,8 @@ class ApprovedLiveSource {
     this.articleUrlFormat = 'path-prefix',
     this.requiredTopicTerms = const {},
     this.requiresAttribution = false,
+    this.imagePolicy,
+    this.preserveFeedText = false,
   });
   factory ApprovedLiveSource.fromJson(Map<String, dynamic> json) {
     final hosts = feedIds(json['allowedArticleHosts'], max: 20);
@@ -224,6 +397,10 @@ class ApprovedLiveSource {
       enabled: json['enabled'] == true,
       requiredTopicTerms: Set.unmodifiable(topicTerms),
       requiresAttribution: json['requiresAttribution'] == true,
+      imagePolicy: json['imagePolicy'] == null
+          ? null
+          : ApprovedImagePolicy.fromJson(feedMap(json['imagePolicy'])),
+      preserveFeedText: json['preserveFeedText'] == true,
       articleUrlFormat: format as String,
       feedUri: feed,
       feedRedirectHosts: redirects,
@@ -245,13 +422,17 @@ class ApprovedLiveSource {
   final String articleUrlFormat;
   final Set<String> requiredTopicTerms;
   final bool requiresAttribution;
+  final ApprovedImagePolicy? imagePolicy;
+  final bool preserveFeedText;
 }
 
 class LiveSourceRegistry {
-  LiveSourceRegistry(Iterable<ApprovedLiveSource> sources)
-    : sources = Map.unmodifiable({
-        for (final source in sources) source.source.id: source,
-      });
+  LiveSourceRegistry(
+    Iterable<ApprovedLiveSource> sources, {
+    this.requireStoryImages = false,
+  }) : sources = Map.unmodifiable({
+         for (final source in sources) source.source.id: source,
+       });
   factory LiveSourceRegistry.fromJson(Map<String, dynamic> json) {
     if (json['schemaVersion'] != 1 ||
         json['sources'] is! List ||
@@ -264,7 +445,10 @@ class LiveSourceRegistry {
     if (rows.map((s) => s.source.id).toSet().length != rows.length) {
       throw const FormatException('Duplicate source.');
     }
-    return LiveSourceRegistry(rows);
+    return LiveSourceRegistry(
+      rows,
+      requireStoryImages: json['requireStoryImages'] == true,
+    );
   }
   static Future<LiveSourceRegistry> loadBundled() async =>
       LiveSourceRegistry.fromJson(
@@ -275,6 +459,7 @@ class LiveSourceRegistry {
         ),
       );
   final Map<String, ApprovedLiveSource> sources;
+  final bool requireStoryImages;
 }
 
 class LiveContentItem {
@@ -296,9 +481,19 @@ class LiveContentItem {
     this.attribution,
     this.region,
     this.reviewedAt,
+    this.image,
+    this.syndicatedArticle,
   });
   factory LiveContentItem.fromJson(Map<String, dynamic> json) {
     final eligibility = feedMap(json['eligibility']);
+    LiveArticleImage? image;
+    try {
+      if (json['image'] != null) {
+        image = LiveArticleImage.fromJson(feedMap(json['image']));
+      }
+    } catch (_) {
+      /* An invalid image never removes a readable headline. */
+    }
     return LiveContentItem(
       id: feedId(json['id']),
       sourceId: feedId(json['sourceId']),
@@ -325,6 +520,10 @@ class LiveContentItem {
           : feedDate(eligibility['reviewedAt']),
       expiresAt: feedDate(json['expiresAt']),
       region: json['region'] == null ? null : feedId(json['region']),
+      image: image,
+      syndicatedArticle: json['syndicatedArticle'] == null
+          ? null
+          : SyndicatedArticle.fromJson(feedMap(json['syndicatedArticle'])),
     );
   }
   final String id,
@@ -340,6 +539,8 @@ class LiveContentItem {
   final DateTime fetchedAt, expiresAt;
   final Set<String> topics;
   final LiveContentRights rights;
+  final LiveArticleImage? image;
+  final SyndicatedArticle? syndicatedArticle;
 
   /// No remote thumbnail is exposed by the client. Image approval needs its own
   /// pinned rights/moderation contract, not merely an image URL in a feed.
@@ -364,7 +565,8 @@ class LiveContentItem {
       'reviewedAt': reviewedAt?.toIso8601String(),
     },
     'expiresAt': expiresAt.toIso8601String(),
-    'image': null,
+    'image': image?.toJson(),
+    'syndicatedArticle': syndicatedArticle?.toJson(),
   };
 }
 

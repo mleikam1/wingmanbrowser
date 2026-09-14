@@ -6,6 +6,7 @@ import 'package:wingman_browser/live_content/rss_transport.dart';
 import 'package:wingman_browser/live_content/rss_transport_native.dart';
 
 import 'rss_provider_test.dart' as fixtures;
+import 'article_images_test.dart' as photos;
 
 // These deterministic HTTP fixtures test protocol limits, not TLS identity.
 // The opt-in live test separately exercises real DNS pinning and system TLS.
@@ -185,6 +186,153 @@ void main() {
       );
     }
   });
+  test(
+    'image requests enforce the separate media policy and send no browser credentials',
+    () async {
+      await fixture(
+        [
+          _Response(
+            200,
+            headers: {
+              'content-type': ['image/png'],
+            },
+            chunks: [photos.png],
+          ),
+        ],
+        (transport, mock) async {
+          final response = await transport.fetchImage(
+            photos.item(1).image!,
+            photos.imageSource(),
+            canOpenDestination: (_) => true,
+          );
+          expect(response.status, 200);
+          expect(response.body, photos.png);
+          final headers = mock.clients.single.request!.headers.values;
+          expect(headers['accept'], ['image/jpeg, image/png, image/webp']);
+          expect(
+            headers.keys.toSet().intersection({
+              'cookie',
+              'referer',
+              'authorization',
+            }),
+            isEmpty,
+          );
+        },
+      );
+      for (final redirect in [
+        'https://evil.example/thumb/a.png',
+        'https://media.example/hero/a.png',
+        'http://media.example/thumb/a.png',
+        'https://media.example/thumb/a.png?visitor=id',
+      ]) {
+        await fixture(
+          [
+            _Response(
+              302,
+              headers: {
+                'location': [redirect],
+              },
+            ),
+          ],
+          (transport, mock) async {
+            await expectLater(
+              transport.fetchImage(
+                photos.item(1).image!,
+                photos.imageSource(),
+                canOpenDestination: (_) => true,
+              ),
+              throwsA(isA<RssFailure>()),
+            );
+            expect(mock.clients.length, 1);
+          },
+        );
+      }
+      for (final response in [
+        _Response(
+          200,
+          headers: {
+            'content-type': ['text/html'],
+          },
+        ),
+        _Response(
+          200,
+          headers: {
+            'content-type': ['image/svg+xml'],
+          },
+        ),
+        _Response(
+          200,
+          headers: {
+            'content-type': ['image/png'],
+            'content-encoding': ['gzip'],
+          },
+        ),
+        _Response(
+          200,
+          headers: {
+            'content-type': ['image/png'],
+          },
+          contentLength: 1024 * 1024 + 1,
+        ),
+      ]) {
+        await fixture([response], (transport, mock) async {
+          await expectLater(
+            transport.fetchImage(
+              photos.item(1).image!,
+              photos.imageSource(),
+              canOpenDestination: (_) => true,
+            ),
+            throwsA(isA<RssFailure>()),
+          );
+        });
+      }
+      final private = NativeRssFeedTransport(
+        resolver: (_) async => [InternetAddress('127.0.0.1')],
+      );
+      await expectLater(
+        private.fetchImage(
+          photos.item(1).image!,
+          photos.imageSource(),
+          canOpenDestination: (_) => true,
+        ),
+        throwsA(
+          isA<RssFailure>().having((e) => e.code, 'reason', 'non-public-dns'),
+        ),
+      );
+    },
+  );
+  test(
+    'mandatory destination denial is rechecked before an otherwise approved image redirect',
+    () async {
+      await fixture(
+        [
+          _Response(
+            302,
+            headers: {
+              'location': ['https://media.example/thumb/denied.png'],
+            },
+          ),
+        ],
+        (transport, mock) async {
+          await expectLater(
+            transport.fetchImage(
+              photos.item(1).image!,
+              photos.imageSource(),
+              canOpenDestination: (uri) => !uri.path.contains('denied'),
+            ),
+            throwsA(
+              isA<RssFailure>().having(
+                (e) => e.code,
+                'code',
+                'image-destination-denied',
+              ),
+            ),
+          );
+          expect(mock.clients.length, 1);
+        },
+      );
+    },
+  );
   test(
     'fourth redirect is refused and duplicate Location is ambiguous',
     () async {

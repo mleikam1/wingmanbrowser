@@ -28,7 +28,7 @@ class LiveContentFeedScreen extends StatelessWidget {
     final scale = MediaQuery.textScalerOf(context).scale(18) / 18;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Updates'),
+        title: const Text('Discover'),
         toolbarHeight: scale > 1.4 ? 64 * scale : 64,
         actions: [
           IconButton(

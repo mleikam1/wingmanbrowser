@@ -56,7 +56,7 @@ class _LiveReadingListState extends State<LiveReadingList> {
         children: [
           const WingmanSection(title: 'Saved publisher articles'),
           const Text(
-            'Saved links open on the publisher’s website. A saved link does not include an offline copy of the full article.',
+            'Keep stories to read again. Publisher links open online; syndicated features include the supplied article.',
           ),
           if (entries.isEmpty)
             const WingmanEmptyState(
@@ -99,11 +99,12 @@ class _LiveReadingListState extends State<LiveReadingList> {
     final allowed =
         widget.canContinue() && item != null && controller.canOpen(item);
     final storyImage = allowed ? StoryImages.forItem(item) : null;
+    final publisherImage = allowed ? controller.imageFor(item) : null;
     final header = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          liveContentSourceName(controller, saved.sourceId),
+          '${item?.syndicatedArticle != null ? 'Sponsored feature · ' : ''}${liveContentSourceName(controller, saved.sourceId)}',
           style: Theme.of(context).textTheme.labelLarge,
         ),
         const SizedBox(height: 8),
@@ -116,7 +117,13 @@ class _LiveReadingListState extends State<LiveReadingList> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (storyImage != null)
+        if (publisherImage != null)
+          LivePublisherImageHeader(
+            image: publisherImage,
+            bytes: controller.imageBytesFor(item!),
+            child: header,
+          )
+        else if (storyImage != null)
           LiveStoryImageHeader(image: storyImage, child: header)
         else
           header,

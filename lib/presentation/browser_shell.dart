@@ -46,6 +46,7 @@ import 'live_content/live_content_section.dart';
 import 'live_content/live_content_feed_screen.dart';
 import 'live_content/live_content_preferences_screen.dart';
 import 'live_content/live_reading_list.dart';
+import 'live_content/syndicated_article_screen.dart';
 
 const _collections = <String, String>{
   'science': 'Science',
@@ -1024,19 +1025,8 @@ class _BrowserShellState extends State<BrowserShell>
     if (showingWeb && _websiteDecision(website).isAllowed) {
       _retainEngine(_tab, website);
     }
-    final search =
-        showingWeb && const StrictSearchPolicy().acceptsCanonical(website);
     return Column(
       children: [
-        if (search)
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 10, 16, 10),
-            child: Text(
-              'DuckDuckGo search · Adult filtering: Strict\n'
-              'Previews and ads are not fully classified against Wingman’s other rules.',
-              key: ValueKey('strict-search-scope'),
-            ),
-          ),
         Expanded(
           child: Stack(
             fit: StackFit.expand,
@@ -2562,6 +2552,28 @@ class _BrowserShellState extends State<BrowserShell>
     if (_ephemeral ||
         !_validOrigin(_tab) ||
         widget.liveContent?.canOpen(item) != true) {
+      return;
+    }
+    if (item.syndicatedArticle != null) {
+      final origin = _tab;
+      final controller = widget.liveContent!;
+      _pushFeature(
+        SyndicatedArticleScreen(
+          item: item,
+          controller: controller,
+          canContinue: () => !_ephemeral && _validOrigin(origin),
+          onOpenUri: (uri) {
+            if (_ephemeral ||
+                !_validOrigin(origin) ||
+                !controller.canOpen(item) ||
+                !_websiteDecision(uri).isAllowed) {
+              return;
+            }
+            Navigator.of(context).popUntil((route) => route.isFirst);
+            _navigateWebsite(uri);
+          },
+        ),
+      );
       return;
     }
     Navigator.of(context).popUntil((route) => route.isFirst);

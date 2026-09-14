@@ -5,6 +5,7 @@ import 'eligibility.dart';
 import 'models.dart';
 import 'provider.dart';
 import 'rss_parser.dart';
+import 'ordering.dart';
 import 'rss_transport.dart';
 import 'rss_transport_native.dart'
     if (dart.library.js_interop) 'rss_transport_web.dart'
@@ -137,7 +138,7 @@ class RssFeedProvider implements FeedProvider, ResumableFeedProvider {
       } else {
         final configKey = rssDigest(
           jsonEncode({
-            'version': 1,
+            'version': 2,
             'url': source.feedUri.toString(),
             'hosts': source.feedRedirectHosts.toList()..sort(),
             'articleHosts': source.allowedArticleHosts.toList()..sort(),
@@ -147,6 +148,8 @@ class RssFeedProvider implements FeedProvider, ResumableFeedProvider {
             'terms': source.requiredTopicTerms.toList()..sort(),
             'format': source.articleUrlFormat,
             'requiresAuthor': source.requiresAttribution,
+            'imagePolicy': source.imagePolicy?.toJson(),
+            'preserveFeedText': source.preserveFeedText,
             'retention': source.retentionSeconds,
           }),
         );
@@ -324,12 +327,7 @@ class RssFeedProvider implements FeedProvider, ResumableFeedProvider {
         }
       }
     }
-    var items = unique.values.toList()
-      ..sort(
-        (a, b) => (b.publishedAt ?? b.fetchedAt).compareTo(
-          a.publishedAt ?? a.fetchedAt,
-        ),
-      );
+    var items = balancedLiveItems(unique.values, registry.sources.keys);
     items = items.take(300).toList();
     if (revoked.length > 5000) {
       revokedSources.addAll(approved.map((s) => s.source.id));
@@ -367,6 +365,7 @@ class RssFeedProvider implements FeedProvider, ResumableFeedProvider {
     }
     return FeedResponse(
       snapshot: snapshot,
+      publisherImagesVerified: true,
       providerState: state,
       warning: anyFailure
           ? 'Some publishers could not be refreshed. Available and cached articles are shown.'

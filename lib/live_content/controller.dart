@@ -1,10 +1,14 @@
 import 'dart:convert';
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../signature/storage/document_store.dart';
 import 'eligibility.dart';
 import 'models.dart';
 import 'preferences.dart';
 import 'provider.dart';
+import 'image_loader.dart';
+import 'story_images.dart';
+import 'ordering.dart';
 
 enum LiveContentContext { owner, private, handoff, inactive }
 
@@ -15,13 +19,18 @@ class LiveContentController extends ChangeNotifier {
     required this.store,
     required this.eligibility,
     this.provider,
+    ArticleImageLoader? imageLoader,
     DateTime Function()? clock,
     this.pageSize = 12,
   }) : _clock = clock ?? DateTime.now,
+       _imageLoader =
+           imageLoader ??
+           ArticleImageLoader(eligibility: eligibility, clock: clock),
        _limit = pageSize.clamp(1, 30);
   final SignatureDocumentStore store;
   final LiveContentEligibility eligibility;
   final FeedProvider? provider;
+  final ArticleImageLoader _imageLoader;
   final DateTime Function() _clock;
   final int pageSize;
   LiveContentContext _context = LiveContentContext.inactive;
@@ -30,18 +39,29 @@ class LiveContentController extends ChangeNotifier {
   Map<String, dynamic>? _providerState;
   List<LiveSavedItem> _saved = [];
   final Set<String> _revokedItems = {}, _revokedSources = {};
+  final Set<String> _revokedImageSources = {};
+  final Set<String> _revokedImageKeys = {};
   String? _etag, _lastModified, _error, _storageError;
   DateTime? _nextRefreshAt;
   bool _initialized = false, _refreshing = false, _disposed = false;
+  bool _imagesLoading = false;
+  bool _publisherImagesVerified = false;
   bool _preferencesReadable = true, _savedReadable = true;
   bool _providerStateReadable = true;
   int _epoch = 0, _limit;
+  int _imageLoad = 0;
   Future<void>? _initializing;
   Future<void> _writes = Future.value();
   DateTime get _now => _clock().toUtc();
   bool get _owner => !_disposed && _context == LiveContentContext.owner;
   bool get initialized => _initialized;
   bool get refreshing => _owner && _refreshing;
+  bool get imagesLoading =>
+      _owner &&
+      _preferences.enabled &&
+      _preferencesReadable &&
+      _savedReadable &&
+      _imagesLoading;
   bool get configured => provider != null;
   bool get hasMore => _visible.length > _limit;
   bool get stale =>
@@ -112,6 +132,9 @@ class LiveContentController extends ChangeNotifier {
         .where(
           (item) =>
               _accepts(item) &&
+              (!eligibility.registry.requireStoryImages ||
+                  imageBytesFor(item) != null ||
+                  StoryImages.forItem(item) != null) &&
               _preferences.follows(item.sourceId) &&
               !_preferences.dismissedItemIds.contains(item.id) &&
               item.language == _preferences.language &&
@@ -122,17 +145,11 @@ class LiveContentController extends ChangeNotifier {
                   item.region == _preferences.region),
         )
         .toList();
-    rows.sort((a, b) {
-      final aFewer = a.topics.any(_preferences.fewerTopics.contains) ? 1 : 0;
-      final bFewer = b.topics.any(_preferences.fewerTopics.contains) ? 1 : 0;
-      final preferenceOrder = aFewer.compareTo(bFewer);
-      if (preferenceOrder != 0) return preferenceOrder;
-      final dateOrder = (b.publishedAt ?? b.fetchedAt).compareTo(
-        a.publishedAt ?? a.fetchedAt,
-      );
-      return dateOrder != 0 ? dateOrder : a.id.compareTo(b.id);
-    });
-    return rows;
+    return balancedLiveItems(
+      rows,
+      eligibility.registry.sources.keys,
+      fewerTopics: _preferences.fewerTopics,
+    );
   }
 
   List<LiveSavedItem> get savedItems => !_owner
@@ -157,6 +174,72 @@ class LiveContentController extends ChangeNotifier {
 
   bool canDisplay(LiveContentItem item) =>
       _owner && _savedReadable && _accepts(item);
+  LiveArticleImage? imageFor(LiveContentItem item) {
+    if (!_publisherImagesVerified ||
+        !_preferences.enabled ||
+        !_preferencesReadable ||
+        !_savedReadable ||
+        _revokedImageSources.contains(item.sourceId) ||
+        _revokedImageKeys.contains(item.image?.cacheKey) ||
+        !canOpen(item)) {
+      return null;
+    }
+    final current = _snapshot?.items.where((i) => i.id == item.id).firstOrNull;
+    if (current != null && current.image?.cacheKey != item.image?.cacheKey) {
+      return null;
+    }
+    final source = _snapshot?.sources
+        .where((s) => s.id == item.sourceId)
+        .firstOrNull;
+    if (source != null && !source.rights.images) return null;
+    return eligibility.imageFor(item);
+  }
+
+  Uint8List? imageBytesFor(LiveContentItem item) =>
+      imageFor(item) == null ? null : _imageLoader.bytesFor(item);
+  bool imageIsTransientFor(LiveContentItem item) =>
+      imageFor(item) != null && _imageLoader.isTransientFor(item);
+  void _cancelImages({bool clear = false}) {
+    _imageLoad++;
+    _imagesLoading = false;
+    _imageLoader.cancel(clear: clear);
+  }
+
+  void _loadImages(int epoch) {
+    if (!_valid(epoch) ||
+        !_preferences.enabled ||
+        !_preferencesReadable ||
+        !_savedReadable) {
+      return;
+    }
+    final load = ++_imageLoad;
+    final candidates = (_snapshot?.items ?? const <LiveContentItem>[])
+        .where((i) => _accepts(i) && imageFor(i) != null)
+        .toList();
+    _imagesLoading = candidates.isNotEmpty;
+    final work = _imageLoader.load(
+      candidates,
+      onChanged: () {
+        if (_valid(epoch) && load == _imageLoad) _notify();
+      },
+    );
+    // load() drops transient buffers synchronously. Notify after that boundary
+    // so a fresh batch cannot keep a withdrawn no-store image on screen.
+    _notify();
+    unawaited(
+      work
+          .catchError((Object _) {
+            /* Image failure does not replace feed status. */
+          })
+          .whenComplete(() {
+            if (_valid(epoch) && load == _imageLoad) {
+              _imagesLoading = false;
+              _notify();
+            }
+          }),
+    );
+  }
+
   bool _accepts(LiveContentItem item, {bool saved = false}) {
     if (_revokedItems.contains(item.id) ||
         _revokedSources.contains(item.sourceId)) {
@@ -186,6 +269,8 @@ class LiveContentController extends ChangeNotifier {
     _epoch++;
     _refreshing = false;
     provider?.cancel();
+    _cancelImages();
+    if (_owner && _initialized) _loadImages(_epoch);
     _notify();
   }
 
@@ -259,10 +344,20 @@ class LiveContentController extends ChangeNotifier {
             value['revokedSourceIds'] ?? [],
             max: 50,
           );
+          final revokedImages = feedIds(
+            value['revokedImageSourceIds'] ?? [],
+            max: 50,
+          );
+          final revokedImageKeys = feedIds(
+            value['revokedImageKeys'] ?? [],
+            max: 5000,
+          );
           if (_valid(epoch)) {
             _saved = saved;
             _revokedItems.addAll(revokedItems);
             _revokedSources.addAll(revokedSources);
+            _revokedImageSources.addAll(revokedImages);
+            _revokedImageKeys.addAll(revokedImageKeys);
           }
         }
       } catch (_) {
@@ -280,6 +375,7 @@ class LiveContentController extends ChangeNotifier {
           _validateSnapshot(snapshot);
           if (_valid(epoch)) {
             _snapshot = snapshot;
+            _publisherImagesVerified = value['publisherImagesVerified'] == true;
             _etag = value['etag'] as String?;
             _lastModified = value['lastModified'] as String?;
             _revokedItems.addAll(snapshot.revokedItemIds);
@@ -308,6 +404,7 @@ class LiveContentController extends ChangeNotifier {
       if (_valid(epoch)) {
         _initialized = true;
         _notify();
+        _loadImages(epoch);
       }
     }
   }
@@ -368,6 +465,36 @@ class LiveContentController extends ChangeNotifier {
       final snapshot = response.snapshot;
       if (snapshot == null) throw const FormatException();
       _validateSnapshot(snapshot);
+      // Suppress withdrawn photos immediately, even when the following durable
+      // checkpoint fails. Existing text/save semantics remain independent.
+      _revokedImageSources.addAll(
+        snapshot.sources
+            .where(
+              (s) =>
+                  !s.rights.images &&
+                  eligibility.registry.sources.containsKey(s.id),
+            )
+            .map((s) => s.id),
+      );
+      _cancelImages();
+      final replacements = {for (final item in snapshot.items) item.id: item};
+      for (final old in [
+        ...?_snapshot?.items,
+        for (final saved in _saved)
+          if (saved.item != null) saved.item!,
+      ]) {
+        final replacement = replacements[old.id], previousImage = old.image;
+        if (previousImage != null &&
+            replacement != null &&
+            (!replacement.rights.images ||
+                replacement.image?.cacheKey != previousImage.cacheKey)) {
+          _revokedImageKeys.add(previousImage.cacheKey);
+        }
+      }
+      if (_revokedImageKeys.length > 5000) {
+        _revokedImageSources.addAll(eligibility.registry.sources.keys);
+        _revokedImageKeys.clear();
+      }
       final sourceIds = snapshot.sources.map((s) => s.id).toSet();
       final revokedSources = {
         ..._revokedSources,
@@ -439,6 +566,7 @@ class LiveContentController extends ChangeNotifier {
         await store.writeDocument('liveContentSaved', _savedDocument(saved));
         if (!_valid(epoch)) return;
         _snapshot = _boundedSnapshot(snapshot);
+        _publisherImagesVerified = response.publisherImagesVerified;
         _etag = response.etag;
         _lastModified = response.lastModified;
         _limit = pageSize.clamp(1, 30);
@@ -461,6 +589,7 @@ class LiveContentController extends ChangeNotifier {
       if (_valid(epoch)) {
         _refreshing = false;
         _notify();
+        _loadImages(epoch);
       }
     }
   }
@@ -509,6 +638,7 @@ class LiveContentController extends ChangeNotifier {
     'schemaVersion': 1,
     'snapshot': _snapshot?.toJson(),
     'etag': _etag,
+    'publisherImagesVerified': _publisherImagesVerified,
     'lastModified': _lastModified,
   };
   Map<String, Object?> _savedDocument(List<LiveSavedItem> saved) => {
@@ -516,6 +646,8 @@ class LiveContentController extends ChangeNotifier {
     'items': saved.map((s) => s.toJson()).toList(),
     'revokedItemIds': _revokedItems.toList(),
     'revokedSourceIds': _revokedSources.toList(),
+    'revokedImageSourceIds': _revokedImageSources.toList(),
+    'revokedImageKeys': _revokedImageKeys.toList(),
   };
   Future<void> _enqueue(int epoch, Future<void> Function() operation) {
     final future = _writes.then((_) async {
@@ -605,6 +737,7 @@ class LiveContentController extends ChangeNotifier {
     if (!enabled) {
       _epoch++;
       provider?.cancel();
+      _cancelImages();
       _refreshing = false;
       _preferences = _preferences.copyWith(enabled: false);
       _notify();
@@ -671,6 +804,7 @@ class LiveContentController extends ChangeNotifier {
           });
           if (!_valid(epoch)) return;
           _snapshot = null;
+          _publisherImagesVerified = false;
           _etag = null;
           _lastModified = null;
           _nextRefreshAt = null;
@@ -702,6 +836,7 @@ class LiveContentController extends ChangeNotifier {
     if (!_owner) return;
     _epoch++;
     provider?.cancel();
+    _cancelImages(clear: true);
     _refreshing = false;
     final epoch = _epoch;
     try {
@@ -712,6 +847,7 @@ class LiveContentController extends ChangeNotifier {
         });
         if (_valid(epoch)) {
           _snapshot = null;
+          _publisherImagesVerified = false;
           _etag = null;
           _lastModified = null;
           _nextRefreshAt = null;
@@ -738,6 +874,7 @@ class LiveContentController extends ChangeNotifier {
     _disposed = true;
     _epoch++;
     provider?.cancel();
+    _cancelImages(clear: true);
     super.dispose();
   }
 }

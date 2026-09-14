@@ -1,4 +1,5 @@
 import 'models.dart';
+import 'syndicated_article.dart';
 
 /// Publisher rights and a build-pinned editorial scope are the admission gate.
 /// Text rules only subtract obvious promotion; they do not approve a source or
@@ -10,6 +11,63 @@ class LiveContentEligibility {
   });
   final LiveSourceRegistry registry;
   final bool Function(Uri) canOpenDestination;
+
+  /// Image permission is independent of headline permission. This checks pinned
+  /// origin/license/rendition and association consistency; provenance comes from
+  /// the direct RSS provider, not from a self-asserted JSON image object.
+  LiveArticleImage? imageFor(LiveContentItem item) {
+    final approved = registry.sources[item.sourceId];
+    final policy = approved?.imagePolicy, image = item.image;
+    if (approved == null ||
+        !approved.enabled ||
+        policy == null ||
+        image == null ||
+        !approved.source.rights.images ||
+        !item.rights.images ||
+        image.sourceId != item.sourceId ||
+        image.articleUrl != item.canonicalUrl ||
+        image.basis != policy.kind ||
+        image.credit != policy.credit ||
+        image.licenseUrl != policy.licenseUrl ||
+        image.licenseLabel != policy.licenseLabel ||
+        image.width > policy.maximumWidth ||
+        image.height > policy.maximumHeight ||
+        (policy.kind == 'syndicated-feed-thumbnail' &&
+            (image.width < 1 || image.height < 1)) ||
+        (policy.kind == 'syndicated-article-photo' &&
+            !acceptsSyndicatedArticle(item)) ||
+        !policy.acceptsUri(image.url)) {
+      return null;
+    }
+    try {
+      return canOpenDestination(image.url) ? image : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  bool acceptsSyndicatedArticle(LiveContentItem item) {
+    final source = registry.sources[item.sourceId],
+        body = item.syndicatedArticle;
+    if (source?.imagePolicy?.kind != 'syndicated-article-photo' ||
+        body == null ||
+        body.articleUrl != item.canonicalUrl ||
+        body.publisher != source!.source.name ||
+        body.licenseUrl != source.source.rights.licenseUrl ||
+        !acceptsSyndicatedPromotion(item.title) ||
+        !acceptsSyndicatedPromotion(body.plainText)) {
+      return false;
+    }
+    try {
+      return body.paragraphs
+          .expand((p) => p.runs)
+          .where((r) => r.link != null)
+          .every((r) => canOpenDestination(r.link!));
+    } catch (_) {
+      return false;
+    }
+  }
+
   bool accepts(
     LiveContentItem item, {
     required DateTime now,
@@ -51,7 +109,9 @@ class LiveContentEligibility {
         item.rights.licenseUrl != approved.source.rights.licenseUrl) {
       return false;
     }
-    if (!acceptsFeedText(item.title, item.excerpt ?? '') ||
+    if ((item.syndicatedArticle != null
+            ? !acceptsSyndicatedArticle(item)
+            : !acceptsFeedText(item.title, item.excerpt ?? '')) ||
         !matchesTopicScope(
           item.title,
           item.excerpt ?? '',

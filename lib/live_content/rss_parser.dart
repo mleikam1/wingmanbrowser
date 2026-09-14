@@ -7,6 +7,7 @@ import 'package:xml/xml_events.dart';
 import 'models.dart';
 import 'eligibility.dart';
 import 'rss_transport.dart';
+import 'syndicated_article.dart';
 
 String rssDigest(String text) =>
     sha256.convert(utf8.encode(text)).toString().substring(0, 32);
@@ -183,6 +184,101 @@ class RssParsedFeed {
   final int rejected;
 }
 
+Set<String> _featureTopics(String title) {
+  const terms = <String, String>{
+    'business':
+        r'\b(?:business|financial|finance|retirement|investing|banking|savings)\b',
+    'technology':
+        r'\b(?:technology|quantum|software|gaming|digital|computers?)\b',
+    'sports': r'\b(?:sports?|football|basketball|baseball|soccer|athletes?)\b',
+    'entertainment': r'\b(?:books?|movies?|music|entertainment|novels?)\b',
+    'food': r'\b(?:foods?|recipes?|cooking|nutrition|meals?|kitchen)\b',
+    'health': r'\b(?:health|flu|wellness|vaccines?|medical|fitness|sleep)\b',
+    'fashion': r'\b(?:fashion|clothing|skincare|skin care|beauty|facial)\b',
+  };
+  final topics = terms.entries
+      .where((e) => RegExp(e.value, caseSensitive: false).hasMatch(title))
+      .map((e) => e.key)
+      .toSet();
+  return topics.isEmpty ? {'headlines'} : topics;
+}
+
+LiveArticleImage? rssThumbnail(
+  XmlElement entry,
+  ApprovedLiveSource source,
+  Uri article,
+) {
+  final policy = source.imagePolicy;
+  if (!source.source.rights.images || policy == null) {
+    return null;
+  }
+  if (policy.kind == 'syndicated-article-photo') {
+    for (final node in entry.childElements.where(
+      (n) => n.name.local == 'enclosure',
+    )) {
+      try {
+        final uri = feedArticleUri(node.getAttribute('url'));
+        if (!policy.acceptsUri(uri) ||
+            !{
+              'image/jpeg',
+              'image/png',
+              'image/webp',
+            }.contains(node.getAttribute('type'))) {
+          continue;
+        }
+        return LiveArticleImage(
+          url: uri,
+          articleUrl: article,
+          sourceId: source.source.id,
+          credit: policy.credit,
+          caption: 'Photo supplied with this sponsored feature',
+          licenseUrl: policy.licenseUrl,
+          licenseLabel: policy.licenseLabel,
+          basis: policy.kind,
+          width: 0,
+          height: 0,
+        );
+      } catch (_) {}
+    }
+    return null;
+  }
+  for (final node in entry.childElements) {
+    if (node.namespaceUri != 'http://search.yahoo.com/mrss/' ||
+        node.name.local != 'thumbnail') {
+      continue;
+    }
+    try {
+      final uri = feedArticleUri(node.getAttribute('url'));
+      final width = int.tryParse(node.getAttribute('width') ?? ''),
+          height = int.tryParse(node.getAttribute('height') ?? '');
+      if (!policy.acceptsUri(uri) ||
+          width == null ||
+          height == null ||
+          width < 1 ||
+          height < 1 ||
+          width > policy.maximumWidth ||
+          height > policy.maximumHeight) {
+        continue;
+      }
+      return LiveArticleImage(
+        url: uri,
+        articleUrl: article,
+        sourceId: source.source.id,
+        credit: policy.credit,
+        caption: 'Publisher thumbnail',
+        licenseUrl: policy.licenseUrl,
+        licenseLabel: policy.licenseLabel,
+        basis: policy.kind,
+        width: width,
+        height: height,
+      );
+    } catch (_) {
+      /* An unusable thumbnail leaves the article intact. */
+    }
+  }
+  return null;
+}
+
 RssParsedFeed parseRssFeed(
   Uint8List bytes,
   ApprovedLiveSource source,
@@ -276,10 +372,20 @@ RssParsedFeed parseRssFeed(
         guid = field(entry, atom ? {'id'} : {'guid'});
     try {
       final title = rssPlain(field(entry, {'title'}));
+      final isSyndicated =
+          source.imagePolicy?.kind == 'syndicated-article-photo';
+      final body = isSyndicated
+          ? SyndicatedArticle.fromHtml(
+              html: field(entry, atom ? {'summary'} : {'description'}),
+              articleUrl: url,
+              publisher: source.source.name,
+              licenseUrl: source.source.rights.licenseUrl!,
+            )
+          : null;
       // Only publisher description/summary, never content:encoded or Atom content.
-      final excerpt = rssPlain(
-        field(entry, atom ? {'summary'} : {'description'}),
-      );
+      final excerpt = isSyndicated
+          ? ''
+          : rssPlain(field(entry, atom ? {'summary'} : {'description'}));
       final rights = rssPlain(field(entry, {'rights', 'copyright'}));
       var author = field(entry, {'creator', 'author'});
       if (atom) {
@@ -290,10 +396,13 @@ RssParsedFeed parseRssFeed(
             .join(', ');
       }
       author = rssPlain(author, limit: 200);
+      if (isSyndicated && author.isEmpty) author = source.source.name;
       final combined = '$title $excerpt'.toLowerCase();
       if (title.isEmpty ||
           (source.requiresAttribution && author.isEmpty) ||
-          !allowsEditorialText(title, excerpt) ||
+          (isSyndicated
+              ? !acceptsSyndicatedPromotion(title)
+              : !allowsEditorialText(title, excerpt)) ||
           RegExp(
             r'\b(?:all rights reserved|third.party copyright|used (?:by|with) permission|courtesy of|getty images|associated press)\b',
             caseSensitive: false,
@@ -316,26 +425,44 @@ RssParsedFeed parseRssFeed(
       }
       final published = rssDate(
         field(entry, atom ? {'published'} : {'pubDate', 'date'}),
-        now,
+        isSyndicated ? now.add(const Duration(days: 366)) : now,
       );
+      if (isSyndicated && published != null && published.isAfter(now)) {
+        rejected++;
+        continue;
+      }
       if (published != null &&
           published.isBefore(now.subtract(const Duration(days: 30)))) {
         rejected++;
         continue;
       }
-      final topics =
-          source.source.id == 'nasa-technology' &&
-              !(url.host == 'www.nasa.gov' &&
-                  url.path.startsWith('/technology/'))
+      final topics = isSyndicated
+          ? _featureTopics(title)
+          : source.source.id == 'phys-org' &&
+                entry.childElements.any(
+                  (e) =>
+                      e.name.local == 'category' &&
+                      e.innerText == 'Economics & Business',
+                )
+          ? <String>{'business'}
+          : source.source.id == 'phys-org'
+          ? <String>{'science'}
+          : source.source.id == 'nasa-technology' &&
+                !(url.host == 'www.nasa.gov' &&
+                    url.path.startsWith('/technology/'))
           ? <String>{'science'}
           : source.source.topics;
       final item = LiveContentItem(
         id: id,
         sourceId: source.source.id,
-        title: rssPlain(title, limit: 200),
+        title: source.preserveFeedText
+            ? feedText(title, max: 500)
+            : rssPlain(title, limit: 200),
         canonicalUrl: url,
         excerpt: source.source.rights.excerpts && excerpt.isNotEmpty
-            ? rssPlain(excerpt, limit: 400)
+            ? (source.preserveFeedText
+                  ? feedText(excerpt, max: 1600)
+                  : rssPlain(excerpt, limit: 400))
             : null,
         attribution: author.isEmpty ? null : author,
         publishedAt: published,
@@ -348,6 +475,9 @@ RssParsedFeed parseRssFeed(
         eligibilityScope: source.eligibilityScope,
         reviewedAt: source.verifiedAt,
         expiresAt: now.add(Duration(seconds: source.retentionSeconds)),
+        image: rssThumbnail(entry, source, url),
+        syndicatedArticle: body,
+        region: isSyndicated ? 'us' : null,
       );
       if (!eligibility.matchesTopicScope(
         item.title,
