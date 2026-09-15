@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'image_headers.dart';
 import 'eligibility.dart';
 import 'models.dart';
 import 'rss_provider.dart' show rssRefreshDelay;
@@ -21,48 +23,46 @@ Future<void> validateArticleImage(
   if (bytes.isEmpty || bytes.length > 1024 * 1024) {
     throw const RssFailure('image-size');
   }
-  final jpeg =
-      bytes.length >= 3 &&
-      bytes[0] == 255 &&
-      bytes[1] == 216 &&
-      bytes[2] == 255;
-  final png =
-      bytes.length >= 8 &&
-      [
-        137,
-        80,
-        78,
-        71,
-        13,
-        10,
-        26,
-        10,
-      ].asMap().entries.every((e) => bytes[e.key] == e.value);
-  final webp =
-      bytes.length >= 12 &&
-      String.fromCharCodes(bytes.sublist(0, 4)) == 'RIFF' &&
-      String.fromCharCodes(bytes.sublist(8, 12)) == 'WEBP';
-  if (!(type == 'image/jpeg' && jpeg ||
-      type == 'image/png' && png ||
-      type == 'image/webp' && webp)) {
-    throw const RssFailure('image-format');
+  late final ArticleImageDimensions header;
+  try {
+    header = articleImageDimensions(bytes, type);
+  } on FormatException {
+    throw const RssFailure('image-format-or-dimensions');
+  }
+  bool dimensionsMatch(int width, int height) =>
+      width == header.width &&
+      height == header.height &&
+      (image.width == 0 || width == image.width) &&
+      (image.height == 0 || height == image.height) &&
+      width >= 16 &&
+      height >= 16 &&
+      width <= maximumWidth &&
+      height <= maximumHeight &&
+      width * height <= 4 * 1024 * 1024;
+  if (!dimensionsMatch(header.width, header.height)) {
+    throw const RssFailure('image-dimensions');
   }
   final buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
   ui.ImageDescriptor? descriptor;
   ui.Codec? codec;
   try {
     descriptor = await ui.ImageDescriptor.encoded(buffer);
-    if ((image.width > 0 && descriptor.width != image.width) ||
-        (image.height > 0 && descriptor.height != image.height) ||
-        descriptor.width > maximumWidth ||
-        descriptor.height > maximumHeight ||
-        descriptor.width * descriptor.height > 4 * 1024 * 1024) {
+    // Flutter web's encoded ImageDescriptor does not expose dimensions.
+    // Header inspection bounds allocation there; native retains its descriptor
+    // check, and every platform verifies the actual decoded frame below.
+    if (!kIsWeb && !dimensionsMatch(descriptor.width, descriptor.height)) {
       throw const RssFailure('image-dimensions');
     }
     codec = await descriptor.instantiateCodec();
     if (codec.frameCount != 1) throw const RssFailure('animated-image');
     final frame = await codec.getNextFrame();
-    frame.image.dispose();
+    try {
+      if (!dimensionsMatch(frame.image.width, frame.image.height)) {
+        throw const RssFailure('decoded-image-dimensions');
+      }
+    } finally {
+      frame.image.dispose();
+    }
   } finally {
     codec?.dispose();
     descriptor?.dispose();
@@ -225,9 +225,24 @@ class ArticleImageLoader {
                 .reduce((a, b) => a < b ? a : b);
             ttl = Duration(seconds: seconds.clamp(0, 604800));
           }
+          final ageText = response.headers['age'] ?? '0';
+          if (!RegExp(r'^[0-9]{1,10}$').hasMatch(ageText)) {
+            throw const RssFailure('invalid-image-cache-age');
+          }
+          final age = int.parse(ageText);
+          // A cached response already spent part of its lifetime upstream.
+          // Never turn an expired positive max-age into a fresh transient image.
+          if ((ttl > Duration.zero && age >= ttl.inSeconds) ||
+              (ttl <= Duration.zero && age > 0)) {
+            throw const RssFailure('stale-image-response');
+          }
           if (ttl <= Duration.zero) {
+            // Fresh max-age=0/no-store bytes may be displayed for this active
+            // presentation only, preserving the NewsUSA transient contract.
             transient = true;
             ttl = const Duration(minutes: 30);
+          } else {
+            ttl -= Duration(seconds: age);
           }
           final type = (response.headers['content-type'] ?? '')
               .split(';')

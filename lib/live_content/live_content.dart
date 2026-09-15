@@ -1,4 +1,5 @@
 export 'models.dart';
+export 'branding.dart';
 export 'preferences.dart';
 export 'eligibility.dart';
 export 'provider.dart';

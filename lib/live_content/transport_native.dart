@@ -2,17 +2,27 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 import 'transport.dart';
+import 'rss_transport_native.dart' show NativeRssFeedTransport;
 
 FeedTransport createFeedTransport() => _NativeFeedTransport();
 
 class _NativeFeedTransport implements FeedTransport {
   HttpClient? _client;
+  final _public = NativeRssFeedTransport();
   @override
   Future<FeedTransportResponse> get(
     Uri endpoint,
     Map<String, String> headers,
   ) async {
     cancel();
+    if (!{'localhost', '127.0.0.1', '::1'}.contains(endpoint.host)) {
+      final response = await _public.fetchSharedResource(endpoint, headers);
+      return FeedTransportResponse(
+        response.status,
+        response.body,
+        response.headers,
+      );
+    }
     final client = HttpClient()..autoUncompress = false;
     client.connectionTimeout = const Duration(seconds: 10);
     _client = client;
@@ -42,6 +52,9 @@ class _NativeFeedTransport implements FeedTransport {
           'last-modified',
           'retry-after',
           'content-type',
+          'cache-control',
+          'pragma',
+          'age',
         ]) {
           final value = response.headers.value(name);
           if (value != null) outputHeaders[name] = value;
@@ -60,6 +73,7 @@ class _NativeFeedTransport implements FeedTransport {
 
   @override
   void cancel() {
+    _public.cancel();
     _client?.close(force: true);
     _client = null;
   }

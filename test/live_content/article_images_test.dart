@@ -53,8 +53,8 @@ LiveContentItem item(int id, {bool image = true}) => LiveContentItem.fromJson({
           'licenseUrl': 'https://science.example/feeds/',
           'licenseLabel': 'RSS terms',
           'basis': 'syndicated-feed-thumbnail',
-          'width': 1,
-          'height': 1,
+          'width': 90,
+          'height': 90,
         }
       : null,
 });
@@ -69,8 +69,9 @@ LiveSnapshot snapshot(
   items: items,
   revokedItemIds: revoked,
 );
+// Generated solid-color 90px test raster; no publisher image is bundled.
 final png = base64Decode(
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGMwKFjwHwAEVAJA4zks+QAAAABJRU5ErkJggg==',
+  'iVBORw0KGgoAAAANSUhEUgAAAFoAAABaCAIAAAC3ytZVAAAAkUlEQVR4nO3QMQ0AIADAMPSgBolI5UMC42gyAUvHXFu3kR98FQ4cOHDgwIEDBw4cfThw4MCBAwcOHDhw9OHAgQMHDhw4cODA0YcDBw4cOHDgwIEDRx8OHDhw4MCBAwcOHH04cODAgQMHDhw4cPThwIEDBw4cOHDgwNGHAwcOHDhw4MCBA0cfDhw4cODAgQPHqw4ojdyna+RyaQAAAABJRU5ErkJggg==',
 );
 
 class Images implements ArticleImageTransport {
@@ -172,6 +173,9 @@ void main() {
         {'credit': 'Getty Images'},
         {'basis': 'unreviewed'},
         {'width': 900},
+        {'width': 89},
+        {'height': 89},
+        {'width': 1, 'height': 1},
         {'width': 0},
       ]) {
         final altered = LiveContentItem.fromJson({
@@ -201,6 +205,7 @@ void main() {
         '<media:thumbnail url="https://media.example/thumb/a.png" width="90" height="90"/>',
         '<thumbnail url="https://media.example/thumb/a.png" width="90" height="90"/>',
         '<media:thumbnail url="https://media.example/hero/a.png" width="90" height="90"/>',
+        '<media:thumbnail url="https://media.example/thumb/a.png" width="1" height="1"/>',
       ]) {
         final parsed = parseRssFeed(
           Uint8List.fromList(utf8.encode(xml(thumb))),
@@ -213,9 +218,94 @@ void main() {
         expect(parsed.items.single.excerpt, description);
         expect(
           gate().imageFor(parsed.items.single) != null,
-          thumb.startsWith('<media:') && thumb.contains('/thumb/'),
+          thumb.startsWith('<media:') &&
+              thumb.contains('/thumb/') &&
+              thumb.contains('width="90" height="90"'),
         );
       }
+    },
+  );
+  test(
+    'approved thumbnails support item formats without namespace, logo or size expansion',
+    () {
+      LiveContentItem parse(
+        String extra, {
+        String description = 'A publisher summary',
+        String channel = '',
+      }) {
+        final xml =
+            '<rss xmlns:media="http://search.yahoo.com/mrss/" xmlns:wrong="https://other.example/media"><channel>$channel<item><title>A science story</title><link>https://science.example/reports/one</link><description><![CDATA[$description]]></description>$extra</item></channel></rss>';
+        return parseRssFeed(
+          Uint8List.fromList(utf8.encode(xml)),
+          imageSource(),
+          now,
+          gate(),
+          (_, _) => true,
+        ).items.single;
+      }
+
+      const url = 'https://media.example/thumb/photo.png';
+      for (final extra in [
+        '<media:group><media:thumbnail url="$url" width="90" height="90"/></media:group>',
+        '<media:content url="$url" type="image/png" medium="image" width="90" height="90"/>',
+        '<media:group><media:content url="$url" type="image/jpeg" width="90" height="90"/></media:group>',
+        '<enclosure url="$url" type="image/webp" width="90" height="90"/>',
+      ]) {
+        expect(
+          gate().imageFor(parse(extra))?.url.toString(),
+          url,
+          reason: extra,
+        );
+      }
+      expect(
+        gate()
+            .imageFor(
+              parse(
+                '',
+                description:
+                    '<p>Publisher summary.</p><img src="$url" width="90" height="90">',
+              ),
+            )
+            ?.url
+            .toString(),
+        url,
+      );
+      final preferred = parse(
+        '<media:content url="https://media.example/thumb/other.png" type="image/png" width="90" height="90"/><media:thumbnail url="$url" width="90" height="90"/>',
+      );
+      expect(preferred.image!.url.toString(), url);
+      for (final extra in [
+        '<wrong:thumbnail url="$url" width="90" height="90"/>',
+        '<media:group><wrong:content url="$url" type="image/png" width="90" height="90"/></media:group>',
+        '<media:content url="$url" type="video/mp4" width="90" height="90"/>',
+        '<media:content url="$url" type="image/svg+xml" width="90" height="90"/>',
+        '<media:content url="$url" type="image/png" medium="video" width="90" height="90"/>',
+        '<enclosure url="$url" type="image/png"/>',
+        '<enclosure url="$url" type="image/png" width="900" height="900"/>',
+        '<enclosure url="https://evil.example/thumb/photo.png" type="image/png" width="90" height="90"/>',
+      ]) {
+        expect(parse(extra).image, isNull, reason: extra);
+      }
+      for (final description in [
+        '<img src="$url" width="1" height="1">',
+        '<img srcset="$url 90w" width="90" height="90">',
+        '<img src="https://evil.example/thumb/photo.png" width="90" height="90">',
+        '<script><img src="$url" width="90" height="90"></script>',
+      ]) {
+        expect(
+          parse('', description: description).image,
+          isNull,
+          reason: description,
+        );
+      }
+      expect(
+        parse(
+          '',
+          channel:
+              '<image><url>$url</url><width>90</width><height>90</height></image>',
+        ).image,
+        isNull,
+      );
     },
   );
   test(
@@ -234,11 +324,24 @@ void main() {
       }
       final lie = LiveArticleImage.fromJson({
         ...item(1).image!.toJson(),
-        'width': 90,
+        'width': 89,
         'height': 90,
       });
       await expectLater(
         validateArticleImage(png, lie, 'image/png'),
+        throwsA(isA<RssFailure>()),
+      );
+      final trackingPixel = base64Decode(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGMwKFjwHwAEVAJA4zks+QAAAABJRU5ErkJggg==',
+      );
+      final unknownDimensions = LiveArticleImage.fromJson({
+        ...item(1).image!.toJson(),
+        'basis': 'syndicated-article-photo',
+        'width': 0,
+        'height': 0,
+      });
+      await expectLater(
+        validateArticleImage(trackingPixel, unknownDimensions, 'image/png'),
         throwsA(isA<RssFailure>()),
       );
     },
@@ -304,13 +407,94 @@ void main() {
       expect(changes, 0);
     },
   );
+  test('upstream Age shortens the remaining image cache lifetime', () async {
+    var clock = now;
+    final transport = Images()
+      ..responseHeaders = {
+        'content-type': 'image/png',
+        'cache-control': 'public, max-age=600',
+        'age': '550',
+      };
+    final loader = ArticleImageLoader(
+      eligibility: gate(),
+      transport: transport,
+      clock: () => clock,
+      validator: (_, _, _) async {},
+    );
+    await loader.load([item(1)], onChanged: () {});
+    clock = now.add(const Duration(seconds: 49));
+    expect(loader.bytesFor(item(1)), isNotNull);
+    clock = now.add(const Duration(seconds: 50));
+    expect(loader.bytesFor(item(1)), isNull);
+    loader.cancel(clear: true);
+  });
+  test(
+    'invalid Age is rejected before decoding or exposing image bytes',
+    () async {
+      for (final age in [
+        '-1',
+        '+1',
+        '1.5',
+        '',
+        'bogus',
+        '1, 2',
+        '99999999999',
+      ]) {
+        final transport = Images()
+          ..responseHeaders = {
+            'content-type': 'image/png',
+            'cache-control': 'max-age=600',
+            'age': age,
+          };
+        var decoded = 0, changed = 0;
+        final loader = ArticleImageLoader(
+          eligibility: gate(),
+          transport: transport,
+          clock: () => now,
+          validator: (_, _, _) async {
+            decoded++;
+          },
+        );
+        await loader.load([item(1)], onChanged: () => changed++);
+        expect(loader.bytesFor(item(1)), isNull, reason: age);
+        expect(decoded, 0, reason: age);
+        expect(changed, 0, reason: age);
+        loader.cancel(clear: true);
+      }
+    },
+  );
+  test(
+    'already stale max-age cannot become a fresh transient buffer',
+    () async {
+      for (final headers in [
+        {'cache-control': 'max-age=600', 'age': '600'},
+        {'cache-control': 'max-age=600', 'age': '601'},
+        {'cache-control': 'no-store, max-age=600', 'age': '600'},
+        {'cache-control': 'no-store, max-age=0', 'age': '1'},
+      ]) {
+        final transport = Images()
+          ..responseHeaders = {'content-type': 'image/png', ...headers};
+        final loader = ArticleImageLoader(
+          eligibility: gate(),
+          transport: transport,
+          clock: () => now,
+          validator: (_, _, _) async {},
+        );
+        await loader.load([item(1)], onChanged: () {});
+        expect(loader.bytesFor(item(1)), isNull, reason: headers.toString());
+        expect(loader.isTransientFor(item(1)), isFalse);
+        loader.cancel(clear: true);
+      }
+    },
+  );
   test(
     'no-store responses are fresh transient display buffers, never reused across batches or owner changes',
     () async {
       final transport = Images()
         ..responseHeaders = {
           'content-type': 'image/png',
-          'cache-control': 'no-cache, no-store, must-revalidate',
+          'cache-control': 'no-cache, no-store, max-age=0, must-revalidate',
+          'age': '0',
         };
       final loader = ArticleImageLoader(
         eligibility: gate(),

@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/services.dart';
+import 'branding.dart';
 import 'syndicated_article.dart';
 
 String feedText(Object? value, {int max = 500, bool empty = false}) {
@@ -57,6 +58,25 @@ Uri feedArticleUri(Object? value) {
   return uri.removeFragment();
 }
 
+/// Stable identity removes only recognized analytics parameters. The original
+/// publisher link remains available separately for navigation and attribution.
+Uri feedCanonicalIdentity(Uri uri) {
+  final query = <String, dynamic>{};
+  uri.queryParametersAll.forEach((key, values) {
+    if (!key.toLowerCase().startsWith('utm_') &&
+        !{'fbclid', 'gclid', 'mc_cid', 'mc_eid'}.contains(key.toLowerCase())) {
+      query[key] = values;
+    }
+  });
+  return Uri(
+    scheme: uri.scheme,
+    host: uri.host,
+    port: uri.hasPort ? uri.port : null,
+    path: uri.path,
+    queryParameters: query.isEmpty ? null : query,
+  );
+}
+
 Set<String> feedIds(Object? value, {int max = 500}) {
   if (value is! List || value.length > max) {
     throw const FormatException('Invalid feed list.');
@@ -82,12 +102,14 @@ class ApprovedImagePolicy {
     required this.maximumWidth,
     required this.maximumHeight,
     this.allowedQueryKeys = const {},
+    this.reviewedArticles = const {},
   });
   factory ApprovedImagePolicy.fromJson(Map<String, dynamic> json) {
     final kind = feedId(json['kind']);
     if (!{
       'syndicated-feed-thumbnail',
       'syndicated-article-photo',
+      'reviewed-article-image',
     }.contains(kind)) {
       throw const FormatException('Unknown publisher image policy.');
     }
@@ -117,7 +139,34 @@ class ApprovedImagePolicy {
         height > 2048) {
       throw const FormatException('Invalid publisher image policy.');
     }
-    return ApprovedImagePolicy(
+    final reviewed = <String, LiveArticleImage>{};
+    final mappings = json['reviewedArticles'] ?? <String, Object?>{};
+    if (mappings is! Map || mappings.length > 100) {
+      throw const FormatException('Invalid reviewed article images.');
+    }
+    for (final entry in mappings.entries) {
+      final article = feedArticleUri(entry.key);
+      final image = LiveArticleImage.fromJson(feedMap(entry.value));
+      if (entry.key != article.toString() ||
+          image.articleUrl != article ||
+          image.basis != 'reviewed-article-image' ||
+          image.articleId !=
+              sha256
+                  .convert(utf8.encode(article.toString()))
+                  .toString()
+                  .substring(0, 32)) {
+        throw const FormatException(
+          'Reviewed image must bind its exact article.',
+        );
+      }
+      reviewed[entry.key as String] = image;
+    }
+    if ((kind == 'reviewed-article-image') != reviewed.isNotEmpty) {
+      throw const FormatException(
+        'Reviewed image policy requires exact mappings.',
+      );
+    }
+    final policy = ApprovedImagePolicy(
       kind: kind,
       allowedHosts: hosts,
       pathPrefixes: Set.unmodifiable(paths.cast<String>()),
@@ -127,13 +176,26 @@ class ApprovedImagePolicy {
       maximumWidth: width,
       maximumHeight: height,
       allowedQueryKeys: feedIds(json['allowedQueryKeys'] ?? [], max: 5),
+      reviewedArticles: Map.unmodifiable(reviewed),
     );
+    if (reviewed.values.any(
+      (image) =>
+          !policy.acceptsUri(image.url) ||
+          image.width > width ||
+          image.height > height,
+    )) {
+      throw const FormatException(
+        'Reviewed image exceeds pinned source limits.',
+      );
+    }
+    return policy;
   }
   final String kind, licenseLabel, credit;
   final Set<String> allowedHosts, pathPrefixes;
   final Set<String> allowedQueryKeys;
   final Uri licenseUrl;
   final int maximumWidth, maximumHeight;
+  final Map<String, LiveArticleImage> reviewedArticles;
   bool acceptsUri(Uri uri) {
     try {
       if (feedArticleUri(uri.toString()) != uri ||
@@ -146,7 +208,11 @@ class ApprovedImagePolicy {
           path.split('/').any((p) => p == '.' || p == '..')) {
         return false;
       }
-      if (uri.queryParametersAll.entries.any(
+      if (kind == 'reviewed-article-image') {
+        if (!reviewedArticles.values.any((image) => image.url == uri)) {
+          return false;
+        }
+      } else if (uri.queryParametersAll.entries.any(
         (e) =>
             !allowedQueryKeys.contains(e.key) ||
             e.value.length != 1 ||
@@ -172,6 +238,11 @@ class ApprovedImagePolicy {
     'maximumWidth': maximumWidth,
     'maximumHeight': maximumHeight,
     'allowedQueryKeys': allowedQueryKeys.toList()..sort(),
+    if (reviewedArticles.isNotEmpty)
+      'reviewedArticles': {
+        for (final entry in reviewedArticles.entries)
+          entry.key: entry.value.toJson(),
+      },
   };
 }
 
@@ -187,6 +258,7 @@ class LiveArticleImage {
     required this.basis,
     required this.width,
     required this.height,
+    this.articleId,
   });
   factory LiveArticleImage.fromJson(Map<String, dynamic> json) {
     final width = json['width'], height = json['height'];
@@ -205,6 +277,7 @@ class LiveArticleImage {
       url: feedArticleUri(json['url']),
       articleUrl: feedArticleUri(json['articleUrl']),
       sourceId: feedId(json['sourceId']),
+      articleId: json['articleId'] == null ? null : feedId(json['articleId']),
       credit: feedText(json['credit'], max: 200),
       caption: feedText(json['caption'], max: 500),
       licenseUrl: feedArticleUri(json['licenseUrl']),
@@ -216,9 +289,12 @@ class LiveArticleImage {
   }
   final Uri url, articleUrl, licenseUrl;
   final String sourceId, credit, caption, licenseLabel, basis;
+  final String? articleId;
   final int width, height;
   bool get preserveAspectRatio => true;
-  String get displayLabel => basis == 'syndicated-article-photo'
+  String get displayLabel => basis == 'reviewed-article-image'
+      ? 'Reviewed story image'
+      : basis == 'syndicated-article-photo'
       ? 'Supplied story photo'
       : 'Publisher thumbnail';
   String get cacheKey =>
@@ -228,6 +304,7 @@ class LiveArticleImage {
     'url': url.toString(),
     'articleUrl': articleUrl.toString(),
     'sourceId': sourceId,
+    if (articleId != null) 'articleId': articleId,
     'credit': credit,
     'caption': caption,
     'licenseUrl': licenseUrl.toString(),
@@ -333,7 +410,14 @@ class ApprovedLiveSource {
     this.requiresAttribution = false,
     this.imagePolicy,
     this.preserveFeedText = false,
-  });
+    this.branding,
+    this.feedCompatibility,
+    String? displayMode,
+  }) : displayMode =
+           displayMode ??
+           (imagePolicy?.kind == 'syndicated-article-photo'
+               ? 'sponsored-syndication'
+               : 'publisher-link');
   factory ApprovedLiveSource.fromJson(Map<String, dynamic> json) {
     final hosts = feedIds(json['allowedArticleHosts'], max: 20);
     if (hosts.any(
@@ -362,6 +446,14 @@ class ApprovedLiveSource {
         ? null
         : feedArticleUri(json['feedUrl']);
     final redirects = feedIds(json['feedRedirectHosts'] ?? [], max: 10);
+    final compatibility = json['feedCompatibility'];
+    if (compatibility != null &&
+        (compatibility != 'nasa-photojournal-self-link-v1' ||
+            json['id'] != 'nasa-photojournal' ||
+            feed?.toString() !=
+                'https://science.nasa.gov/feed/photojournal/latest-content/')) {
+      throw const FormatException('Invalid source feed compatibility.');
+    }
     if (feed != null &&
             ((json['feedUrl'] as String).contains('#') ||
                 !redirects.contains(feed.host)) ||
@@ -389,6 +481,25 @@ class ApprovedLiveSource {
     final topicTerms = terms
         .map((v) => feedText(v, max: 80).toLowerCase())
         .toSet();
+    final imagePolicy = json['imagePolicy'] == null
+        ? null
+        : ApprovedImagePolicy.fromJson(feedMap(json['imagePolicy']));
+    final displayMode =
+        json['displayMode'] ??
+        (imagePolicy?.kind == 'syndicated-article-photo'
+            ? 'sponsored-syndication'
+            : 'publisher-link');
+    if (!{'publisher-link', 'sponsored-syndication'}.contains(displayMode) ||
+        (displayMode == 'sponsored-syndication') !=
+            (imagePolicy?.kind == 'syndicated-article-photo') ||
+        (imagePolicy?.reviewedArticles.values.any(
+              (image) => image.sourceId != json['id'],
+            ) ??
+            false)) {
+      throw const FormatException(
+        'Invalid source display or image association.',
+      );
+    }
     return ApprovedLiveSource(
       source: LiveSource.fromJson(json),
       allowedArticleHosts: hosts,
@@ -397,9 +508,10 @@ class ApprovedLiveSource {
       enabled: json['enabled'] == true,
       requiredTopicTerms: Set.unmodifiable(topicTerms),
       requiresAttribution: json['requiresAttribution'] == true,
-      imagePolicy: json['imagePolicy'] == null
-          ? null
-          : ApprovedImagePolicy.fromJson(feedMap(json['imagePolicy'])),
+      imagePolicy: imagePolicy,
+      branding: PublisherBranding.tryFromJson(json['branding']),
+      displayMode: displayMode as String,
+      feedCompatibility: compatibility as String?,
       preserveFeedText: json['preserveFeedText'] == true,
       articleUrlFormat: format as String,
       feedUri: feed,
@@ -424,6 +536,10 @@ class ApprovedLiveSource {
   final bool requiresAttribution;
   final ApprovedImagePolicy? imagePolicy;
   final bool preserveFeedText;
+  final PublisherBranding? branding;
+  final String? feedCompatibility;
+  final String displayMode;
+  bool get isSponsoredSyndication => displayMode == 'sponsored-syndication';
 }
 
 class LiveSourceRegistry {
@@ -436,7 +552,7 @@ class LiveSourceRegistry {
   factory LiveSourceRegistry.fromJson(Map<String, dynamic> json) {
     if (json['schemaVersion'] != 1 ||
         json['sources'] is! List ||
-        (json['sources'] as List).length > 50) {
+        (json['sources'] as List).length > 256) {
       throw const FormatException('Invalid approved source registry.');
     }
     final rows = (json['sources'] as List)
@@ -462,6 +578,28 @@ class LiveSourceRegistry {
   final bool requireStoryImages;
 }
 
+class LiveExcerptProvenance {
+  const LiveExcerptProvenance({required this.field, this.shortened = false});
+  factory LiveExcerptProvenance.fromJson(Map<String, dynamic> json) {
+    if (!{'rss-description', 'atom-summary'}.contains(json['field']) ||
+        json['format'] != 'plain-text' ||
+        json['shortened'] is! bool) {
+      throw const FormatException('Invalid publisher excerpt provenance.');
+    }
+    return LiveExcerptProvenance(
+      field: json['field'] as String,
+      shortened: json['shortened'] as bool,
+    );
+  }
+  final String field;
+  final bool shortened;
+  Map<String, Object?> toJson() => {
+    'field': field,
+    'format': 'plain-text',
+    'shortened': shortened,
+  };
+}
+
 class LiveContentItem {
   const LiveContentItem({
     required this.id,
@@ -483,6 +621,10 @@ class LiveContentItem {
     this.reviewedAt,
     this.image,
     this.syndicatedArticle,
+    this.originalUrl,
+    this.outboundUrl,
+    this.updatedAt,
+    this.excerptProvenance,
   });
   factory LiveContentItem.fromJson(Map<String, dynamic> json) {
     final eligibility = feedMap(json['eligibility']);
@@ -505,6 +647,16 @@ class LiveContentItem {
           ? null
           : feedText(json['attribution'], max: 200, empty: true),
       canonicalUrl: feedArticleUri(json['canonicalUrl']),
+      originalUrl: json['originalUrl'] == null
+          ? null
+          : feedArticleUri(json['originalUrl']),
+      outboundUrl: json['outboundUrl'] == null
+          ? null
+          : feedArticleUri(json['outboundUrl']),
+      updatedAt: json['updatedAt'] == null ? null : feedDate(json['updatedAt']),
+      excerptProvenance: json['excerptProvenance'] == null
+          ? null
+          : LiveExcerptProvenance.fromJson(feedMap(json['excerptProvenance'])),
       publishedAt: json['publishedAt'] == null
           ? null
           : feedDate(json['publishedAt']),
@@ -535,7 +687,10 @@ class LiveContentItem {
       eligibilityScope;
   final String? excerpt, region, attribution;
   final Uri canonicalUrl;
-  final DateTime? publishedAt, reviewedAt;
+  final Uri? originalUrl, outboundUrl;
+  Uri get openingUrl => outboundUrl ?? canonicalUrl;
+  final DateTime? publishedAt, reviewedAt, updatedAt;
+  final LiveExcerptProvenance? excerptProvenance;
   final DateTime fetchedAt, expiresAt;
   final Set<String> topics;
   final LiveContentRights rights;
@@ -552,6 +707,11 @@ class LiveContentItem {
     'excerpt': excerpt,
     'attribution': attribution,
     'canonicalUrl': canonicalUrl.toString(),
+    if (originalUrl != null) 'originalUrl': originalUrl.toString(),
+    if (outboundUrl != null) 'outboundUrl': outboundUrl.toString(),
+    if (updatedAt != null) 'updatedAt': updatedAt?.toIso8601String(),
+    if (excerptProvenance != null)
+      'excerptProvenance': excerptProvenance!.toJson(),
     'publishedAt': publishedAt?.toIso8601String(),
     'fetchedAt': fetchedAt.toIso8601String(),
     'language': language,
@@ -587,7 +747,7 @@ class LiveSnapshot {
         json['items'] is! List ||
         (json['items'] as List).length > 300 ||
         json['sources'] is! List ||
-        (json['sources'] as List).length > 50) {
+        (json['sources'] as List).length > 256) {
       throw const FormatException('Invalid snapshot.');
     }
     final sources = (json['sources'] as List)
@@ -597,17 +757,22 @@ class LiveSnapshot {
       throw const FormatException('Duplicate source.');
     }
     final items = <LiveContentItem>[];
+    final publishers = {
+      for (final source in sources)
+        source.id: '${source.homepageUrl.host}\u0000${source.name}',
+    };
     var rejected = 0;
     final ids = <String>{}, urls = <String>{};
     for (final raw in json['items'] as List) {
       try {
         final item = LiveContentItem.fromJson(feedMap(raw));
-        if (ids.contains(item.id) ||
-            urls.contains(item.canonicalUrl.toString())) {
+        final publisherUrl =
+            '${publishers[item.sourceId] ?? item.sourceId}\u0000${item.canonicalUrl}';
+        if (ids.contains(item.id) || urls.contains(publisherUrl)) {
           continue;
         }
         ids.add(item.id);
-        urls.add(item.canonicalUrl.toString());
+        urls.add(publisherUrl);
         items.add(item);
       } on FormatException {
         rejected++;
@@ -626,8 +791,8 @@ class LiveSnapshot {
       items: List.unmodifiable(items),
       rejectedItems: rejected,
       revokedItemIds: feedIds(json['revokedItemIds'] ?? [], max: 5000),
-      revokedSourceIds: feedIds(json['revokedSourceIds'] ?? [], max: 50),
-      staleSourceIds: feedIds(json['staleSourceIds'] ?? [], max: 50),
+      revokedSourceIds: feedIds(json['revokedSourceIds'] ?? [], max: 256),
+      staleSourceIds: feedIds(json['staleSourceIds'] ?? [], max: 256),
     );
   }
   final String snapshotId;

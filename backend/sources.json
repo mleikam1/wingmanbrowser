@@ -2,6 +2,292 @@
   "schemaVersion": 1,
   "sources": [
     {
+      "id": "newsusa-features",
+      "name": "NewsUSA",
+      "homepageUrl": "https://about.newsusa.com/",
+      "language": "en",
+      "topics": [
+        "headlines",
+        "business",
+        "technology",
+        "sports",
+        "entertainment",
+        "food",
+        "health",
+        "fashion",
+        "travel"
+      ],
+      "allowedArticleHosts": [
+        "about.newsusa.com"
+      ],
+      "articlePathPrefixes": [
+        "/"
+      ],
+      "eligibilityScope": "sponsored-features",
+      "rights": {
+        "titles": true,
+        "excerpts": false,
+        "images": true,
+        "attribution": "NewsUSA · Sponsored feature. Supplied article and image; original links retained.",
+        "licenseUrl": "https://newsflow.newsusa.com/terms-of-syndication"
+      },
+      "enabled": true,
+      "verifiedAt": "2026-09-14T00:37:00Z",
+      "feedUrl": "https://feeds.newsusa.com/articles/RSS-firehose_2.aspx",
+      "feedRedirectHosts": [
+        "feeds.newsusa.com"
+      ],
+      "minRefreshSeconds": 1800,
+      "retentionSeconds": 604800,
+      "preserveFeedText": true,
+      "requiresAttribution": true,
+      "imagePolicy": {
+        "kind": "syndicated-article-photo",
+        "allowedHosts": [
+          "feeds.newsusa.com"
+        ],
+        "pathPrefixes": [
+          "/sites/default/files/styles/full_size_rss_feed/public/"
+        ],
+        "allowedQueryKeys": [
+          "itok"
+        ],
+        "licenseUrl": "https://newsflow.newsusa.com/terms-of-syndication",
+        "licenseLabel": "NewsUSA syndication terms",
+        "credit": "NewsUSA",
+        "maximumWidth": 2048,
+        "maximumHeight": 2048
+      },
+      "displayMode": "sponsored-syndication"
+    },
+    {
+      "id": "tech-xplore",
+      "name": "Tech Xplore",
+      "homepageUrl": "https://techxplore.com/",
+      "language": "en",
+      "topics": [
+        "technology"
+      ],
+      "allowedArticleHosts": [
+        "techxplore.com"
+      ],
+      "articlePathPrefixes": [
+        "/news/"
+      ],
+      "eligibilityScope": "technology-reporting",
+      "rights": {
+        "titles": true,
+        "excerpts": true,
+        "images": true,
+        "attribution": "Source: Tech Xplore. RSS content supplied by the publisher.",
+        "licenseUrl": "https://techxplore.com/feeds/"
+      },
+      "enabled": true,
+      "verifiedAt": "2026-09-14T00:37:00Z",
+      "feedUrl": "https://techxplore.com/rss-feed/",
+      "feedRedirectHosts": [
+        "techxplore.com"
+      ],
+      "minRefreshSeconds": 1800,
+      "retentionSeconds": 604800,
+      "preserveFeedText": true,
+      "imagePolicy": {
+        "kind": "syndicated-feed-thumbnail",
+        "allowedHosts": [
+          "scx1.b-cdn.net"
+        ],
+        "pathPrefixes": [
+          "/csz/news/tmb/"
+        ],
+        "licenseUrl": "https://techxplore.com/feeds/",
+        "licenseLabel": "Publisher RSS terms",
+        "credit": "Tech Xplore",
+        "maximumWidth": 90,
+        "maximumHeight": 90
+      },
+      "displayMode": "publisher-link"
+    },
+    {
+      "id": "medical-xpress",
+      "name": "Medical Xpress",
+      "homepageUrl": "https://medicalxpress.com/",
+      "language": "en",
+      "topics": [
+        "health"
+      ],
+      "allowedArticleHosts": [
+        "medicalxpress.com"
+      ],
+      "articlePathPrefixes": [
+        "/news/"
+      ],
+      "eligibilityScope": "health-reporting",
+      "rights": {
+        "titles": true,
+        "excerpts": true,
+        "images": true,
+        "attribution": "Source: Medical Xpress. RSS content supplied by the publisher.",
+        "licenseUrl": "https://medicalxpress.com/feeds/"
+      },
+      "enabled": true,
+      "verifiedAt": "2026-09-14T00:37:00Z",
+      "feedUrl": "https://medicalxpress.com/rss-feed/",
+      "feedRedirectHosts": [
+        "medicalxpress.com"
+      ],
+      "minRefreshSeconds": 1800,
+      "retentionSeconds": 604800,
+      "preserveFeedText": true,
+      "imagePolicy": {
+        "kind": "syndicated-feed-thumbnail",
+        "allowedHosts": [
+          "scx1.b-cdn.net"
+        ],
+        "pathPrefixes": [
+          "/csz/news/tmb/"
+        ],
+        "licenseUrl": "https://medicalxpress.com/feeds/",
+        "licenseLabel": "Publisher RSS terms",
+        "credit": "Medical Xpress",
+        "maximumWidth": 90,
+        "maximumHeight": 90
+      },
+      "displayMode": "publisher-link"
+    },
+    {
+      "id": "phys-org",
+      "name": "Phys.org",
+      "homepageUrl": "https://phys.org/",
+      "language": "en",
+      "topics": [
+        "science",
+        "business"
+      ],
+      "allowedArticleHosts": [
+        "phys.org"
+      ],
+      "articlePathPrefixes": [
+        "/news/"
+      ],
+      "eligibilityScope": "science-reporting",
+      "rights": {
+        "titles": true,
+        "excerpts": true,
+        "images": true,
+        "attribution": "Source: Phys.org. RSS content supplied by the publisher.",
+        "licenseUrl": "https://phys.org/feeds/"
+      },
+      "enabled": true,
+      "verifiedAt": "2026-09-14T00:37:00Z",
+      "feedUrl": "https://phys.org/rss-feed/",
+      "feedRedirectHosts": [
+        "phys.org"
+      ],
+      "minRefreshSeconds": 1800,
+      "retentionSeconds": 604800,
+      "preserveFeedText": true,
+      "imagePolicy": {
+        "kind": "syndicated-feed-thumbnail",
+        "allowedHosts": [
+          "scx1.b-cdn.net"
+        ],
+        "pathPrefixes": [
+          "/csz/news/tmb/"
+        ],
+        "licenseUrl": "https://phys.org/feeds/",
+        "licenseLabel": "Publisher RSS terms",
+        "credit": "Phys.org",
+        "maximumWidth": 90,
+        "maximumHeight": 90
+      },
+      "displayMode": "publisher-link"
+    },
+    {
+      "id": "nasa-photojournal",
+      "name": "NASA Photojournal",
+      "homepageUrl": "https://science.nasa.gov/photojournal/",
+      "language": "en",
+      "topics": [
+        "science",
+        "technology"
+      ],
+      "allowedArticleHosts": [
+        "science.nasa.gov"
+      ],
+      "articlePathPrefixes": [
+        "/photojournal/"
+      ],
+      "eligibilityScope": "science-reporting",
+      "rights": {
+        "titles": true,
+        "excerpts": true,
+        "images": true,
+        "attribution": "NASA/JPL-Caltech. No endorsement implied.",
+        "licenseUrl": "https://www.jpl.nasa.gov/jpl-image-use-policy/"
+      },
+      "enabled": true,
+      "verifiedAt": "2026-09-15T19:42:42Z",
+      "feedUrl": "https://science.nasa.gov/feed/photojournal/latest-content/",
+      "feedRedirectHosts": [
+        "science.nasa.gov"
+      ],
+      "minRefreshSeconds": 1800,
+      "retentionSeconds": 604800,
+      "articleUrlFormat": "path-prefix",
+      "requiredTopicTerms": [],
+      "requiresAttribution": false,
+      "preserveFeedText": true,
+      "displayMode": "publisher-link",
+      "feedCompatibility": "nasa-photojournal-self-link-v1",
+      "imagePolicy": {
+        "kind": "reviewed-article-image",
+        "allowedHosts": [
+          "assets.science.nasa.gov"
+        ],
+        "pathPrefixes": [
+          "/dynamicimage/assets/science/psd/photojournal/pia/pia26/"
+        ],
+        "licenseUrl": "https://www.jpl.nasa.gov/jpl-image-use-policy/",
+        "licenseLabel": "NASA/JPL media use",
+        "credit": "NASA/JPL-Caltech",
+        "maximumWidth": 1200,
+        "maximumHeight": 900,
+        "reviewedArticles": {
+          "https://science.nasa.gov/photojournal/nasa-deep-space-networks-new-goldstone-antenna-goes-online/": {
+            "schemaVersion": 1,
+            "url": "https://assets.science.nasa.gov/dynamicimage/assets/science/psd/photojournal/pia/pia26/pia26778/PIA26778.jpg?w=1200&h=899&fit=crop&crop=faces%2Cfocalpoint",
+            "articleUrl": "https://science.nasa.gov/photojournal/nasa-deep-space-networks-new-goldstone-antenna-goes-online/",
+            "sourceId": "nasa-photojournal",
+            "articleId": "d0ac03014816a6a019124df95bd5db1c",
+            "credit": "NASA/JPL-Caltech",
+            "caption": "NASA Deep Space Network antenna at Goldstone",
+            "licenseUrl": "https://www.jpl.nasa.gov/jpl-image-use-policy/",
+            "licenseLabel": "NASA/JPL media use",
+            "basis": "reviewed-article-image",
+            "width": 1200,
+            "height": 899
+          },
+          "https://science.nasa.gov/photojournal/panorama-showcasing-the-34-meter-antennas-of-the-dsns-goldstone-complex/": {
+            "schemaVersion": 1,
+            "url": "https://assets.science.nasa.gov/dynamicimage/assets/science/psd/photojournal/pia/pia26/pia26777/PIA26777.jpg?w=1200&h=535&fit=crop&crop=faces%2Cfocalpoint",
+            "articleUrl": "https://science.nasa.gov/photojournal/panorama-showcasing-the-34-meter-antennas-of-the-dsns-goldstone-complex/",
+            "sourceId": "nasa-photojournal",
+            "articleId": "c51edcda31dd31ee312bf10f02dbd56d",
+            "credit": "NASA/JPL-Caltech",
+            "caption": "Panorama of the antennas at NASA’s Goldstone complex",
+            "licenseUrl": "https://www.jpl.nasa.gov/jpl-image-use-policy/",
+            "licenseLabel": "NASA/JPL media use",
+            "basis": "reviewed-article-image",
+            "width": 1200,
+            "height": 534
+          }
+        }
+      },
+      "candidateRecordId": "WM-0145",
+      "revokedItemIds": [],
+      "revokedUrls": []
+    },
+    {
       "id": "nasa-technology",
       "name": "NASA",
       "homepageUrl": "https://www.nasa.gov/technology/",
@@ -34,7 +320,8 @@
       "minRefreshSeconds": 1800,
       "retentionSeconds": 604800,
       "revokedUrls": [],
-      "revokedItemIds": []
+      "revokedItemIds": [],
+      "displayMode": "publisher-link"
     },
     {
       "id": "noaa-news",
@@ -71,7 +358,8 @@
       "minRefreshSeconds": 1800,
       "retentionSeconds": 604800,
       "revokedUrls": [],
-      "revokedItemIds": []
+      "revokedItemIds": [],
+      "displayMode": "publisher-link"
     },
     {
       "id": "usgs-news",
@@ -110,7 +398,8 @@
       "minRefreshSeconds": 1800,
       "retentionSeconds": 604800,
       "revokedUrls": [],
-      "revokedItemIds": []
+      "revokedItemIds": [],
+      "displayMode": "publisher-link"
     },
     {
       "id": "globalvoices-sports",
@@ -146,7 +435,8 @@
       "minRefreshSeconds": 1800,
       "retentionSeconds": 604800,
       "revokedUrls": [],
-      "revokedItemIds": []
+      "revokedItemIds": [],
+      "displayMode": "publisher-link"
     },
     {
       "id": "globalvoices-fashion",
@@ -195,7 +485,8 @@
         "couture",
         "tailoring",
         "dressmaking"
-      ]
+      ],
+      "displayMode": "publisher-link"
     },
     {
       "id": "globalvoices-food",
@@ -231,7 +522,8 @@
       "minRefreshSeconds": 1800,
       "retentionSeconds": 604800,
       "revokedUrls": [],
-      "revokedItemIds": []
+      "revokedItemIds": [],
+      "displayMode": "publisher-link"
     },
     {
       "id": "globalvoices-health",
@@ -267,7 +559,8 @@
       "minRefreshSeconds": 1800,
       "retentionSeconds": 604800,
       "revokedUrls": [],
-      "revokedItemIds": []
+      "revokedItemIds": [],
+      "displayMode": "publisher-link"
     },
     {
       "id": "globalvoices-science",
@@ -303,7 +596,8 @@
       "minRefreshSeconds": 1800,
       "retentionSeconds": 604800,
       "revokedUrls": [],
-      "revokedItemIds": []
+      "revokedItemIds": [],
+      "displayMode": "publisher-link"
     },
     {
       "id": "globalvoices-technology",
@@ -339,7 +633,8 @@
       "minRefreshSeconds": 1800,
       "retentionSeconds": 604800,
       "revokedUrls": [],
-      "revokedItemIds": []
+      "revokedItemIds": [],
+      "displayMode": "publisher-link"
     },
     {
       "id": "globalvoices-business",
@@ -375,7 +670,8 @@
       "minRefreshSeconds": 1800,
       "retentionSeconds": 604800,
       "revokedUrls": [],
-      "revokedItemIds": []
+      "revokedItemIds": [],
+      "displayMode": "publisher-link"
     },
     {
       "id": "globalvoices-entertainment",
@@ -411,7 +707,8 @@
       "minRefreshSeconds": 1800,
       "retentionSeconds": 604800,
       "revokedUrls": [],
-      "revokedItemIds": []
+      "revokedItemIds": [],
+      "displayMode": "publisher-link"
     },
     {
       "id": "globalvoices-headlines",
@@ -447,7 +744,9 @@
       "minRefreshSeconds": 1800,
       "retentionSeconds": 604800,
       "revokedUrls": [],
-      "revokedItemIds": []
+      "revokedItemIds": [],
+      "displayMode": "publisher-link"
     }
-  ]
+  ],
+  "requireStoryImages": true
 }

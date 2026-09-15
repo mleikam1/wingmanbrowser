@@ -1,5 +1,7 @@
 # Content and presentation refresh
 
+Current feed-candidate integration and shared-media rules: [FEED_CANDIDATE_INTEGRATION.md](FEED_CANDIDATE_INTEGRATION.md). Historical version notes below remain unchanged.
+
 Version **0.14.0+16** replaces the four-photo-only feed experience with source-approved, article-associated images delivered with current publisher feeds. The browser engines and DuckDuckGo filtering settings are unchanged. The persistent Strict-search banner above results is removed; search privacy and protection details remain in settings and an expandable search explanation.
 
 ## Presentation

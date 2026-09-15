@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:typed_data';
+import 'package:flutter/widgets.dart' show StringCharacters;
 import 'package:crypto/crypto.dart';
 import 'package:html/parser.dart' as html;
 import 'package:xml/xml.dart';
@@ -11,6 +12,40 @@ import 'syndicated_article.dart';
 
 String rssDigest(String text) =>
     sha256.convert(utf8.encode(text)).toString().substring(0, 32);
+
+/// The XML package preserves unknown/bare entities by default. Feed documents
+/// require XML entities; HTML character references belong inside CDATA only.
+class _StrictFeedEntities extends XmlDefaultEntityMapping {
+  const _StrictFeedEntities() : super.xml();
+  @override
+  String decode(String input) {
+    if (RegExp(
+      r'&(?!amp;|lt;|gt;|quot;|apos;|#x[0-9a-fA-F]+;|#[0-9]+;)',
+    ).hasMatch(input)) {
+      throw const RssFailure('invalid-xml-entity');
+    }
+    for (final match in RegExp(
+      r'&#(x[0-9a-fA-F]+|[0-9]+);',
+    ).allMatches(input)) {
+      final raw = match[1]!;
+      final code = int.tryParse(
+        raw.startsWith('x') ? raw.substring(1) : raw,
+        radix: raw.startsWith('x') ? 16 : 10,
+      );
+      if (code == null ||
+          !(code == 9 ||
+              code == 10 ||
+              code == 13 ||
+              code >= 0x20 && code <= 0xd7ff ||
+              code >= 0xe000 && code <= 0xfffd ||
+              code >= 0x10000 && code <= 0x10ffff)) {
+        throw const RssFailure('invalid-xml-character');
+      }
+    }
+    return super.decode(input);
+  }
+}
+
 String rssPlain(String text, {int limit = 100000}) {
   if (text.length > 100000) throw const RssFailure('text-too-large');
   final fragment = html.parseFragment(text);
@@ -24,9 +59,13 @@ String rssPlain(String text, {int limit = 100000}) {
       )
       .replaceAll(RegExp(r'\s+'), ' ')
       .trim();
-  return value.length <= limit
-      ? value
-      : '${value.substring(0, limit - 1).trimRight()}…';
+  if (value.length <= limit) return value;
+  final truncated = StringBuffer();
+  for (final character in value.characters) {
+    if (truncated.length + character.length >= limit) break;
+    truncated.write(character);
+  }
+  return '${truncated.toString().trimRight()}…';
 }
 
 DateTime? rssDate(String? text, DateTime now) {
@@ -143,28 +182,8 @@ Uri? rssCanonical(String raw, ApprovedLiveSource source) {
         !RegExp(r'^/\d{4}/\d{2}/\d{2}/[^/]+/?$').hasMatch(path)) {
       return null;
     }
-    final query = <String, dynamic>{};
     if (uri.queryParametersAll.length > 40) return null;
-    uri.queryParametersAll.forEach((key, values) {
-      if (!key.toLowerCase().startsWith('utm_') &&
-          !{
-            'fbclid',
-            'gclid',
-            'mc_cid',
-            'mc_eid',
-          }.contains(key.toLowerCase())) {
-        query[key] = values;
-      }
-    });
-    // Uri.replace(null) retains the original component, and an empty fragment
-    // serializes a trailing '#'. Build the canonical URI with absent components.
-    return Uri(
-      scheme: uri.scheme,
-      host: uri.host,
-      port: uri.hasPort ? uri.port : null,
-      path: uri.path,
-      queryParameters: query.isEmpty ? null : query,
-    );
+    return feedCanonicalIdentity(uri);
   } catch (_) {
     return null;
   }
@@ -195,6 +214,7 @@ Set<String> _featureTopics(String title) {
     'food': r'\b(?:foods?|recipes?|cooking|nutrition|meals?|kitchen)\b',
     'health': r'\b(?:health|flu|wellness|vaccines?|medical|fitness|sleep)\b',
     'fashion': r'\b(?:fashion|clothing|skincare|skin care|beauty|facial)\b',
+    'travel': r'\b(?:travel|vacation|tourism|destinations?|sightseeing)\b',
   };
   final topics = terms.entries
       .where((e) => RegExp(e.value, caseSensitive: false).hasMatch(title))
@@ -211,6 +231,11 @@ LiveArticleImage? rssThumbnail(
   final policy = source.imagePolicy;
   if (!source.source.rights.images || policy == null) {
     return null;
+  }
+  if (policy.kind == 'reviewed-article-image') {
+    // A reviewed story association is the only authority for this kind; feed
+    // enclosures, HTML images and alternate renditions cannot expand it.
+    return policy.reviewedArticles[article.toString()];
   }
   if (policy.kind == 'syndicated-article-photo') {
     for (final node in entry.childElements.where(
@@ -242,23 +267,23 @@ LiveArticleImage? rssThumbnail(
     }
     return null;
   }
-  for (final node in entry.childElements) {
-    if (node.namespaceUri != 'http://search.yahoo.com/mrss/' ||
-        node.name.local != 'thumbnail') {
-      continue;
-    }
+  LiveArticleImage? thumbnail(
+    String? raw,
+    String? rawWidth,
+    String? rawHeight,
+  ) {
     try {
-      final uri = feedArticleUri(node.getAttribute('url'));
-      final width = int.tryParse(node.getAttribute('width') ?? ''),
-          height = int.tryParse(node.getAttribute('height') ?? '');
+      final uri = feedArticleUri(raw);
+      final width = int.tryParse(rawWidth ?? ''),
+          height = int.tryParse(rawHeight ?? '');
       if (!policy.acceptsUri(uri) ||
           width == null ||
           height == null ||
-          width < 1 ||
-          height < 1 ||
+          width != 90 ||
+          height != 90 ||
           width > policy.maximumWidth ||
           height > policy.maximumHeight) {
-        continue;
+        return null;
       }
       return LiveArticleImage(
         url: uri,
@@ -274,6 +299,86 @@ LiveArticleImage? rssThumbnail(
       );
     } catch (_) {
       /* An unusable thumbnail leaves the article intact. */
+      return null;
+    }
+  }
+
+  const mediaNamespace = 'http://search.yahoo.com/mrss/';
+  const imageTypes = {'image/jpeg', 'image/png', 'image/webp'};
+  final directMedia = entry.childElements
+      .where((node) => node.namespaceUri == mediaNamespace)
+      .toList();
+  final nestedMedia = directMedia
+      .where((node) => {'group', 'content'}.contains(node.name.local))
+      .expand((node) => node.descendantElements)
+      .where((node) => node.namespaceUri == mediaNamespace)
+      .toList();
+  // Prefer explicit thumbnails to other publisher-supplied item image formats.
+  // This never examines the channel logo, srcset or a larger derived rendition.
+  for (final node in [
+    ...directMedia,
+    ...nestedMedia,
+  ].where((node) => node.name.local == 'thumbnail')) {
+    final image = thumbnail(
+      node.getAttribute('url'),
+      node.getAttribute('width'),
+      node.getAttribute('height'),
+    );
+    if (image != null) return image;
+  }
+  for (final node in [
+    ...directMedia,
+    ...nestedMedia,
+  ].where((node) => node.name.local == 'content')) {
+    if (!imageTypes.contains(node.getAttribute('type')?.toLowerCase()) ||
+        (node.getAttribute('medium') != null &&
+            node.getAttribute('medium') != 'image')) {
+      continue;
+    }
+    final image = thumbnail(
+      node.getAttribute('url'),
+      node.getAttribute('width'),
+      node.getAttribute('height'),
+    );
+    if (image != null) return image;
+  }
+  for (final node in entry.childElements.where(
+    (node) =>
+        node.name.local == 'enclosure' &&
+        (node.namespaceUri == null || node.namespaceUri == ''),
+  )) {
+    if (!imageTypes.contains(node.getAttribute('type')?.toLowerCase())) {
+      continue;
+    }
+    final image = thumbnail(
+      node.getAttribute('url'),
+      node.getAttribute('width'),
+      node.getAttribute('height'),
+    );
+    if (image != null) return image;
+  }
+  final description = entry.childElements
+      .where(
+        (node) =>
+            node.name.local == 'description' &&
+            (node.namespaceUri == null || node.namespaceUri == ''),
+      )
+      .firstOrNull
+      ?.innerText;
+  if (description != null && description.length <= 100000) {
+    final fragment = html.parseFragment(description);
+    fragment
+        .querySelectorAll(
+          'script,style,iframe,svg,noscript,object,embed,template',
+        )
+        .forEach((node) => node.remove());
+    for (final node in fragment.querySelectorAll('img')) {
+      final image = thumbnail(
+        node.attributes['src'],
+        node.attributes['width'],
+        node.attributes['height'],
+      );
+      if (image != null) return image;
     }
   }
   return null;
@@ -289,15 +394,64 @@ RssParsedFeed parseRssFeed(
   if (bytes.length > rssMaximumXmlBytes) {
     throw const RssFailure('xml-too-large');
   }
-  final text = utf8.decode(bytes, allowMalformed: false);
+  var text = utf8.decode(bytes, allowMalformed: false);
   if (RegExp(
     r'<!\s*(?:DOCTYPE|ENTITY)\b',
     caseSensitive: false,
   ).hasMatch(text)) {
     throw const RssFailure('xml-declarations-forbidden');
   }
+  if (source.feedCompatibility == 'nasa-photojournal-self-link-v1' &&
+      source.source.id == 'nasa-photojournal' &&
+      source.feedUri?.toString() ==
+          'https://science.nasa.gov/feed/photojournal/latest-content/') {
+    const knownTag =
+        '<atom:link href="https://science.nasa.gov/feed/?post_type=post&cat=19797&science_org=19791" rel="self" type="application/rss+xml"/>';
+    final at = text.indexOf(knownTag);
+    final channel = text.indexOf('<channel>');
+    final firstItem = text.indexOf('<item');
+    if (at >= 0 &&
+        channel >= 0 &&
+        at > channel &&
+        firstItem > at &&
+        text.indexOf(knownTag, at + knownTag.length) < 0) {
+      var directSelfLink = false, inspected = 0;
+      // The package's default decoder is used only to locate the malformed
+      // known node. The strict decoder still checks the entire repaired XML.
+      for (final event in parseEvents(
+        text,
+        withLocation: true,
+        withParent: true,
+        withNamespace: true,
+      )) {
+        if (++inspected > 20000) throw const RssFailure('xml-node-limit');
+        if ((event.start ?? text.length) > at) break;
+        if (event.start == at) {
+          directSelfLink =
+              event is XmlStartElementEvent &&
+              event.name == 'atom:link' &&
+              event.namespaceUri == 'http://www.w3.org/2005/Atom' &&
+              event.parent?.name == 'channel' &&
+              event.parent?.parent?.name == 'rss' &&
+              event.stop == at + knownTag.length;
+          break;
+        }
+      }
+      if (directSelfLink) {
+        // Only the two bare '&' in this source's exact channel self-link change.
+        text = text.replaceRange(
+          at,
+          at + knownTag.length,
+          knownTag.replaceAll('&', '&amp;'),
+        );
+      }
+    }
+  }
   var nodes = 0, depth = 0;
-  for (final event in parseEvents(text)) {
+  for (final event in parseEvents(
+    text,
+    entityMapping: const _StrictFeedEntities(),
+  )) {
     if (++nodes > 20000 || event is XmlDoctypeEvent) {
       throw const RssFailure('xml-node-limit');
     }
@@ -312,7 +466,10 @@ RssParsedFeed parseRssFeed(
       depth--;
     }
   }
-  final root = XmlDocument.parse(text).rootElement;
+  final root = XmlDocument.parse(
+    text,
+    entityMapping: const _StrictFeedEntities(),
+  ).rootElement;
   final atom =
       root.name.local == 'feed' &&
       root.namespaceUri == 'http://www.w3.org/2005/Atom';
@@ -349,6 +506,7 @@ RssParsedFeed parseRssFeed(
   }
   for (final entry in entries) {
     Uri? url;
+    Uri? original;
     final links = atom
         ? entry.childElements
               .where(
@@ -362,7 +520,10 @@ RssParsedFeed parseRssFeed(
           ];
     for (final link in links) {
       url = rssCanonical(link, source);
-      if (url != null) break;
+      if (url != null) {
+        original = feedArticleUri((html.parseFragment(link).text ?? '').trim());
+        break;
+      }
     }
     if (url == null) {
       rejected++;
@@ -372,8 +533,7 @@ RssParsedFeed parseRssFeed(
         guid = field(entry, atom ? {'id'} : {'guid'});
     try {
       final title = rssPlain(field(entry, {'title'}));
-      final isSyndicated =
-          source.imagePolicy?.kind == 'syndicated-article-photo';
+      final isSyndicated = source.isSponsoredSyndication;
       final body = isSyndicated
           ? SyndicatedArticle.fromHtml(
               html: field(entry, atom ? {'summary'} : {'description'}),
@@ -399,6 +559,7 @@ RssParsedFeed parseRssFeed(
       if (isSyndicated && author.isEmpty) author = source.source.name;
       final combined = '$title $excerpt'.toLowerCase();
       if (title.isEmpty ||
+          title.length > 500 ||
           (source.requiresAttribution && author.isEmpty) ||
           (isSyndicated
               ? !acceptsSyndicatedPromotion(title)
@@ -427,6 +588,7 @@ RssParsedFeed parseRssFeed(
         field(entry, atom ? {'published'} : {'pubDate', 'date'}),
         isSyndicated ? now.add(const Duration(days: 366)) : now,
       );
+      final updated = atom ? rssDate(field(entry, {'updated'}), now) : null;
       if (isSyndicated && published != null && published.isAfter(now)) {
         rejected++;
         continue;
@@ -455,17 +617,24 @@ RssParsedFeed parseRssFeed(
       final item = LiveContentItem(
         id: id,
         sourceId: source.source.id,
-        title: source.preserveFeedText
-            ? feedText(title, max: 500)
-            : rssPlain(title, limit: 200),
+        title: feedText(title, max: 500),
         canonicalUrl: url,
+        originalUrl: original,
+        outboundUrl: original,
         excerpt: source.source.rights.excerpts && excerpt.isNotEmpty
             ? (source.preserveFeedText
                   ? feedText(excerpt, max: 1600)
-                  : rssPlain(excerpt, limit: 400))
+                  : rssPlain(excerpt, limit: 1600))
+            : null,
+        excerptProvenance: source.source.rights.excerpts && excerpt.isNotEmpty
+            ? LiveExcerptProvenance(
+                field: atom ? 'atom-summary' : 'rss-description',
+                shortened: !source.preserveFeedText && excerpt.length > 1600,
+              )
             : null,
         attribution: author.isEmpty ? null : author,
         publishedAt: published,
+        updatedAt: updated,
         fetchedAt: now,
         language: source.source.language,
         topics: topics,

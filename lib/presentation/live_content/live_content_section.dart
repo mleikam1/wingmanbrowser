@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../live_content/live_content.dart';
 import '../components/wingman_components.dart';
 import 'live_story_image.dart';
+import 'live_story_excerpt.dart';
+import 'publisher_identity.dart';
 
 String liveContentTopicLabel(String topic) => topic
     .replaceAll('-', ' ')
@@ -68,6 +70,21 @@ String liveContentSourceName(LiveContentController controller, String id) {
     if (source.id == id) return source.name;
   }
   return 'Saved publisher';
+}
+
+String? liveContentPermittedExcerpt(
+  LiveContentController controller,
+  LiveContentItem item,
+) {
+  final approved = controller.eligibility.registry.sources[item.sourceId];
+  final excerpt = item.excerpt;
+  return controller.canOpen(item) &&
+          approved?.source.rights.excerpts == true &&
+          item.rights.excerpts &&
+          excerpt != null &&
+          excerpt.trim().isNotEmpty
+      ? excerpt
+      : null;
 }
 
 /// A finite section. Home uses a three-item preview; the full feed expands only
@@ -324,6 +341,7 @@ class _LiveContentSectionState extends State<LiveContentSection> {
     required bool featured,
   }) {
     final source = liveContentSourceName(controller, item.sourceId);
+    final approved = controller.eligibility.registry.sources[item.sourceId];
     final saved = controller.isSaved(item.id),
         allowed = _current && controller.canOpen(item);
     final storyImage = allowed ? StoryImages.forItem(item) : null;
@@ -337,6 +355,9 @@ class _LiveContentSectionState extends State<LiveContentSection> {
     final hero = featured && storyImage != null;
     final theme = Theme.of(context);
     final colors = WingmanTokens.of(context);
+    final excerpt = allowed
+        ? liveContentPermittedExcerpt(controller, item)
+        : null;
     final headline = TextButton(
       key: ValueKey(
         '${widget.preview ? 'live-open' : 'live-title'}-${item.id}',
@@ -399,14 +420,20 @@ class _LiveContentSectionState extends State<LiveContentSection> {
     final titleBlock = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          item.syndicatedArticle == null
-              ? source
-              : 'Sponsored feature · $source',
-          style: theme.textTheme.labelLarge?.copyWith(color: colors.action),
+        LivePublisherIdentity(
+          name: source,
+          sponsored: item.syndicatedArticle != null,
+          branding: allowed && controller.preferences.enabled
+              ? approved?.branding
+              : null,
         ),
         const SizedBox(height: 4),
         headline,
+        if (excerpt != null)
+          LiveStoryExcerpt(
+            key: ValueKey('live-excerpt-${item.id}'),
+            text: excerpt,
+          ),
         if (item.attribution?.isNotEmpty == true && item.attribution != source)
           Padding(
             padding: const EdgeInsets.only(top: 4),
@@ -451,6 +478,17 @@ class _LiveContentSectionState extends State<LiveContentSection> {
                   runSpacing: 4,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
+                    if (topics.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: Text(
+                          topics.map(liveContentTopicLabel).join(' · '),
+                          key: ValueKey('live-category-${item.id}'),
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: colors.secondaryText,
+                          ),
+                        ),
+                      ),
                     Tooltip(
                       message: liveContentPublicationLabel(item),
                       child: Padding(
@@ -503,8 +541,8 @@ class _LiveContentSectionState extends State<LiveContentSection> {
                     ),
                     const SizedBox(height: 12),
                     Text(liveContentPublicationLabel(item)),
-                    if (item.rights.excerpts &&
-                        item.excerpt?.isNotEmpty == true) ...[
+                    if (liveContentPermittedExcerpt(controller, item) !=
+                        null) ...[
                       const SizedBox(height: 16),
                       Text(
                         'Publisher excerpt',

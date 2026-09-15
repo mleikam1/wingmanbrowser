@@ -7,8 +7,9 @@ from datetime import datetime, timezone
 from email.utils import format_datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from .normalize import date_value
-from .provider import is_unexpired
+from .provider import is_unexpired, item_current
 from .store import encode
+from .media import media_response
 
 
 class HeaderBudget:
@@ -30,19 +31,23 @@ class SnapshotReader:
         self.cached, self.checked = None, 0
         self.lock = threading.Lock()
 
-    def read(self):
+    def bundle(self):
         with self.lock:
             if time.monotonic() - self.checked >= self.ttl or self.cached is None:
                 # Failure preserves a prior good generation with original dates.
                 try:
                     bundle = self.store.read()
                     if bundle:
-                        self.cached = bundle["snapshot"]
+                        self.cached = bundle
                 except Exception:
                     if self.cached is None:
                         raise
                 self.checked = time.monotonic()
             return self.cached
+
+    def read(self):
+        bundle = self.bundle()
+        return bundle['snapshot'] if bundle else None
 
 
 def handler_for(store):
@@ -72,6 +77,17 @@ def handler_for(store):
             if self.path == "/healthz":
                 self.reply(200, b'{"status":"ok"}')
                 return
+            if self.path.startswith('/v1/media/'):
+                try:
+                    result = media_response(reader.bundle() or {}, self.path[len('/v1/media/'):], datetime.now(timezone.utc))
+                except Exception:
+                    result = None
+                if result is None:
+                    self.reply(404, b'{"error":"media-unavailable"}', {'Cache-Control': 'no-store'})
+                else:
+                    body, mime, ttl = result
+                    self.reply(200, body, {'Cache-Control': 'public, max-age=%d, must-revalidate' % ttl}, content_type=mime)
+                return
             if self.path != "/v1/snapshot.json":
                 self.reply(404, b'{"error":"not-found"}')
                 return
@@ -83,7 +99,7 @@ def handler_for(store):
                 self.reply(503, b'{"error":"snapshot-unavailable"}')
                 return
             now = datetime.now(timezone.utc)
-            snapshot = dict(snapshot, items=[item for item in snapshot["items"] if is_unexpired(item, now)])
+            snapshot = dict(snapshot, items=[item for item in snapshot["items"] if is_unexpired(item, now) and item_current(item, now)])
             data = encode(snapshot)
             etag = '"' + hashlib.sha256(data).hexdigest() + '"'
             generated = date_value(snapshot.get("generatedAt"))
@@ -101,20 +117,20 @@ def handler_for(store):
             self.reply(405, b'{"error":"read-only"}', {"Allow": "GET"})
 
         def do_OPTIONS(self):
-            if self.path != "/v1/snapshot.json":
+            if self.path != "/v1/snapshot.json" and not self.path.startswith('/v1/media/'):
                 self.reply(404, b'{"error":"not-found"}')
                 return
             self.reply(204, b"", {"Access-Control-Allow-Methods": "GET, OPTIONS",
                                   "Access-Control-Allow-Headers": "If-None-Match, If-Modified-Since, Accept",
                                   "Access-Control-Max-Age": "600"})
 
-        def reply(self, status, body, headers=None):
+        def reply(self, status, body, headers=None, content_type='application/json; charset=utf-8'):
             self.send_response(status)
-            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(body)))
             self.send_header("X-Content-Type-Options", "nosniff")
             self.send_header("Access-Control-Allow-Origin", "*")
-            self.send_header("Access-Control-Expose-Headers", "ETag, Last-Modified, Retry-After")
+            self.send_header("Access-Control-Expose-Headers", "ETag, Last-Modified, Retry-After, Cache-Control, Content-Type")
             self.send_header("Referrer-Policy", "no-referrer")
             for key, value in (headers or {}).items():
                 self.send_header(key, value)

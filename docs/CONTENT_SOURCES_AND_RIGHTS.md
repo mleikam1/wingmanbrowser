@@ -1,5 +1,7 @@
 # Content sources and rights
 
+Current feed-candidate integration and shared-media rules: [FEED_CANDIDATE_INTEGRATION.md](FEED_CANDIDATE_INTEGRATION.md). Historical version notes below remain unchanged.
+
 Reviewed **September 13, 2026**. The current registry has **12 feed entries from four separately operated publishers**: NASA, NOAA, USGS and Global Voices. Nine entries are sections of Global Voices, not nine independent newsrooms. The configured topics are Headlines, Sports, Entertainment, Technology, Business, Fashion, Science, Food, Health and Environment. All sources are English-language; this inventory does not promise local reporting for every region or a comprehensive daily newsroom for every topic.
 
 This record supports attributed text cards and, in **0.13.1+15**, a separately reviewed catalog of bundled photographs. RSS availability alone does not establish reuse rights. Full article bodies, paid API keys and commercial syndication agreements are not included. Free feed access observed today is not a guarantee that every future destination will remain free or accessible.

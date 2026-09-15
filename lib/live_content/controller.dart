@@ -25,7 +25,13 @@ class LiveContentController extends ChangeNotifier {
   }) : _clock = clock ?? DateTime.now,
        _imageLoader =
            imageLoader ??
-           ArticleImageLoader(eligibility: eligibility, clock: clock),
+           ArticleImageLoader(
+             eligibility: eligibility,
+             clock: clock,
+             transport: provider is SnapshotFeedProvider
+                 ? provider.createImageTransport()
+                 : null,
+           ),
        _limit = pageSize.clamp(1, 30);
   final SignatureDocumentStore store;
   final LiveContentEligibility eligibility;
@@ -50,6 +56,9 @@ class LiveContentController extends ChangeNotifier {
   bool _providerStateReadable = true;
   int _epoch = 0, _limit;
   int _imageLoad = 0;
+  final Map<String, int> _presentationOrder = {};
+  String? _presentationPreferences;
+  int _nextPresentationIndex = 0;
   Future<void>? _initializing;
   Future<void> _writes = Future.value();
   DateTime get _now => _clock().toUtc();
@@ -145,11 +154,31 @@ class LiveContentController extends ChangeNotifier {
                   item.region == _preferences.region),
         )
         .toList();
-    return balancedLiveItems(
+    final ordered = balancedLiveItems(
       rows,
       eligibility.registry.sources.keys,
       fewerTopics: _preferences.fewerTopics,
     );
+    // Already displayed cards keep their order as checked image bytes arrive.
+    // Preference changes intentionally start a fresh local ordering; networking
+    // still uses the same common snapshot and never receives those preferences.
+    final fingerprint = jsonEncode(_preferences.toJson());
+    if (_presentationPreferences != fingerprint) {
+      _presentationPreferences = fingerprint;
+      _presentationOrder.clear();
+      _nextPresentationIndex = 0;
+    }
+    final currentIds = (_snapshot?.items ?? const <LiveContentItem>[])
+        .map((item) => item.id)
+        .toSet();
+    _presentationOrder.removeWhere((id, _) => !currentIds.contains(id));
+    for (final item in ordered) {
+      _presentationOrder.putIfAbsent(item.id, () => _nextPresentationIndex++);
+    }
+    ordered.sort(
+      (a, b) => _presentationOrder[a.id]!.compareTo(_presentationOrder[b.id]!),
+    );
+    return ordered;
   }
 
   List<LiveSavedItem> get savedItems => !_owner
@@ -342,11 +371,11 @@ class LiveContentController extends ChangeNotifier {
           );
           final revokedSources = feedIds(
             value['revokedSourceIds'] ?? [],
-            max: 50,
+            max: 256,
           );
           final revokedImages = feedIds(
             value['revokedImageSourceIds'] ?? [],
-            max: 50,
+            max: 256,
           );
           final revokedImageKeys = feedIds(
             value['revokedImageKeys'] ?? [],
@@ -525,7 +554,7 @@ class LiveContentController extends ChangeNotifier {
           revokedItems.add(item.id);
         }
       }
-      if (revokedItems.length > 5000 || revokedSources.length > 50) {
+      if (revokedItems.length > 5000 || revokedSources.length > 256) {
         throw const FormatException();
       }
       for (final item in snapshot.items) {

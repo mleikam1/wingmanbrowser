@@ -286,42 +286,62 @@ void main() {
     },
   );
 
-  testWidgets('compact cards retain full dates and excerpts in story details', (
-    tester,
-  ) async {
-    final controller = await _controller();
-    addTearDown(controller.dispose);
-    await tester.pumpWidget(_app(_section(controller)));
-    await tester.pumpAndSettle();
-    expect(find.text('Fixture article 1'), findsOneWidget);
-    expect(find.text('Fixture article 2'), findsOneWidget);
-    expect(find.text('Fixture article 3'), findsNothing);
-    expect(find.text('Date unavailable'), findsOneWidget);
-    expect(find.text('Publisher excerpt'), findsNothing);
-    expect(find.text('Fixture author 1'), findsOneWidget);
-    expect(find.byType(LiveStoryImage), findsNothing);
-    expect(find.textContaining('Topic photo'), findsNothing);
-    expect(find.byKey(const ValueKey('live-feed-freshness')), findsOneWidget);
-    await _tap(tester, _key('live-menu-fixture-1'));
-    await _tap(tester, find.text('About this story'));
-    expect(find.textContaining('Date not supplied; fetched'), findsOneWidget);
-    expect(find.text('Publisher excerpt'), findsOneWidget);
-    expect(find.text(_item(1).excerpt!), findsOneWidget);
-    await _tap(tester, find.text('Done'));
-    for (final image in tester.widgetList<Image>(find.byType(Image))) {
-      final provider = image.image;
-      expect(
-        provider is AssetImage ||
-            provider is ResizeImage && provider.imageProvider is AssetImage,
-        isTrue,
+  testWidgets(
+    'compact cards show publisher excerpts and retain full text in details',
+    (tester) async {
+      final controller = await _controller();
+      addTearDown(controller.dispose);
+      await tester.pumpWidget(_app(_section(controller)));
+      await tester.pumpAndSettle();
+      expect(find.text('Fixture article 1'), findsOneWidget);
+      expect(find.text('Fixture article 2'), findsOneWidget);
+      expect(find.text('Fixture article 3'), findsNothing);
+      expect(find.text('Date unavailable'), findsOneWidget);
+      expect(find.text('Publisher excerpt'), findsNothing);
+      final excerpt = tester.widget<Text>(
+        find.descendant(
+          of: _key('live-excerpt-fixture-1'),
+          matching: find.byType(Text),
+        ),
       );
-    }
-    await _tap(tester, _key('live-feed-load-more'));
-    expect(find.text('Fixture article 3'), findsOneWidget);
-    expect(_key('live-feed-load-more'), findsNothing);
-    expect(find.text('End of this selection.'), findsOneWidget);
-    expect(tester.takeException(), isNull);
-  });
+      expect(excerpt.data, _item(1).excerpt);
+      expect(excerpt.maxLines, 3);
+      expect(excerpt.overflow, TextOverflow.ellipsis);
+      expect(
+        tester.getTopLeft(_key('live-excerpt-fixture-1')).dy,
+        greaterThan(tester.getTopLeft(find.text('Fixture article 1')).dy),
+      );
+      expect(find.text('Fixture author 1'), findsOneWidget);
+      expect(find.byType(LiveStoryImage), findsNothing);
+      expect(find.textContaining('Topic photo'), findsNothing);
+      expect(find.byKey(const ValueKey('live-feed-freshness')), findsOneWidget);
+      await _tap(tester, _key('live-menu-fixture-1'));
+      await _tap(tester, find.text('About this story'));
+      expect(find.textContaining('Date not supplied; fetched'), findsOneWidget);
+      expect(find.text('Publisher excerpt'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.text(_item(1).excerpt!),
+        ),
+        findsOneWidget,
+      );
+      await _tap(tester, find.text('Done'));
+      for (final image in tester.widgetList<Image>(find.byType(Image))) {
+        final provider = image.image;
+        expect(
+          provider is AssetImage ||
+              provider is ResizeImage && provider.imageProvider is AssetImage,
+          isTrue,
+        );
+      }
+      await _tap(tester, _key('live-feed-load-more'));
+      expect(find.text('Fixture article 3'), findsOneWidget);
+      expect(_key('live-feed-load-more'), findsNothing);
+      expect(find.text('End of this selection.'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets(
     'card actions open, save, pin, reduce topic and dismiss locally',

@@ -85,6 +85,9 @@ class _WebFeedTransport implements FeedTransport {
         'last-modified',
         'retry-after',
         'content-type',
+        'cache-control',
+        'pragma',
+        'age',
       ]) {
         final value = response.headers.get(name);
         if (value != null) outputHeaders[name] = value;

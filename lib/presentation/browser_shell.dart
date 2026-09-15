@@ -120,9 +120,17 @@ class _BrowserShellState extends State<BrowserShell>
   DateTime? _lastFeedAttempt;
 
   int _featureRouteDepth = 0;
+  int _feedOwnerEpoch = 0;
+  // These route locations live only in the current owner UI, never in saved
+  // browser history, feed preferences or a private/Hand It Over session.
+  final Map<String, _LiveFeedReturn> _liveFeedReturns = {};
   void _recheckLiveContent() => widget.liveContent?.recheckEligibility();
 
   void _syncLiveContentContext() {
+    if (_ephemeral || widget.handoff?.blocksOwner == true) {
+      _feedOwnerEpoch++;
+      _liveFeedReturns.clear();
+    }
     widget.liveContent?.setContext(
       widget.handoff?.blocksOwner == true
           ? LiveContentContext.handoff
@@ -785,6 +793,7 @@ class _BrowserShellState extends State<BrowserShell>
     _webWindowTokens.removeWhere((id, _) => !validTabs.contains(id));
     _webWindowOpeners.removeWhere((id, _) => !validTabs.contains(id));
     _webControllers.removeWhere((id, _) => !validTabs.contains(id));
+    _liveFeedReturns.removeWhere((id, _) => !validTabs.contains(id));
     _liveOrder.removeWhere((id) => !validTabs.contains(id));
     _persistSession();
     for (final key
@@ -822,6 +831,7 @@ class _BrowserShellState extends State<BrowserShell>
   }
 
   void _home() {
+    _liveFeedReturns.remove(_tab.id);
     setState(() {
       _tab.visit(null);
       _destination = 0;
@@ -848,6 +858,7 @@ class _BrowserShellState extends State<BrowserShell>
       return;
     }
     FocusScope.of(context).unfocus();
+    _liveFeedReturns.remove(_tab.id);
     setState(() {
       _tab.visit(r.id);
       _destination = 0;
@@ -871,6 +882,8 @@ class _BrowserShellState extends State<BrowserShell>
     bool newTab = false,
     String? windowToken,
     String? openerTabId,
+    _LiveFeedLocation? returnToFeed,
+    bool companionArticle = false,
   }) {
     if (!_validOrigin(_tab)) return;
     try {
@@ -885,7 +898,7 @@ class _BrowserShellState extends State<BrowserShell>
         productEdition == ProductEdition.consumer &&
         const StrictSearchPolicy().acceptsCanonical(uri) &&
         widget.policy.searchAvailable(additional: _additional)) {
-      navigateCompanion(uri);
+      navigateCompanion(uri, newTab: companionArticle);
       return;
     }
     if (kIsWeb && productEdition == ProductEdition.consumer) {
@@ -902,7 +915,7 @@ class _BrowserShellState extends State<BrowserShell>
         return;
       }
       // A user-selected destination opens top-level in the host browser.
-      navigateCompanion(uri);
+      navigateCompanion(uri, newTab: companionArticle);
       return;
     }
     final decision = _websiteDecision(uri);
@@ -927,11 +940,24 @@ class _BrowserShellState extends State<BrowserShell>
         if (windowToken != null) _webWindowTokens[_tab.id] = windowToken;
         if (openerTabId != null) _webWindowOpeners[_tab.id] = openerTabId;
       }
+      final previousEntry = _tab.currentEntry;
+      _liveFeedReturns.remove(_tab.id);
       _tab.visitWebsite(uri);
       _webRequests[_tab.id] = uri;
       _retainEngine(_tab, uri);
       _webStatuses.remove(_tab.id);
       _webRevisions[_tab.id] = (_webRevisions[_tab.id] ?? 0) + 1;
+      if (returnToFeed != null && _validFeedLocation(returnToFeed)) {
+        _liveFeedReturns[_tab.id] = _LiveFeedReturn(
+          location: returnToFeed,
+          articlePosition: _tab.position,
+          originPosition: previousEntry == _tab.currentEntry
+              ? _tab.position
+              : _tab.position - 1,
+          revision: _webRevisions[_tab.id]!,
+          entryUrl: uri,
+        );
+      }
       _destination = 0;
       _query = '';
       _collection = null;
@@ -942,13 +968,14 @@ class _BrowserShellState extends State<BrowserShell>
   }
 
   Widget _websiteView(DiscoveryTab owner, Uri request, {required bool active}) {
+    final revision = _webRevisions[owner.id] ?? 0;
     return ProtectedWebSurface(
       key: ValueKey('live-${owner.id}'),
       tabId: owner.id,
       url: request,
       isPrivate: owner.isPrivate,
       active: active,
-      revision: _webRevisions[owner.id] ?? 0,
+      revision: revision,
       windowToken: _webWindowTokens[owner.id],
       restrictions: widget.policy.nativeConsumerConfiguration(_additional),
       policyChanges: _launchpadChanges,
@@ -1007,6 +1034,15 @@ class _BrowserShellState extends State<BrowserShell>
         }
         setState(() {
           _webStatuses[owner.id] = status;
+          final feedReturn = _liveFeedReturns[owner.id];
+          if (feedReturn != null &&
+              feedReturn.awaitingInitialCommit &&
+              feedReturn.revision == revision &&
+              status.committed) {
+            // Remember the final article URL after its initial redirects.
+            feedReturn.entryUrl = status.url!;
+            feedReturn.awaitingInitialCommit = false;
+          }
           if (status.url != null &&
               status.error == null &&
               owner.website != null) {
@@ -1086,6 +1122,28 @@ class _BrowserShellState extends State<BrowserShell>
   void _historyStep(bool forward) {
     final engine = _webControllers[_tab.id];
     final status = _webStatuses[_tab.id];
+    final feedReturn = _liveFeedReturns[_tab.id];
+    if (!forward &&
+        feedReturn != null &&
+        _validFeedLocation(feedReturn.location) &&
+        feedReturn.articlePosition == _tab.position &&
+        feedReturn.revision == _webRevisions[_tab.id] &&
+        (feedReturn.awaitingInitialCommit ||
+            status?.url == feedReturn.entryUrl ||
+            engine == null ||
+            status?.canGoBack != true)) {
+      _liveFeedReturns.remove(_tab.id);
+      setState(() {
+        _tab.position = feedReturn.originPosition;
+        _destination = 0;
+        _query = '';
+        _collection = null;
+        _queryController.clear();
+      });
+      _recordTaskNavigation();
+      _liveContentFeed(location: feedReturn.location);
+      return;
+    }
     if (_tab.website != null &&
         engine != null &&
         (forward ? status?.canGoForward == true : status?.canGoBack == true)) {
@@ -1226,6 +1284,7 @@ class _BrowserShellState extends State<BrowserShell>
       PrivacyActivity.localCatalogSearch,
       PrivacyOutcome.completed,
     );
+    _liveFeedReturns.remove(_tab.id);
     setState(() {
       _tab.visit(null);
       _destination = 0;
@@ -2548,7 +2607,10 @@ class _BrowserShellState extends State<BrowserShell>
     );
   }
 
-  void _openLiveContent(LiveContentItem item) {
+  void _openLiveContent(
+    LiveContentItem item, {
+    _LiveFeedLocation? returnToFeed,
+  }) {
     if (_ephemeral ||
         !_validOrigin(_tab) ||
         widget.liveContent?.canOpen(item) != true) {
@@ -2565,29 +2627,55 @@ class _BrowserShellState extends State<BrowserShell>
           onOpenUri: (uri) {
             if (_ephemeral ||
                 !_validOrigin(origin) ||
-                !controller.canOpen(item) ||
-                !_websiteDecision(uri).isAllowed) {
+                !controller.canOpen(item)) {
               return;
             }
-            Navigator.of(context).popUntil((route) => route.isFirst);
-            _navigateWebsite(uri);
+            _navigateWebsite(
+              uri,
+              returnToFeed: returnToFeed,
+              companionArticle: true,
+            );
           },
         ),
       );
       return;
     }
-    Navigator.of(context).popUntil((route) => route.isFirst);
-    _navigateWebsite(item.canonicalUrl);
+    _navigateWebsite(
+      item.openingUrl,
+      returnToFeed: returnToFeed,
+      companionArticle: true,
+    );
   }
 
-  void _liveContentFeed() {
+  bool _validFeedLocation(_LiveFeedLocation location) =>
+      !_ephemeral &&
+      _validOrigin(location.owner) &&
+      _tabs.contains(location.owner) &&
+      location.epoch == _feedOwnerEpoch &&
+      identical(location.controller, widget.liveContent);
+
+  void _liveContentFeed({_LiveFeedLocation? location}) {
     final feed = widget.liveContent, origin = _tab;
     if (feed == null || _ephemeral || !_validOrigin(origin)) return;
+    final captured =
+        location ??
+        _LiveFeedLocation(
+          owner: origin,
+          controller: feed,
+          epoch: _feedOwnerEpoch,
+        );
+    if (!_validFeedLocation(captured)) return;
     _pushFeature(
       LiveContentFeedScreen(
         controller: feed,
-        canContinue: () => !_ephemeral && _validOrigin(origin),
-        onOpen: _openLiveContent,
+        initialScrollOffset: captured.offset,
+        onScrollOffsetChanged: (offset) => captured.offset = offset,
+        canContinue: () => _validFeedLocation(captured),
+        onOpen: (item) {
+          if (_validFeedLocation(captured)) {
+            _openLiveContent(item, returnToFeed: captured);
+          }
+        },
         onOpenUri: _openLiveContentLicense,
         onPin: _pinLiveContent,
         onPreferences: _liveContentPreferences,
@@ -3279,6 +3367,32 @@ class _BrowserShellState extends State<BrowserShell>
           ),
         ),
       );
+}
+
+class _LiveFeedLocation {
+  _LiveFeedLocation({
+    required this.owner,
+    required this.controller,
+    required this.epoch,
+  });
+  final DiscoveryTab owner;
+  final LiveContentController controller;
+  final int epoch;
+  double offset = 0;
+}
+
+class _LiveFeedReturn {
+  _LiveFeedReturn({
+    required this.location,
+    required this.articlePosition,
+    required this.originPosition,
+    required this.revision,
+    required this.entryUrl,
+  });
+  final _LiveFeedLocation location;
+  final int articlePosition, originPosition, revision;
+  Uri entryUrl;
+  bool awaitingInitialCommit = true;
 }
 
 /// Preserve text editing while excluding OS lookup/search/share/process-text.

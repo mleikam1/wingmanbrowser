@@ -64,6 +64,37 @@ class NativeRssFeedTransport
         .timeout(const Duration(seconds: 4));
   }
 
+  /// Fixed configured service resource, using the same public DNS pinning as
+  /// publisher traffic. A redirect cannot change this reviewed service origin.
+  Future<RssFetchResponse> fetchSharedResource(
+    Uri endpoint,
+    Map<String, String> validators,
+  ) => _fetch(
+    initialUri: endpoint,
+    checkUri: (uri) {
+      if (uri != endpoint ||
+          uri.scheme != 'https' ||
+          uri.userInfo.isNotEmpty ||
+          uri.hasQuery ||
+          uri.hasFragment ||
+          (uri.hasPort && uri.port != 443) ||
+          !(uri.path == '/v1/snapshot.json' ||
+              RegExp(r'^/v1/media/[a-f0-9]{64}$').hasMatch(uri.path))) {
+        throw const RssFailure('unapproved-shared-resource');
+      }
+      return uri;
+    },
+    validators: validators,
+    acceptedTypes: const {
+      'application/json',
+      'image/jpeg',
+      'image/png',
+      'image/webp',
+    },
+    accept: 'application/json, image/jpeg, image/png, image/webp',
+    maximumBytes: 2 * 1024 * 1024,
+  );
+
   @override
   Future<RssFetchResponse> fetch(
     ApprovedLiveSource source,

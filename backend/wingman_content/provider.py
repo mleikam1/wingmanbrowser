@@ -11,7 +11,7 @@ from .store import encode
 MAX_SHARED_ITEMS = 300
 MAX_SNAPSHOT_BYTES = 512 * 1024
 MAX_FAILURES = 12
-NORMALIZATION_VERSION = 5
+NORMALIZATION_VERSION = 6
 MAX_REVOCATIONS = 5000  # Matches the client envelope limit.
 
 
@@ -145,12 +145,23 @@ def public_snapshot(config, states, now, prior_snapshot=None):
                 continue
             candidate = {key: value for key, value in item.items() if not key.startswith("_")}
             candidate["rights"] = {"title": True, "excerpt": source["rights"]["excerpts"],
-                                   "image": False, "licenseUrl": source["rights"]["licenseUrl"]}
+                                   "image": source['rights']['images'], "licenseUrl": source["rights"]["licenseUrl"]}
             if not source["rights"]["excerpts"]:
                 candidate.pop("excerpt", None)
+                candidate.pop("excerptProvenance", None)
+            from .media import accepts_image
+            if not accepts_image(candidate.get('image'), source):
+                candidate['image'] = None
+            if source.get('displayMode', 'publisher-link') != 'sponsored-syndication':
+                candidate.pop('syndicatedArticle', None)
             # Stable URL identity wins deterministically; distinct articles with
             # the same headline are never collapsed.
-            by_url.setdefault(candidate["canonicalUrl"], candidate)
+            old = by_url.get(candidate['canonicalUrl'])
+            # The same article may appear in a broad feed and its reviewed
+            # photo-specific feed. Keep the complete approved representation;
+            # never combine permissions or image fields from different sources.
+            if old is None or (candidate.get('image') and not old.get('image')):
+                by_url[candidate['canonicalUrl']] = candidate
     revoked_sources = sorted(set(revoked_sources) | set((prior_snapshot or {}).get("revokedSourceIds", [])))
     items = [item for item in by_url.values() if item["id"] not in revoked
              and item["sourceId"] not in revoked_sources]
@@ -175,7 +186,7 @@ def public_snapshot(config, states, now, prior_snapshot=None):
     return result
 
 
-def ingest(config, store, provider, now=None):
+def ingest(config, store, provider, now=None, media_fetcher=None):
     live_clock = now is None
     now = now or datetime.now(timezone.utc)
     prior = store.read() or {"states": {}, "snapshot": {}}
@@ -218,5 +229,11 @@ def ingest(config, store, provider, now=None):
     if snapshot.get('recoveryRequired'):
         for state in states.values():
             state.update(sourceRevoked=True, items=[], revokedItemIds=[])
-    store.write({"schemaVersion": 1, "states": states, "snapshot": snapshot})
+    from .media import ingest_media
+    media, media_report = ingest_media(snapshot, config, prior.get('media', {}),
+                                       datetime.now(timezone.utc) if live_clock else now, media_fetcher,
+                                       cursor=prior.get('mediaCursor', 0))
+    store.write({"schemaVersion": 1, "states": states, "snapshot": snapshot,
+                 "media": media, "mediaReport": media_report,
+                 "mediaCursor": media_report[-1]['scheduler']['nextCursor']})
     return snapshot, report

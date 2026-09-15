@@ -505,10 +505,11 @@ class ConfigurationTests(unittest.TestCase):
             "globalvoices-fashion", "globalvoices-food", "globalvoices-health",
             "globalvoices-science", "globalvoices-technology", "globalvoices-business",
             "globalvoices-entertainment", "globalvoices-headlines",
+            "newsusa-features", "phys-org", "tech-xplore", "medical-xpress", "nasa-photojournal",
         })
         self.assertEqual({topic for source in config["sources"] for topic in source["topics"]}, {
             "sports", "fashion", "food", "health", "science", "technology",
-            "business", "entertainment", "headlines", "environment",
+            "business", "entertainment", "headlines", "environment", "travel",
         })
 
     def test_real_pinned_baseline_loaded_and_mandatory_fixture_denied(self):

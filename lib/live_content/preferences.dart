@@ -18,8 +18,8 @@ class LiveContentPreferences {
     return LiveContentPreferences(
       enabled: json['enabled'] as bool,
       selectedTopics: feedIds(json['selectedTopics'] ?? [], max: 30),
-      selectedSourceIds: feedIds(json['selectedSourceIds'] ?? [], max: 50),
-      hiddenSourceIds: feedIds(json['hiddenSourceIds'] ?? [], max: 50),
+      selectedSourceIds: feedIds(json['selectedSourceIds'] ?? [], max: 256),
+      hiddenSourceIds: feedIds(json['hiddenSourceIds'] ?? [], max: 256),
       fewerTopics: feedIds(json['fewerTopics'] ?? [], max: 30),
       dismissedItemIds: feedIds(json['dismissedItemIds'] ?? [], max: 2000),
       language: feedId(json['language'] ?? 'en'),

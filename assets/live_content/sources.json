@@ -1,5 +1,6 @@
 {
   "schemaVersion": 1,
+  "requireStoryImages": true,
   "sources": [
     {
       "id": "newsusa-features",
@@ -14,7 +15,8 @@
         "entertainment",
         "food",
         "health",
-        "fashion"
+        "fashion",
+        "travel"
       ],
       "allowedArticleHosts": [
         "about.newsusa.com"
@@ -27,7 +29,7 @@
         "titles": true,
         "excerpts": false,
         "images": true,
-        "attribution": "NewsUSA · Sponsored feature. Supplied article and image; original links retained.",
+        "attribution": "NewsUSA \u00b7 Sponsored feature. Supplied article and image; original links retained.",
         "licenseUrl": "https://newsflow.newsusa.com/terms-of-syndication"
       },
       "enabled": true,
@@ -38,7 +40,6 @@
       ],
       "minRefreshSeconds": 1800,
       "retentionSeconds": 604800,
-      "preserveFeedText": true,
       "requiresAttribution": true,
       "imagePolicy": {
         "kind": "syndicated-article-photo",
@@ -56,7 +57,103 @@
         "credit": "NewsUSA",
         "maximumWidth": 2048,
         "maximumHeight": 2048
-      }
+      },
+      "preserveFeedText": true,
+      "displayMode": "sponsored-syndication"
+    },
+    {
+      "id": "tech-xplore",
+      "name": "Tech Xplore",
+      "homepageUrl": "https://techxplore.com/",
+      "language": "en",
+      "topics": [
+        "technology"
+      ],
+      "allowedArticleHosts": [
+        "techxplore.com"
+      ],
+      "articlePathPrefixes": [
+        "/news/"
+      ],
+      "eligibilityScope": "technology-reporting",
+      "rights": {
+        "titles": true,
+        "excerpts": true,
+        "images": true,
+        "attribution": "Source: Tech Xplore. RSS content supplied by the publisher.",
+        "licenseUrl": "https://techxplore.com/feeds/"
+      },
+      "enabled": true,
+      "verifiedAt": "2026-09-14T00:37:00Z",
+      "feedUrl": "https://techxplore.com/rss-feed/",
+      "feedRedirectHosts": [
+        "techxplore.com"
+      ],
+      "minRefreshSeconds": 1800,
+      "retentionSeconds": 604800,
+      "imagePolicy": {
+        "kind": "syndicated-feed-thumbnail",
+        "allowedHosts": [
+          "scx1.b-cdn.net"
+        ],
+        "pathPrefixes": [
+          "/csz/news/tmb/"
+        ],
+        "licenseUrl": "https://techxplore.com/feeds/",
+        "licenseLabel": "Publisher RSS terms",
+        "credit": "Tech Xplore",
+        "maximumWidth": 90,
+        "maximumHeight": 90
+      },
+      "preserveFeedText": true,
+      "displayMode": "publisher-link"
+    },
+    {
+      "id": "medical-xpress",
+      "name": "Medical Xpress",
+      "homepageUrl": "https://medicalxpress.com/",
+      "language": "en",
+      "topics": [
+        "health"
+      ],
+      "allowedArticleHosts": [
+        "medicalxpress.com"
+      ],
+      "articlePathPrefixes": [
+        "/news/"
+      ],
+      "eligibilityScope": "health-reporting",
+      "rights": {
+        "titles": true,
+        "excerpts": true,
+        "images": true,
+        "attribution": "Source: Medical Xpress. RSS content supplied by the publisher.",
+        "licenseUrl": "https://medicalxpress.com/feeds/"
+      },
+      "enabled": true,
+      "verifiedAt": "2026-09-14T00:37:00Z",
+      "feedUrl": "https://medicalxpress.com/rss-feed/",
+      "feedRedirectHosts": [
+        "medicalxpress.com"
+      ],
+      "minRefreshSeconds": 1800,
+      "retentionSeconds": 604800,
+      "imagePolicy": {
+        "kind": "syndicated-feed-thumbnail",
+        "allowedHosts": [
+          "scx1.b-cdn.net"
+        ],
+        "pathPrefixes": [
+          "/csz/news/tmb/"
+        ],
+        "licenseUrl": "https://medicalxpress.com/feeds/",
+        "licenseLabel": "Publisher RSS terms",
+        "credit": "Medical Xpress",
+        "maximumWidth": 90,
+        "maximumHeight": 90
+      },
+      "preserveFeedText": true,
+      "displayMode": "publisher-link"
     },
     {
       "id": "phys-org",
@@ -89,7 +186,6 @@
       ],
       "minRefreshSeconds": 1800,
       "retentionSeconds": 604800,
-      "preserveFeedText": true,
       "imagePolicy": {
         "kind": "syndicated-feed-thumbnail",
         "allowedHosts": [
@@ -103,99 +199,91 @@
         "credit": "Phys.org",
         "maximumWidth": 90,
         "maximumHeight": 90
-      }
+      },
+      "preserveFeedText": true,
+      "displayMode": "publisher-link"
     },
     {
-      "id": "tech-xplore",
-      "name": "Tech Xplore",
-      "homepageUrl": "https://techxplore.com/",
+      "id": "nasa-photojournal",
+      "name": "NASA Photojournal",
+      "homepageUrl": "https://science.nasa.gov/photojournal/",
       "language": "en",
       "topics": [
+        "science",
         "technology"
       ],
       "allowedArticleHosts": [
-        "techxplore.com"
+        "science.nasa.gov"
       ],
       "articlePathPrefixes": [
-        "/news/"
+        "/photojournal/"
       ],
-      "eligibilityScope": "technology-reporting",
+      "eligibilityScope": "science-reporting",
       "rights": {
         "titles": true,
         "excerpts": true,
         "images": true,
-        "attribution": "Source: Tech Xplore. RSS content supplied by the publisher.",
-        "licenseUrl": "https://techxplore.com/feeds/"
+        "attribution": "NASA/JPL-Caltech. No endorsement implied.",
+        "licenseUrl": "https://www.jpl.nasa.gov/jpl-image-use-policy/"
       },
       "enabled": true,
-      "verifiedAt": "2026-09-14T00:37:00Z",
-      "feedUrl": "https://techxplore.com/rss-feed/",
+      "verifiedAt": "2026-09-15T19:42:42Z",
+      "feedUrl": "https://science.nasa.gov/feed/photojournal/latest-content/",
       "feedRedirectHosts": [
-        "techxplore.com"
+        "science.nasa.gov"
       ],
       "minRefreshSeconds": 1800,
       "retentionSeconds": 604800,
-      "preserveFeedText": true,
+      "articleUrlFormat": "path-prefix",
+      "requiredTopicTerms": [],
+      "requiresAttribution": false,
       "imagePolicy": {
-        "kind": "syndicated-feed-thumbnail",
+        "kind": "reviewed-article-image",
         "allowedHosts": [
-          "scx1.b-cdn.net"
+          "assets.science.nasa.gov"
         ],
         "pathPrefixes": [
-          "/csz/news/tmb/"
+          "/dynamicimage/assets/science/psd/photojournal/pia/pia26/"
         ],
-        "licenseUrl": "https://techxplore.com/feeds/",
-        "licenseLabel": "Publisher RSS terms",
-        "credit": "Tech Xplore",
-        "maximumWidth": 90,
-        "maximumHeight": 90
-      }
-    },
-    {
-      "id": "medical-xpress",
-      "name": "Medical Xpress",
-      "homepageUrl": "https://medicalxpress.com/",
-      "language": "en",
-      "topics": [
-        "health"
-      ],
-      "allowedArticleHosts": [
-        "medicalxpress.com"
-      ],
-      "articlePathPrefixes": [
-        "/news/"
-      ],
-      "eligibilityScope": "health-reporting",
-      "rights": {
-        "titles": true,
-        "excerpts": true,
-        "images": true,
-        "attribution": "Source: Medical Xpress. RSS content supplied by the publisher.",
-        "licenseUrl": "https://medicalxpress.com/feeds/"
+        "licenseUrl": "https://www.jpl.nasa.gov/jpl-image-use-policy/",
+        "licenseLabel": "NASA/JPL media use",
+        "credit": "NASA/JPL-Caltech",
+        "maximumWidth": 1200,
+        "maximumHeight": 900,
+        "reviewedArticles": {
+          "https://science.nasa.gov/photojournal/nasa-deep-space-networks-new-goldstone-antenna-goes-online/": {
+            "schemaVersion": 1,
+            "url": "https://assets.science.nasa.gov/dynamicimage/assets/science/psd/photojournal/pia/pia26/pia26778/PIA26778.jpg?w=1200&h=899&fit=crop&crop=faces%2Cfocalpoint",
+            "articleUrl": "https://science.nasa.gov/photojournal/nasa-deep-space-networks-new-goldstone-antenna-goes-online/",
+            "sourceId": "nasa-photojournal",
+            "articleId": "d0ac03014816a6a019124df95bd5db1c",
+            "credit": "NASA/JPL-Caltech",
+            "caption": "NASA Deep Space Network antenna at Goldstone",
+            "licenseUrl": "https://www.jpl.nasa.gov/jpl-image-use-policy/",
+            "licenseLabel": "NASA/JPL media use",
+            "basis": "reviewed-article-image",
+            "width": 1200,
+            "height": 899
+          },
+          "https://science.nasa.gov/photojournal/panorama-showcasing-the-34-meter-antennas-of-the-dsns-goldstone-complex/": {
+            "schemaVersion": 1,
+            "url": "https://assets.science.nasa.gov/dynamicimage/assets/science/psd/photojournal/pia/pia26/pia26777/PIA26777.jpg?w=1200&h=535&fit=crop&crop=faces%2Cfocalpoint",
+            "articleUrl": "https://science.nasa.gov/photojournal/panorama-showcasing-the-34-meter-antennas-of-the-dsns-goldstone-complex/",
+            "sourceId": "nasa-photojournal",
+            "articleId": "c51edcda31dd31ee312bf10f02dbd56d",
+            "credit": "NASA/JPL-Caltech",
+            "caption": "Panorama of the antennas at NASA\u2019s Goldstone complex",
+            "licenseUrl": "https://www.jpl.nasa.gov/jpl-image-use-policy/",
+            "licenseLabel": "NASA/JPL media use",
+            "basis": "reviewed-article-image",
+            "width": 1200,
+            "height": 534
+          }
+        }
       },
-      "enabled": true,
-      "verifiedAt": "2026-09-14T00:37:00Z",
-      "feedUrl": "https://medicalxpress.com/rss-feed/",
-      "feedRedirectHosts": [
-        "medicalxpress.com"
-      ],
-      "minRefreshSeconds": 1800,
-      "retentionSeconds": 604800,
       "preserveFeedText": true,
-      "imagePolicy": {
-        "kind": "syndicated-feed-thumbnail",
-        "allowedHosts": [
-          "scx1.b-cdn.net"
-        ],
-        "pathPrefixes": [
-          "/csz/news/tmb/"
-        ],
-        "licenseUrl": "https://medicalxpress.com/feeds/",
-        "licenseLabel": "Publisher RSS terms",
-        "credit": "Medical Xpress",
-        "maximumWidth": 90,
-        "maximumHeight": 90
-      }
+      "displayMode": "publisher-link",
+      "feedCompatibility": "nasa-photojournal-self-link-v1"
     },
     {
       "id": "nasa-technology",
@@ -228,7 +316,8 @@
         "www.nasa.gov"
       ],
       "minRefreshSeconds": 1800,
-      "retentionSeconds": 604800
+      "retentionSeconds": 604800,
+      "displayMode": "publisher-link"
     },
     {
       "id": "noaa-news",
@@ -263,7 +352,8 @@
         "www.noaa.gov"
       ],
       "minRefreshSeconds": 1800,
-      "retentionSeconds": 604800
+      "retentionSeconds": 604800,
+      "displayMode": "publisher-link"
     },
     {
       "id": "usgs-news",
@@ -300,11 +390,12 @@
         "www.usgs.gov"
       ],
       "minRefreshSeconds": 1800,
-      "retentionSeconds": 604800
+      "retentionSeconds": 604800,
+      "displayMode": "publisher-link"
     },
     {
       "id": "globalvoices-sports",
-      "name": "Global Voices · Sports",
+      "name": "Global Voices \u00b7 Sports",
       "homepageUrl": "https://globalvoices.org/-/topics/sport/",
       "language": "en",
       "topics": [
@@ -321,7 +412,7 @@
         "titles": true,
         "excerpts": true,
         "images": false,
-        "attribution": "Global Voices · CC BY 3.0. Publisher excerpt; formatting and length adjusted. No endorsement implied.",
+        "attribution": "Global Voices \u00b7 CC BY 3.0. Publisher excerpt; formatting and length adjusted. No endorsement implied.",
         "licenseUrl": "https://creativecommons.org/licenses/by/3.0/"
       },
       "enabled": true,
@@ -333,11 +424,12 @@
       "minRefreshSeconds": 1800,
       "retentionSeconds": 604800,
       "articleUrlFormat": "dated-story",
-      "requiresAttribution": true
+      "requiresAttribution": true,
+      "displayMode": "publisher-link"
     },
     {
       "id": "globalvoices-fashion",
-      "name": "Global Voices · Fashion",
+      "name": "Global Voices \u00b7 Fashion",
       "homepageUrl": "https://globalvoices.org/?s=fashion",
       "language": "en",
       "topics": [
@@ -354,7 +446,7 @@
         "titles": true,
         "excerpts": true,
         "images": false,
-        "attribution": "Global Voices · CC BY 3.0. Publisher excerpt; formatting and length adjusted. No endorsement implied.",
+        "attribution": "Global Voices \u00b7 CC BY 3.0. Publisher excerpt; formatting and length adjusted. No endorsement implied.",
         "licenseUrl": "https://creativecommons.org/licenses/by/3.0/"
       },
       "enabled": true,
@@ -379,11 +471,12 @@
         "tailoring",
         "dressmaking"
       ],
-      "requiresAttribution": true
+      "requiresAttribution": true,
+      "displayMode": "publisher-link"
     },
     {
       "id": "globalvoices-food",
-      "name": "Global Voices · Food",
+      "name": "Global Voices \u00b7 Food",
       "homepageUrl": "https://globalvoices.org/-/topics/food/",
       "language": "en",
       "topics": [
@@ -400,7 +493,7 @@
         "titles": true,
         "excerpts": true,
         "images": false,
-        "attribution": "Global Voices · CC BY 3.0. Publisher excerpt; formatting and length adjusted. No endorsement implied.",
+        "attribution": "Global Voices \u00b7 CC BY 3.0. Publisher excerpt; formatting and length adjusted. No endorsement implied.",
         "licenseUrl": "https://creativecommons.org/licenses/by/3.0/"
       },
       "enabled": true,
@@ -412,11 +505,12 @@
       "minRefreshSeconds": 1800,
       "retentionSeconds": 604800,
       "articleUrlFormat": "dated-story",
-      "requiresAttribution": true
+      "requiresAttribution": true,
+      "displayMode": "publisher-link"
     },
     {
       "id": "globalvoices-health",
-      "name": "Global Voices · Health",
+      "name": "Global Voices \u00b7 Health",
       "homepageUrl": "https://globalvoices.org/-/topics/health/",
       "language": "en",
       "topics": [
@@ -433,7 +527,7 @@
         "titles": true,
         "excerpts": true,
         "images": false,
-        "attribution": "Global Voices · CC BY 3.0. Publisher excerpt; formatting and length adjusted. No endorsement implied.",
+        "attribution": "Global Voices \u00b7 CC BY 3.0. Publisher excerpt; formatting and length adjusted. No endorsement implied.",
         "licenseUrl": "https://creativecommons.org/licenses/by/3.0/"
       },
       "enabled": true,
@@ -445,11 +539,12 @@
       "minRefreshSeconds": 1800,
       "retentionSeconds": 604800,
       "articleUrlFormat": "dated-story",
-      "requiresAttribution": true
+      "requiresAttribution": true,
+      "displayMode": "publisher-link"
     },
     {
       "id": "globalvoices-science",
-      "name": "Global Voices · Science",
+      "name": "Global Voices \u00b7 Science",
       "homepageUrl": "https://globalvoices.org/-/topics/science/",
       "language": "en",
       "topics": [
@@ -466,7 +561,7 @@
         "titles": true,
         "excerpts": true,
         "images": false,
-        "attribution": "Global Voices · CC BY 3.0. Publisher excerpt; formatting and length adjusted. No endorsement implied.",
+        "attribution": "Global Voices \u00b7 CC BY 3.0. Publisher excerpt; formatting and length adjusted. No endorsement implied.",
         "licenseUrl": "https://creativecommons.org/licenses/by/3.0/"
       },
       "enabled": true,
@@ -478,11 +573,12 @@
       "minRefreshSeconds": 1800,
       "retentionSeconds": 604800,
       "articleUrlFormat": "dated-story",
-      "requiresAttribution": true
+      "requiresAttribution": true,
+      "displayMode": "publisher-link"
     },
     {
       "id": "globalvoices-technology",
-      "name": "Global Voices · Technology",
+      "name": "Global Voices \u00b7 Technology",
       "homepageUrl": "https://globalvoices.org/-/topics/technology/",
       "language": "en",
       "topics": [
@@ -499,7 +595,7 @@
         "titles": true,
         "excerpts": true,
         "images": false,
-        "attribution": "Global Voices · CC BY 3.0. Publisher excerpt; formatting and length adjusted. No endorsement implied.",
+        "attribution": "Global Voices \u00b7 CC BY 3.0. Publisher excerpt; formatting and length adjusted. No endorsement implied.",
         "licenseUrl": "https://creativecommons.org/licenses/by/3.0/"
       },
       "enabled": true,
@@ -511,11 +607,12 @@
       "minRefreshSeconds": 1800,
       "retentionSeconds": 604800,
       "articleUrlFormat": "dated-story",
-      "requiresAttribution": true
+      "requiresAttribution": true,
+      "displayMode": "publisher-link"
     },
     {
       "id": "globalvoices-business",
-      "name": "Global Voices · Business",
+      "name": "Global Voices \u00b7 Business",
       "homepageUrl": "https://globalvoices.org/-/topics/economics-business/",
       "language": "en",
       "topics": [
@@ -532,7 +629,7 @@
         "titles": true,
         "excerpts": true,
         "images": false,
-        "attribution": "Global Voices · CC BY 3.0. Publisher excerpt; formatting and length adjusted. No endorsement implied.",
+        "attribution": "Global Voices \u00b7 CC BY 3.0. Publisher excerpt; formatting and length adjusted. No endorsement implied.",
         "licenseUrl": "https://creativecommons.org/licenses/by/3.0/"
       },
       "enabled": true,
@@ -544,11 +641,12 @@
       "minRefreshSeconds": 1800,
       "retentionSeconds": 604800,
       "articleUrlFormat": "dated-story",
-      "requiresAttribution": true
+      "requiresAttribution": true,
+      "displayMode": "publisher-link"
     },
     {
       "id": "globalvoices-entertainment",
-      "name": "Global Voices · Entertainment",
+      "name": "Global Voices \u00b7 Entertainment",
       "homepageUrl": "https://globalvoices.org/-/topics/arts-culture/",
       "language": "en",
       "topics": [
@@ -565,7 +663,7 @@
         "titles": true,
         "excerpts": true,
         "images": false,
-        "attribution": "Global Voices · CC BY 3.0. Publisher excerpt; formatting and length adjusted. No endorsement implied.",
+        "attribution": "Global Voices \u00b7 CC BY 3.0. Publisher excerpt; formatting and length adjusted. No endorsement implied.",
         "licenseUrl": "https://creativecommons.org/licenses/by/3.0/"
       },
       "enabled": true,
@@ -577,11 +675,12 @@
       "minRefreshSeconds": 1800,
       "retentionSeconds": 604800,
       "articleUrlFormat": "dated-story",
-      "requiresAttribution": true
+      "requiresAttribution": true,
+      "displayMode": "publisher-link"
     },
     {
       "id": "globalvoices-headlines",
-      "name": "Global Voices · Headlines",
+      "name": "Global Voices \u00b7 Headlines",
       "homepageUrl": "https://globalvoices.org/",
       "language": "en",
       "topics": [
@@ -598,7 +697,7 @@
         "titles": true,
         "excerpts": true,
         "images": false,
-        "attribution": "Global Voices · CC BY 3.0. Publisher excerpt; formatting and length adjusted. No endorsement implied.",
+        "attribution": "Global Voices \u00b7 CC BY 3.0. Publisher excerpt; formatting and length adjusted. No endorsement implied.",
         "licenseUrl": "https://creativecommons.org/licenses/by/3.0/"
       },
       "enabled": true,
@@ -610,8 +709,8 @@
       "minRefreshSeconds": 1800,
       "retentionSeconds": 604800,
       "articleUrlFormat": "dated-story",
-      "requiresAttribution": true
+      "requiresAttribution": true,
+      "displayMode": "publisher-link"
     }
-  ],
-  "requireStoryImages": true
+  ]
 }

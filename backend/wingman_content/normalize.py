@@ -17,8 +17,8 @@ CATEGORIES = {"sexual-explicit", "gambling", "alcohol-promotion", "recreational-
 ATOM = "{http://www.w3.org/2005/Atom}"
 TOMBSTONE = "{http://purl.org/atompub/tombstones/1.0}"
 MAX_ENTRIES = 500
-MAX_TITLE = 200
-MAX_EXCERPT = 400
+MAX_TITLE = 500
+MAX_EXCERPT = 1600
 
 
 def iso(value):
@@ -50,13 +50,13 @@ class PlainText(HTMLParser):
         self.hidden = 0
 
     def handle_starttag(self, tag, attrs):
-        if tag in ("script", "style", "noscript", "iframe", "svg"):
+        if tag in ("script", "style", "noscript", "iframe", "svg", "object", "embed", "template"):
             self.hidden += 1
         if tag in ("p", "br", "div", "li") and not self.hidden:
             self.parts.append(" ")
 
     def handle_endtag(self, tag):
-        if tag in ("script", "style", "noscript", "iframe", "svg") and self.hidden:
+        if tag in ("script", "style", "noscript", "iframe", "svg", "object", "embed", "template") and self.hidden:
             self.hidden -= 1
         if tag in ("p", "div", "li") and not self.hidden:
             self.parts.append(" ")
@@ -66,10 +66,10 @@ class PlainText(HTMLParser):
             self.parts.append(data)
 
 
-def plain(value, limit):
+def plain(value, limit, preserve=False):
     parser = PlainText()
     parser.feed(value[:100000])
-    text = unicodedata.normalize("NFKC", html.unescape(" ".join(parser.parts)))
+    text = unicodedata.normalize("NFC" if preserve else "NFKC", html.unescape(" ".join(parser.parts)))
     text = " ".join("".join(c for c in text if c in "\t\n\r" or
                             unicodedata.category(c) not in ("Cc", "Cf")).split())
     if len(text) > limit:
@@ -94,7 +94,8 @@ def canonical_url(value, source):
         if source.get('articleUrlFormat') == 'dated-story' and not re.fullmatch(
                 r'/[0-9]{4}/[0-9]{2}/[0-9]{2}/[^/]+/?', path):
             return None
-        if not any(path.startswith(prefix) for prefix in source["articlePathPrefixes"]):
+        if not any(path == prefix or path.startswith(prefix if prefix.endswith('/') else prefix + '/')
+                   for prefix in source["articlePathPrefixes"]):
             return None
         query = [(key, value) for key, value in parse_qsl(parsed.query, keep_blank_values=True,
                                                         max_num_fields=40)
@@ -116,11 +117,74 @@ def matches_topic_scope(title, excerpt, source):
                             for term in terms)
 
 
-def item_topics(url, source):
+def item_topics(url, source, title='', categories=()):
+    if source.get('displayMode') == 'sponsored-syndication':
+        from .syndication import feature_topics
+        return feature_topics(title)
+    if source['id'] == 'phys-org':
+        return ['business'] if 'Economics & Business' in categories else ['science']
     if source['id'] == 'nasa-technology':
         parsed = urlsplit(url)
         return ['science', 'technology'] if parsed.hostname == 'www.nasa.gov' and parsed.path.startswith('/technology/') else ['science']
     return source['topics']
+
+
+def article_image(entry, source, url):
+    from .media import accepts_image, accepts_image_url
+    policy = source.get('imagePolicy') or {}
+    if not source['rights'].get('images'):
+        return None
+    if policy.get('kind') == 'reviewed-article-image':
+        image = policy.get('reviewedArticles', {}).get(url)
+        return dict(image) if image and accepts_image(image, source) else None
+    if policy.get('kind') == 'syndicated-feed-thumbnail':
+        media = '{http://search.yahoo.com/mrss/}'
+        def media_nodes(parent):
+            for node in parent:
+                if node.tag in (media+'thumbnail', media+'content', media+'group'):
+                    yield node
+                    if node.tag in (media+'content', media+'group'):
+                        yield from media_nodes(node)
+        nodes = list(media_nodes(entry))
+        direct = entry.findall(media+'thumbnail')
+        candidates = direct + [n for n in nodes if n.tag == media+'thumbnail' and n not in direct]
+        candidates += [n for n in nodes if n.tag == media+'content' and
+                       n.get('type') in ('image/jpeg', 'image/png', 'image/webp') and n.get('medium', 'image') == 'image']
+        candidates += [n for n in entry.findall('enclosure')
+                       if n.get('type') in ('image/jpeg', 'image/png', 'image/webp')]
+        class ItemImages(PlainText):
+            def __init__(self):
+                super().__init__()
+                self.images = []
+            def handle_starttag(self, tag, attrs):
+                super().handle_starttag(tag, attrs)
+                if tag == 'img' and not self.hidden:
+                    row = dict(attrs)
+                    if 'hidden' not in row and not any(k.startswith('on') for k in row):
+                        self.images.append({'url': row.get('src'), 'width': row.get('width'), 'height': row.get('height')})
+        parser = ItemImages()
+        parser.feed((entry.findtext('description') or entry.findtext(ATOM+'summary') or '')[:100000])
+        candidates += parser.images
+    elif policy.get('kind') == 'syndicated-article-photo' and source.get('displayMode') == 'sponsored-syndication':
+        candidates = [n for n in entry.findall('enclosure') if n.get('type') in ('image/jpeg', 'image/png', 'image/webp')]
+    else:
+        return None
+    for node in candidates:
+        try:
+            uri = node.get('url', '')
+            if not accepts_image_url(uri, source):
+                continue
+            thumb = policy['kind'] == 'syndicated-feed-thumbnail'
+            w, h = (int(node.get('width', '0')), int(node.get('height', '0'))) if thumb else (0, 0)
+            image = {'schemaVersion': 1, 'url': uri, 'articleUrl': url, 'sourceId': source['id'],
+                     'credit': policy['credit'], 'caption': 'Publisher thumbnail' if thumb else 'Photo supplied with this sponsored feature',
+                     'licenseUrl': policy['licenseUrl'], 'licenseLabel': policy['licenseLabel'],
+                     'basis': policy['kind'], 'width': w, 'height': h}
+            if accepts_image(image, source):
+                return image
+        except (ValueError, TypeError):
+            continue
+    return None
 
 
 class DestinationPolicy:
@@ -173,10 +237,40 @@ def text_eligible(title, excerpt, categories):
     return bool(title)
 
 
+def compatible_xml(data, source):
+    """One reviewed non-content publisher defect, never generic XML repair."""
+    if re.search(br'<!\s*(?:DOCTYPE|ENTITY)\b', data, re.I):
+        raise ValueError('XML declarations forbidden')
+    if (source.get('feedCompatibility') != 'nasa-photojournal-self-link-v1' or
+            source.get('id') != 'nasa-photojournal' or
+            source.get('feedUrl') != 'https://science.nasa.gov/feed/photojournal/latest-content/'):
+        return data
+    original = b'<atom:link href="https://science.nasa.gov/feed/?post_type=post&cat=19797&science_org=19791" rel="self" type="application/rss+xml"/>'
+    position, first_item = data.find(original), data.find(b'<item>')
+    if data.count(original) == 1 and 0 <= position < first_item:
+        try:
+            # At this exact byte offset only rss/channel may still be open.
+            # A literal inside a comment, CDATA or nested field is not the tag.
+            prefix = ElementTree.fromstring(data[:position] + b'</channel></rss>',
+                forbid_dtd=True, forbid_entities=True, forbid_external=True)
+            if prefix.tag != 'rss' or len(prefix.findall('channel')) != 1:
+                return data
+        except Exception:
+            return data
+        candidate = data.replace(original, original.replace(b'&', b'&amp;'), 1)
+        parsed = ElementTree.fromstring(candidate, forbid_dtd=True, forbid_entities=True, forbid_external=True)
+        self_url = 'https://science.nasa.gov/feed/?post_type=post&cat=19797&science_org=19791'
+        if parsed.tag == 'rss' and any(
+                node.get('href') == self_url and node.get('rel') == 'self' and node.get('type') == 'application/rss+xml'
+                for node in parsed.findall('./channel/' + ATOM + 'link')):
+            return candidate
+    return data
+
+
 def parse_feed(data, source, now, destination_policy):
     if len(data) > 2 * 1024 * 1024:
         raise ValueError("XML size limit")
-    root = ElementTree.fromstring(data, forbid_dtd=True, forbid_entities=True, forbid_external=True)
+    root = ElementTree.fromstring(compatible_xml(data, source), forbid_dtd=True, forbid_entities=True, forbid_external=True)
     if root.tag == "rss":
         entries = root.findall("./channel/item")
         atom = False
@@ -195,8 +289,11 @@ def parse_feed(data, source, now, destination_policy):
         prefix = ATOM if atom else ""
         title_raw = entry.findtext(prefix + "title") or ""
         excerpt_raw = entry.findtext(prefix + ("summary" if atom else "description")) or ""
-        title = plain(title_raw, MAX_TITLE)
-        excerpt = plain(excerpt_raw, MAX_EXCERPT)
+        title = plain(title_raw, 100000, preserve=True)
+        # Never shorten a publisher headline. Over-limit headlines are held.
+        excerpt_full = plain(excerpt_raw, 100000, preserve=True)
+        excerpt = plain(excerpt_raw, MAX_EXCERPT, preserve=True)
+        syndicated = source.get('displayMode') == 'sponsored-syndication'
         links = [node.get("href") for node in entry.findall(ATOM + "link")
                  if node.get("rel", "alternate") == "alternate"] if atom else [entry.findtext("link")]
         url = next((canonical for link in links if link
@@ -214,9 +311,21 @@ def parse_feed(data, source, now, destination_policy):
                                               (title_raw, excerpt_raw, attribution_raw, rights_raw))
                   else "unreviewed-destination" if not url else "destination-policy" if not destination_policy.allows(url)
                   else "missing-author" if source.get('requiresAttribution') and not plain(attribution_raw, 200)
-                  else "promotion-or-rights-ambiguity" if not text_eligible(full_title, review_text + " " + plain(rights_raw, 100000), categories)
+                  else "promotion-or-rights-ambiguity" if not syndicated and not text_eligible(full_title, review_text + " " + plain(rights_raw, 100000), categories)
+                  else "headline-size-limit" if len(title) > MAX_TITLE
+                  else "excerpt-size-limit" if not syndicated and source.get('preserveFeedText') and len(excerpt_full) > MAX_EXCERPT
                   else "outside-topic-scope" if not matches_topic_scope(full_title, review_text, source)
                   else None)
+        article = None
+        if not reason and syndicated:
+            from .syndication import acceptable, article_payload
+            try:
+                if not acceptable(title):
+                    raise ValueError('restricted-syndication-content')
+                article = article_payload(excerpt_raw, url, source, destination_policy)
+                attribution_raw = attribution_raw or source['name']
+            except (ValueError, TypeError):
+                reason = 'syndication-review-failed'
         if reason:
             held["count"] += 1
             held["reasons"][reason] = held["reasons"].get(reason, 0) + 1
@@ -232,19 +341,31 @@ def parse_feed(data, source, now, destination_policy):
                 if url:
                     deleted.append(url)
             continue
-        published = date_value(entry.findtext(prefix + ("published" if atom else "pubDate")), now)
+        published = date_value(entry.findtext(prefix + ("published" if atom else "pubDate")), None if syndicated else now)
+        if published and (published < now - timedelta(days=30) or (syndicated and published > now)):
+            held['count'] += 1
+            held['reasons']['outside-publication-window'] = held['reasons'].get('outside-publication-window', 0) + 1
+            continue
         # Atom updated is an edit timestamp, not proof of first publication.
+        original = next((html.unescape(link.strip()) for link in links if link and canonical_url(link, source) == url), url)
         item = {"id": item_id(url), "sourceId": source["id"], "title": title,
                 "canonicalUrl": url, "publishedAt": iso(published) if published else None,
-                "fetchedAt": iso(now), "language": source["language"], "topics": item_topics(url, source),
-                "rights": {"title": True, "excerpt": source["rights"]["excerpts"], "image": False,
+                "originalUrl": original, "outboundUrl": original,
+                "updatedAt": iso(date_value(entry.findtext(ATOM + 'updated'), now)) if atom and date_value(entry.findtext(ATOM + 'updated'), now) else None,
+                "fetchedAt": iso(now), "language": source["language"], "topics": item_topics(url, source, title, categories),
+                "rights": {"title": True, "excerpt": source["rights"]["excerpts"], "image": source['rights']['images'],
                            "licenseUrl": source["rights"]["licenseUrl"]},
                 "eligibility": {"state": "eligible", "basis": "curated-source-scope",
                                 "scope": source["eligibilityScope"], "reviewedAt": source["verifiedAt"]},
-                "expiresAt": iso(now + timedelta(seconds=source["retentionSeconds"])), "image": None,
+                "expiresAt": iso(now + timedelta(seconds=source["retentionSeconds"])), "image": article_image(entry, source, url),
                 "_guidHash": hashlib.sha256(guid[:4096].encode()).hexdigest()}
         if source["rights"]["excerpts"] and excerpt:
             item["excerpt"] = excerpt
+            item['excerptProvenance'] = {'field': 'atom-summary' if atom else 'rss-description',
+                                        'format': 'plain-text', 'shortened': len(review_text) > MAX_EXCERPT}
+        if article:
+            item['syndicatedArticle'] = article
+            item['region'] = 'us'
         attribution = plain("; ".join(part for part in (attribution_raw, rights_raw) if part), 200)
         if attribution:
             item["attribution"] = attribution

@@ -26,13 +26,23 @@ class LiveContentEligibility {
         !item.rights.images ||
         image.sourceId != item.sourceId ||
         image.articleUrl != item.canonicalUrl ||
+        (image.articleId != null && image.articleId != item.id) ||
         image.basis != policy.kind ||
-        image.credit != policy.credit ||
-        image.licenseUrl != policy.licenseUrl ||
-        image.licenseLabel != policy.licenseLabel ||
+        (policy.kind != 'reviewed-article-image' &&
+            (image.credit != policy.credit ||
+                image.licenseUrl != policy.licenseUrl ||
+                image.licenseLabel != policy.licenseLabel)) ||
+        (policy.kind == 'reviewed-article-image' &&
+            (image.articleId != item.id ||
+                policy
+                        .reviewedArticles[item.canonicalUrl.toString()]
+                        ?.cacheKey !=
+                    image.cacheKey)) ||
         image.width > policy.maximumWidth ||
         image.height > policy.maximumHeight ||
         (policy.kind == 'syndicated-feed-thumbnail' &&
+            (image.width != 90 || image.height != 90)) ||
+        (policy.kind != 'syndicated-article-photo' &&
             (image.width < 1 || image.height < 1)) ||
         (policy.kind == 'syndicated-article-photo' &&
             !acceptsSyndicatedArticle(item)) ||
@@ -49,7 +59,8 @@ class LiveContentEligibility {
   bool acceptsSyndicatedArticle(LiveContentItem item) {
     final source = registry.sources[item.sourceId],
         body = item.syndicatedArticle;
-    if (source?.imagePolicy?.kind != 'syndicated-article-photo' ||
+    if (source?.isSponsoredSyndication != true ||
+        source?.imagePolicy?.kind != 'syndicated-article-photo' ||
         body == null ||
         body.articleUrl != item.canonicalUrl ||
         body.publisher != source!.source.name ||
@@ -78,6 +89,8 @@ class LiveContentEligibility {
         !approved.enabled ||
         !approved.source.rights.titles ||
         !item.rights.titles ||
+        item.title.isEmpty ||
+        item.title.length > 500 ||
         !approved.allowedArticleHosts.contains(item.canonicalUrl.host) ||
         !_approvedPath(item.canonicalUrl, approved.articlePathPrefixes) ||
         (approved.articleUrlFormat == 'dated-story' &&
@@ -95,10 +108,26 @@ class LiveContentEligibility {
         item.fetchedAt.isAfter(now.add(const Duration(hours: 24))) ||
         (item.publishedAt?.isAfter(now.add(const Duration(hours: 24))) ??
             false) ||
+        (!saved &&
+            (item.publishedAt?.isBefore(
+                  now.subtract(const Duration(days: 30)),
+                ) ??
+                false)) ||
+        (item.updatedAt?.isAfter(now.add(const Duration(hours: 24))) ??
+            false) ||
         !item.expiresAt.isAfter(item.fetchedAt) ||
         (!saved && !now.isBefore(item.expiresAt)) ||
         item.expiresAt.difference(item.fetchedAt) > const Duration(days: 30)) {
       return false;
+    }
+    if (approved.isSponsoredSyndication != (item.syndicatedArticle != null)) {
+      return false;
+    }
+    for (final address in [item.originalUrl, item.outboundUrl]) {
+      if (address != null &&
+          feedCanonicalIdentity(address) != item.canonicalUrl) {
+        return false;
+      }
     }
     if (item.excerpt != null &&
         item.excerpt!.isNotEmpty &&
@@ -120,7 +149,8 @@ class LiveContentEligibility {
       return false;
     }
     try {
-      return canOpenDestination(item.canonicalUrl);
+      return canOpenDestination(item.canonicalUrl) &&
+          canOpenDestination(item.openingUrl);
     } catch (_) {
       return false;
     }

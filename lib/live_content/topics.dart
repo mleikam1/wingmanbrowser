@@ -10,5 +10,6 @@ const liveContentTopicOrder = <String>[
   'science',
   'food',
   'health',
+  'travel',
   'environment',
 ];

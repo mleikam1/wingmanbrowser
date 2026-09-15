@@ -4,6 +4,8 @@ import '../../live_content/live_content.dart';
 import '../components/wingman_components.dart';
 import 'live_content_section.dart';
 import 'live_story_image.dart';
+import 'live_story_excerpt.dart';
+import 'publisher_identity.dart';
 
 /// Box content for Library's SliverToBoxAdapter; Library owns scrolling.
 class LiveReadingList extends StatefulWidget {
@@ -100,18 +102,30 @@ class _LiveReadingListState extends State<LiveReadingList> {
         widget.canContinue() && item != null && controller.canOpen(item);
     final storyImage = allowed ? StoryImages.forItem(item) : null;
     final publisherImage = allowed ? controller.imageFor(item) : null;
+    final approved = controller.eligibility.registry.sources[saved.sourceId];
+    final excerpt = allowed
+        ? liveContentPermittedExcerpt(controller, item)
+        : null;
     final header = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          '${item?.syndicatedArticle != null ? 'Sponsored feature · ' : ''}${liveContentSourceName(controller, saved.sourceId)}',
-          style: Theme.of(context).textTheme.labelLarge,
+        LivePublisherIdentity(
+          name: liveContentSourceName(controller, saved.sourceId),
+          sponsored: item?.syndicatedArticle != null,
+          branding: allowed && controller.preferences.enabled
+              ? approved?.branding
+              : null,
         ),
         const SizedBox(height: 8),
         Text(
           item?.title ?? 'Saved article unavailable',
           style: Theme.of(context).textTheme.titleMedium,
         ),
+        if (excerpt != null)
+          LiveStoryExcerpt(
+            key: ValueKey('live-saved-excerpt-${saved.id}'),
+            text: excerpt,
+          ),
       ],
     );
     return Column(

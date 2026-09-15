@@ -6,7 +6,7 @@ import 'live_content_section.dart';
 
 /// An owned feature route: category controls remain reachable while the finite
 /// article list scrolls. No timer, carousel advancement or scroll fetch exists.
-class LiveContentFeedScreen extends StatelessWidget {
+class LiveContentFeedScreen extends StatefulWidget {
   const LiveContentFeedScreen({
     super.key,
     required this.controller,
@@ -16,15 +16,43 @@ class LiveContentFeedScreen extends StatelessWidget {
     required this.onReadingList,
     required this.canContinue,
     this.onOpenUri,
+    this.initialScrollOffset = 0,
+    this.onScrollOffsetChanged,
   });
   final LiveContentController controller;
   final ValueChanged<LiveContentItem> onOpen, onPin;
   final ValueChanged<Uri>? onOpenUri;
   final VoidCallback onPreferences, onReadingList;
   final bool Function() canContinue;
+  final double initialScrollOffset;
+  final ValueChanged<double>? onScrollOffsetChanged;
+
+  @override
+  State<LiveContentFeedScreen> createState() => _LiveContentFeedScreenState();
+}
+
+class _LiveContentFeedScreenState extends State<LiveContentFeedScreen> {
+  late final ScrollController _scroll = ScrollController(
+    initialScrollOffset: widget.initialScrollOffset,
+    keepScrollOffset: false,
+  )..addListener(_rememberScroll);
+
+  void _rememberScroll() {
+    if (_scroll.hasClients && widget.canContinue()) {
+      widget.onScrollOffsetChanged?.call(_scroll.offset);
+    }
+  }
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final controller = widget.controller;
+    final canContinue = widget.canContinue;
     final scale = MediaQuery.textScalerOf(context).scale(18) / 18;
     return Scaffold(
       appBar: AppBar(
@@ -36,7 +64,7 @@ class LiveContentFeedScreen extends StatelessWidget {
             tooltip: 'Topics & sources',
             onPressed: canContinue()
                 ? () {
-                    if (canContinue()) onPreferences();
+                    if (canContinue()) widget.onPreferences();
                   }
                 : null,
             icon: const Icon(Icons.tune),
@@ -46,7 +74,7 @@ class LiveContentFeedScreen extends StatelessWidget {
             tooltip: 'Reading list',
             onPressed: canContinue()
                 ? () {
-                    if (canContinue()) onReadingList();
+                    if (canContinue()) widget.onReadingList();
                   }
                 : null,
             icon: const Icon(Icons.bookmarks_outlined),
@@ -68,6 +96,7 @@ class LiveContentFeedScreen extends StatelessWidget {
             Expanded(
               child: ListView(
                 key: const PageStorageKey('live-content-feed-scroll'),
+                controller: _scroll,
                 padding: EdgeInsets.all(
                   WingmanTokens.gutter(MediaQuery.sizeOf(context).width),
                 ),
@@ -77,11 +106,11 @@ class LiveContentFeedScreen extends StatelessWidget {
                       constraints: const BoxConstraints(maxWidth: 720),
                       child: LiveContentSection(
                         controller: controller,
-                        onOpen: onOpen,
-                        onPin: onPin,
-                        onPreferences: onPreferences,
-                        onReadingList: onReadingList,
-                        onOpenUri: onOpenUri,
+                        onOpen: widget.onOpen,
+                        onPin: widget.onPin,
+                        onPreferences: widget.onPreferences,
+                        onReadingList: widget.onReadingList,
+                        onOpenUri: widget.onOpenUri,
                         canContinue: canContinue,
                         showHeading: false,
                         showTopics: false,

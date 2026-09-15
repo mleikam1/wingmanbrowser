@@ -1,0 +1,3164 @@
+{
+  "schemaVersion": 1,
+  "reviewedAt": "2026-09-15T19:58:55.934497Z",
+  "reviewPurpose": "Commercial Wingman linked story cards, visible publisher excerpts and actual article imagery. Rights decisions are scoped grants/holds, not blanket legal conclusions about bare hyperlinks.",
+  "decisions": [
+    {
+      "reviewId": "rights-20260915-nasa-wm-0145",
+      "recordIds": [
+        "WM-0145"
+      ],
+      "publisher": "NASA",
+      "feedUrl": "https://science.nasa.gov/feed/photojournal/latest-content/",
+      "reviewedAt": "2026-09-15T19:58:55.934497Z",
+      "expiresAt": "2026-10-15T00:00:00Z",
+      "expiryBasis": "Manual operational rights re-review due on15October2026. The review decision is not valid for new promotion afterward without re-review; existing production approval is not automatically disabled by this research date. Underlying NASA/JPL factual-use rights have no stated time expiry. Story freshness is independently limited to30days after original publication.",
+      "permissions": {
+        "headlineLink": {
+          "status": "approved",
+          "scope": "Only NASA-owned original title, supplied description and factual text associated with the two exact reviewed Goldstone articles listed in reviewedArticles; no automatic approval of future Photojournal items.",
+          "evidenceUrls": [
+            "https://www.nasa.gov/nasa-brand-center/images-and-media/",
+            "https://www.jpl.nasa.gov/jpl-image-use-policy/",
+            "https://science.nasa.gov/photojournal/rss-feeds/",
+            "https://science.nasa.gov/photojournal/nasa-deep-space-networks-new-goldstone-antenna-goes-online/",
+            "https://science.nasa.gov/photojournal/panorama-showcasing-the-34-meter-antennas-of-the-dsns-goldstone-complex/"
+          ],
+          "attribution": "NASA; retain applicable NASA/JPL-Caltech credit.",
+          "limits": [
+            "No endorsement or product advertising use implied.",
+            "Retain NASA/JPL-Caltech credit, publisher attribution, original story link and original publication date; no endorsement or misleading article/photo context.",
+            "Only the two exact approved article/photo pairs; no logo grant, third-party material or unrelated image use."
+          ],
+          "unresolved": []
+        },
+        "excerpt": {
+          "status": "approved",
+          "scope": "Only NASA-owned original title, supplied description and factual text associated with the two exact reviewed Goldstone articles listed in reviewedArticles; no automatic approval of future Photojournal items.",
+          "evidenceUrls": [
+            "https://www.nasa.gov/nasa-brand-center/images-and-media/",
+            "https://www.jpl.nasa.gov/jpl-image-use-policy/",
+            "https://science.nasa.gov/photojournal/rss-feeds/",
+            "https://science.nasa.gov/photojournal/nasa-deep-space-networks-new-goldstone-antenna-goes-online/",
+            "https://science.nasa.gov/photojournal/panorama-showcasing-the-34-meter-antennas-of-the-dsns-goldstone-complex/"
+          ],
+          "attribution": "NASA; retain applicable NASA/JPL-Caltech credit.",
+          "limits": [
+            "No endorsement or product advertising use implied.",
+            "Retain NASA/JPL-Caltech credit, publisher attribution, original story link and original publication date; no endorsement or misleading article/photo context.",
+            "Only the two exact approved article/photo pairs; no logo grant, third-party material or unrelated image use.",
+            "Use the publisher-supplied description faithfully; do not imply additional reporting or rewrite claims."
+          ],
+          "unresolved": []
+        },
+        "articleImages": {
+          "status": "approved",
+          "scope": "Only the two exact article/image associations in nasa-photojournal-associations.json. Future/unreviewed photos are not cleared.",
+          "evidenceUrls": [
+            "https://www.nasa.gov/nasa-brand-center/images-and-media/",
+            "https://www.jpl.nasa.gov/jpl-image-use-policy/",
+            "https://science.nasa.gov/photojournal/rss-feeds/"
+          ],
+          "attribution": "NASA/JPL-Caltech",
+          "limits": [
+            "Use exact declared variants; no generic OG extraction or arbitrary image-host inheritance.",
+            "Exclude third-party credit, identifiable-person publicity issues and separately protected logos.",
+            "Render the complete photograph without a materially misleading crop; fit/letterbox is available. The publisher-provided 1200w URLs are the only reviewed variants."
+          ],
+          "unresolved": []
+        },
+        "branding": {
+          "status": "denied",
+          "scope": "NASA/JPL seals and logos are not granted by the image-use policy. Text attribution remains permitted.",
+          "evidenceUrls": [
+            "https://www.nasa.gov/nasa-brand-center/images-and-media/",
+            "https://www.jpl.nasa.gov/jpl-image-use-policy/",
+            "https://science.nasa.gov/photojournal/rss-feeds/"
+          ],
+          "attribution": "",
+          "limits": [
+            "Use neutral initials."
+          ],
+          "unresolved": []
+        },
+        "fullText": {
+          "status": "approved",
+          "scope": "Only NASA-owned original title, supplied description and factual text associated with the two exact reviewed Goldstone articles listed in reviewedArticles; no automatic approval of future Photojournal items.",
+          "evidenceUrls": [
+            "https://www.nasa.gov/nasa-brand-center/images-and-media/",
+            "https://www.jpl.nasa.gov/jpl-image-use-policy/",
+            "https://science.nasa.gov/photojournal/rss-feeds/",
+            "https://science.nasa.gov/photojournal/nasa-deep-space-networks-new-goldstone-antenna-goes-online/",
+            "https://science.nasa.gov/photojournal/panorama-showcasing-the-34-meter-antennas-of-the-dsns-goldstone-complex/"
+          ],
+          "attribution": "NASA; retain applicable NASA/JPL-Caltech credit.",
+          "limits": [
+            "No endorsement or product advertising use implied.",
+            "Retain NASA/JPL-Caltech credit, publisher attribution, original story link and original publication date; no endorsement or misleading article/photo context.",
+            "Only the two exact approved article/photo pairs; no logo grant, third-party material or unrelated image use."
+          ],
+          "unresolved": []
+        },
+        "storageRedistribution": {
+          "status": "approved",
+          "scope": "Only NASA-owned original title, supplied description and factual text associated with the two exact reviewed Goldstone articles listed in reviewedArticles; no automatic approval of future Photojournal items.",
+          "evidenceUrls": [
+            "https://www.nasa.gov/nasa-brand-center/images-and-media/",
+            "https://www.jpl.nasa.gov/jpl-image-use-policy/",
+            "https://science.nasa.gov/photojournal/rss-feeds/",
+            "https://science.nasa.gov/photojournal/nasa-deep-space-networks-new-goldstone-antenna-goes-online/",
+            "https://science.nasa.gov/photojournal/panorama-showcasing-the-34-meter-antennas-of-the-dsns-goldstone-complex/"
+          ],
+          "attribution": "NASA; retain applicable NASA/JPL-Caltech credit.",
+          "limits": [
+            "No endorsement or product advertising use implied.",
+            "Retain NASA/JPL-Caltech credit, publisher attribution, original story link and original publication date; no endorsement or misleading article/photo context.",
+            "Only the two exact approved article/photo pairs; no logo grant, third-party material or unrelated image use.",
+            "Bound cache by actual HTTP directives and product freshness/rights expiry; no-store responses must not be persisted. Delete cached display material when an association is revoked or its operational approval expires."
+          ],
+          "unresolved": []
+        }
+      },
+      "usQualification": {
+        "status": "verified-us",
+        "scope": "U.S. federal agency; NASA official public-media guidance.",
+        "evidenceUrls": [
+          "https://www.nasa.gov/nasa-brand-center/images-and-media/",
+          "https://www.jpl.nasa.gov/jpl-image-use-policy/",
+          "https://science.nasa.gov/photojournal/rss-feeds/"
+        ]
+      },
+      "trafficEvidence": {
+        "status": "unsubstantiated",
+        "scope": "No verified U.S. monthly traffic threshold; feed existence and global audience claims are not traffic evidence.",
+        "evidenceUrls": []
+      },
+      "contentPolicy": {
+        "status": "approved",
+        "scope": "Only the two reviewed Goldstone antenna article/photo pairs: factual space communications reporting; no prohibited promotion seen in the reviewed text or images.",
+        "evidenceUrls": [
+          "https://www.nasa.gov/nasa-brand-center/images-and-media/",
+          "https://www.jpl.nasa.gov/jpl-image-use-policy/",
+          "https://science.nasa.gov/photojournal/rss-feeds/"
+        ]
+      },
+      "productionEnabled": true,
+      "holdReasons": [
+        "Raw upstream XML remains malformed. Runtime admits only the exact pinned NASA compatibility adapter and separately reviewed article photos; other malformed input still fails."
+      ],
+      "brandingFallback": "Neutral locally rendered initials and publisher name; no copied logo.",
+      "reviewedArticleAssociationsFile": "work/feed-candidates/reviews/nasa-photojournal-associations.json",
+      "reviewedArticles": [
+        {
+          "articleUrl": "https://science.nasa.gov/photojournal/nasa-deep-space-networks-new-goldstone-antenna-goes-online/",
+          "imageUrl": "https://assets.science.nasa.gov/dynamicimage/assets/science/psd/photojournal/pia/pia26/pia26778/PIA26778.jpg?w=1200&h=899&fit=crop&crop=faces%2Cfocalpoint",
+          "publishedAt": "2026-08-25T00:00:00Z",
+          "freshUntil": "2026-09-24T00:00:00Z",
+          "reviewExpiresAt": "2026-10-15T00:00:00Z",
+          "credit": "NASA/JPL-Caltech",
+          "dimensions": [
+            1200,
+            899
+          ],
+          "bytes": 133629,
+          "sha256": "3cf28fbf24c2ea86c11b9d379ce6e8002c348c36d080e08dce145a40f4160f65"
+        },
+        {
+          "articleUrl": "https://science.nasa.gov/photojournal/panorama-showcasing-the-34-meter-antennas-of-the-dsns-goldstone-complex/",
+          "imageUrl": "https://assets.science.nasa.gov/dynamicimage/assets/science/psd/photojournal/pia/pia26/pia26777/PIA26777.jpg?w=1200&h=535&fit=crop&crop=faces%2Cfocalpoint",
+          "publishedAt": "2026-08-25T00:00:00Z",
+          "freshUntil": "2026-09-24T00:00:00Z",
+          "reviewExpiresAt": "2026-10-15T00:00:00Z",
+          "credit": "NASA/JPL-Caltech",
+          "dimensions": [
+            1200,
+            534
+          ],
+          "bytes": 102650,
+          "sha256": "2a8b8be5711fe25636bd03bb70736f7ffa0b0715920ef2abfed06c049d8e2854"
+        }
+      ],
+      "technicalEvidence": {
+        "originalReceipt": "work/feed-candidates/nasa-probe.json",
+        "alternateReceipt": "work/feed-candidates/nasa-alternate-probe.json",
+        "rawParseStatus": "malformed-xml-line-9-column-66",
+        "alternateFeedUrl": "https://science.nasa.gov/feed/?post_type=post&cat=19797&science_org=19791",
+        "alternateParseStatus": "same-malformed-xml",
+        "compatibilityCondition": {
+          "version": "nasa-photojournal-self-link-ampersands-v1",
+          "feedUrl": "https://science.nasa.gov/feed/photojournal/latest-content/",
+          "rule": "After rejecting DTD/entity declarations, match the exact known full channel atom:self link once and escape only its two raw ampersands. Then run the normal strict XML parser; any other malformed document fails. Do not change any article content.",
+          "mustRetain": [
+            "original HTTP status, malformed parse result and raw SHA-256",
+            "adapter version, transformation count, transformed SHA-256 and strict parser result"
+          ],
+          "implementationVerification": "Strict normalization reproduced during operator promotion; original malformed status retained.",
+          "implementationVersion": "nasa-photojournal-self-link-v1"
+        }
+      },
+      "activationReview": {
+        "reviewedAt": "2026-09-15T20:01:43.536606Z",
+        "basis": "Exact source configuration, retained raw bytes, reproduced strict compatibility parse and two independently reviewed article/photo associations; explicitly approved for integration.",
+        "priorProductionEnabled": false,
+        "priorHoldReasons": [
+          "Original and publisher-declared alternate self endpoints both return HTTP200 with malformed XML; neither is a valid endpoint correction.",
+          "Activation depends on a separately tested source-specific compatibility adapter and exact article/image association enforcement. No raw-feed parsing pass is claimed by this rights review."
+        ],
+        "manualReviewDueAt": "2026-10-15T00:00:00Z",
+        "runtimeReviewExpiryEnforced": false
+      },
+      "sourceConfig": {
+        "id": "nasa-photojournal",
+        "name": "NASA Photojournal",
+        "homepageUrl": "https://science.nasa.gov/photojournal/",
+        "language": "en",
+        "topics": [
+          "science",
+          "technology"
+        ],
+        "allowedArticleHosts": [
+          "science.nasa.gov"
+        ],
+        "articlePathPrefixes": [
+          "/photojournal/"
+        ],
+        "eligibilityScope": "science-reporting",
+        "rights": {
+          "titles": true,
+          "excerpts": true,
+          "images": true,
+          "attribution": "NASA/JPL-Caltech. No endorsement implied.",
+          "licenseUrl": "https://www.jpl.nasa.gov/jpl-image-use-policy/"
+        },
+        "enabled": true,
+        "verifiedAt": "2026-09-15T19:42:42Z",
+        "feedUrl": "https://science.nasa.gov/feed/photojournal/latest-content/",
+        "feedRedirectHosts": [
+          "science.nasa.gov"
+        ],
+        "minRefreshSeconds": 1800,
+        "retentionSeconds": 604800,
+        "articleUrlFormat": "path-prefix",
+        "requiredTopicTerms": [],
+        "requiresAttribution": false,
+        "preserveFeedText": true,
+        "displayMode": "publisher-link",
+        "feedCompatibility": "nasa-photojournal-self-link-v1",
+        "imagePolicy": {
+          "kind": "reviewed-article-image",
+          "allowedHosts": [
+            "assets.science.nasa.gov"
+          ],
+          "pathPrefixes": [
+            "/dynamicimage/assets/science/psd/photojournal/pia/pia26/"
+          ],
+          "licenseUrl": "https://www.jpl.nasa.gov/jpl-image-use-policy/",
+          "licenseLabel": "NASA/JPL media use",
+          "credit": "NASA/JPL-Caltech",
+          "maximumWidth": 1200,
+          "maximumHeight": 900,
+          "reviewedArticles": {
+            "https://science.nasa.gov/photojournal/nasa-deep-space-networks-new-goldstone-antenna-goes-online/": {
+              "schemaVersion": 1,
+              "url": "https://assets.science.nasa.gov/dynamicimage/assets/science/psd/photojournal/pia/pia26/pia26778/PIA26778.jpg?w=1200&h=899&fit=crop&crop=faces%2Cfocalpoint",
+              "articleUrl": "https://science.nasa.gov/photojournal/nasa-deep-space-networks-new-goldstone-antenna-goes-online/",
+              "sourceId": "nasa-photojournal",
+              "articleId": "d0ac03014816a6a019124df95bd5db1c",
+              "credit": "NASA/JPL-Caltech",
+              "caption": "NASA Deep Space Network antenna at Goldstone",
+              "licenseUrl": "https://www.jpl.nasa.gov/jpl-image-use-policy/",
+              "licenseLabel": "NASA/JPL media use",
+              "basis": "reviewed-article-image",
+              "width": 1200,
+              "height": 899
+            },
+            "https://science.nasa.gov/photojournal/panorama-showcasing-the-34-meter-antennas-of-the-dsns-goldstone-complex/": {
+              "schemaVersion": 1,
+              "url": "https://assets.science.nasa.gov/dynamicimage/assets/science/psd/photojournal/pia/pia26/pia26777/PIA26777.jpg?w=1200&h=535&fit=crop&crop=faces%2Cfocalpoint",
+              "articleUrl": "https://science.nasa.gov/photojournal/panorama-showcasing-the-34-meter-antennas-of-the-dsns-goldstone-complex/",
+              "sourceId": "nasa-photojournal",
+              "articleId": "c51edcda31dd31ee312bf10f02dbd56d",
+              "credit": "NASA/JPL-Caltech",
+              "caption": "Panorama of the antennas at NASA’s Goldstone complex",
+              "licenseUrl": "https://www.jpl.nasa.gov/jpl-image-use-policy/",
+              "licenseLabel": "NASA/JPL media use",
+              "basis": "reviewed-article-image",
+              "width": 1200,
+              "height": 534
+            }
+          }
+        },
+        "candidateRecordId": "WM-0145",
+        "revokedItemIds": [],
+        "revokedUrls": []
+      },
+      "compatibilityValidation": {
+        "sourceId": "nasa-photojournal",
+        "feedUrl": "https://science.nasa.gov/feed/photojournal/latest-content/",
+        "compatibilityVersion": "nasa-photojournal-self-link-v1",
+        "checkedAt": "2026-09-15T19:55:56Z",
+        "upstreamStatus": "malformed",
+        "strictNormalizedParse": true,
+        "originalSha256": "6f295f540d6e756284627a577d496f7cc92189527577c339c86d2ef801cbf0d8",
+        "normalizedSha256": "46e2392597d6fce89f428394e83d47b8f977044cd3aa427894b591edc839e714",
+        "normalizedItems": 10,
+        "held": {
+          "count": 0,
+          "reasons": {},
+          "examples": []
+        },
+        "imageEligible": [
+          {
+            "id": "d0ac03014816a6a019124df95bd5db1c",
+            "title": "NASA Deep Space Network’s New Goldstone Antenna Goes Online",
+            "canonicalUrl": "https://science.nasa.gov/photojournal/nasa-deep-space-networks-new-goldstone-antenna-goes-online/",
+            "publishedAt": "2026-08-25T00:00:00Z",
+            "excerpt": "Description Long shadows are cast by the recently completed Deep Space Station 23 at the Deep Space Network’s Goldstone complex near Barstow, California, in August 2026. A 34-meter (114-foot) multifrequency beam-waveguide antenna, DSS-23 will boost the DSN’s capacity and enhance NASA’s deep space communications capabilities for decades to come. NASA leadership and personnel as well [...]",
+            "image": {
+              "schemaVersion": 1,
+              "url": "https://assets.science.nasa.gov/dynamicimage/assets/science/psd/photojournal/pia/pia26/pia26778/PIA26778.jpg?w=1200&h=899&fit=crop&crop=faces%2Cfocalpoint",
+              "articleUrl": "https://science.nasa.gov/photojournal/nasa-deep-space-networks-new-goldstone-antenna-goes-online/",
+              "sourceId": "nasa-photojournal",
+              "articleId": "d0ac03014816a6a019124df95bd5db1c",
+              "credit": "NASA/JPL-Caltech",
+              "caption": "NASA Deep Space Network antenna at Goldstone",
+              "licenseUrl": "https://www.jpl.nasa.gov/jpl-image-use-policy/",
+              "licenseLabel": "NASA/JPL media use",
+              "basis": "reviewed-article-image",
+              "width": 1200,
+              "height": 899
+            }
+          },
+          {
+            "id": "c51edcda31dd31ee312bf10f02dbd56d",
+            "title": "Panorama Showcasing the 34-Meter Antennas of the DSN’s Goldstone Complex",
+            "canonicalUrl": "https://science.nasa.gov/photojournal/panorama-showcasing-the-34-meter-antennas-of-the-dsns-goldstone-complex/",
+            "publishedAt": "2026-08-25T00:00:00Z",
+            "excerpt": "Description Five antennas soak in the summer sun at the Deep Space Network’s Goldstone complex near Barstow, California, in August 2026. The recently completed Deep Space Station 23, a 34-meter (114-foot) beam-waveguide antenna, can be seen to the right of the frame in the foreground. The other three 34-meter antennas are, from left, DSS-26, DSS-25, and [...]",
+            "image": {
+              "schemaVersion": 1,
+              "url": "https://assets.science.nasa.gov/dynamicimage/assets/science/psd/photojournal/pia/pia26/pia26777/PIA26777.jpg?w=1200&h=535&fit=crop&crop=faces%2Cfocalpoint",
+              "articleUrl": "https://science.nasa.gov/photojournal/panorama-showcasing-the-34-meter-antennas-of-the-dsns-goldstone-complex/",
+              "sourceId": "nasa-photojournal",
+              "articleId": "c51edcda31dd31ee312bf10f02dbd56d",
+              "credit": "NASA/JPL-Caltech",
+              "caption": "Panorama of the antennas at NASA’s Goldstone complex",
+              "licenseUrl": "https://www.jpl.nasa.gov/jpl-image-use-policy/",
+              "licenseLabel": "NASA/JPL media use",
+              "basis": "reviewed-article-image",
+              "width": 1200,
+              "height": 534
+            }
+          }
+        ]
+      },
+      "runtimeReviewExpiryEnforced": false
+    },
+    {
+      "reviewId": "rights-20260915-nih-wm-0185",
+      "recordIds": [
+        "WM-0185"
+      ],
+      "publisher": "NIH News in Health",
+      "feedUrl": "https://newsinhealth.nih.gov/syndication/rss",
+      "reviewedAt": "2026-09-15T19:47:59.923660Z",
+      "expiresAt": "2026-12-14T00:00:00Z",
+      "expiryBasis": "Operational re-review date; not an assertion that the publisher license expires.",
+      "permissions": {
+        "headlineLink": {
+          "status": "approved",
+          "scope": "NIH News in Health original article text may be reused in digital publications.",
+          "evidenceUrls": [
+            "https://newsinhealth.nih.gov/about-us"
+          ],
+          "attribution": "NIH News in Health; retain author attribution if supplied.",
+          "limits": [
+            "Publisher requests a copy of publications using articles; no contact was made."
+          ],
+          "unresolved": []
+        },
+        "excerpt": {
+          "status": "approved",
+          "scope": "NIH News in Health original article text may be reused in digital publications.",
+          "evidenceUrls": [
+            "https://newsinhealth.nih.gov/about-us"
+          ],
+          "attribution": "NIH News in Health; retain author attribution if supplied.",
+          "limits": [
+            "Publisher requests a copy of publications using articles; no contact was made."
+          ],
+          "unresolved": []
+        },
+        "articleImages": {
+          "status": "uncertain",
+          "scope": "NIH permits its illustrations, but most photographs are copyrighted and require the owner’s permission.",
+          "evidenceUrls": [
+            "https://newsinhealth.nih.gov/about-us",
+            "https://newsinhealth.nih.gov/2026/09",
+            "https://newsinhealth.nih.gov/2026/09/chronic-pain-treatment",
+            "https://newsinhealth.nih.gov/2026/09/addressing-adhd"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": [
+            "No exact current feed illustration/photo has yet been pinned with an applicable grant."
+          ]
+        },
+        "branding": {
+          "status": "uncertain",
+          "scope": "No affirmative grant for this commercial app use established.",
+          "evidenceUrls": [
+            "https://newsinhealth.nih.gov/about-us"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": [
+            "Separate permission or narrower reviewed scope required."
+          ]
+        },
+        "fullText": {
+          "status": "approved",
+          "scope": "NIH News in Health original article text may be reused in digital publications.",
+          "evidenceUrls": [
+            "https://newsinhealth.nih.gov/about-us"
+          ],
+          "attribution": "NIH News in Health; retain author attribution if supplied.",
+          "limits": [
+            "Publisher requests a copy of publications using articles; no contact was made."
+          ],
+          "unresolved": []
+        },
+        "storageRedistribution": {
+          "status": "approved",
+          "scope": "NIH News in Health original article text may be reused in digital publications.",
+          "evidenceUrls": [
+            "https://newsinhealth.nih.gov/about-us"
+          ],
+          "attribution": "NIH News in Health; retain author attribution if supplied.",
+          "limits": [
+            "Publisher requests a copy of publications using articles; no contact was made."
+          ],
+          "unresolved": []
+        }
+      },
+      "usQualification": {
+        "status": "verified-us",
+        "scope": "NIH publisher address in Bethesda, Maryland.",
+        "evidenceUrls": [
+          "https://newsinhealth.nih.gov/about-us"
+        ]
+      },
+      "trafficEvidence": {
+        "status": "unsubstantiated",
+        "scope": "No verified U.S. monthly traffic threshold; feed existence and global audience claims are not traffic evidence.",
+        "evidenceUrls": []
+      },
+      "contentPolicy": {
+        "status": "uncertain",
+        "scope": "Federal health education, subject to per-item mission and medical-context review; no automatic approval of all feed imagery.",
+        "evidenceUrls": [
+          "https://newsinhealth.nih.gov/about-us"
+        ]
+      },
+      "productionEnabled": false,
+      "holdReasons": [
+        "Exact candidate endpoint returned HTTP403 access-restricted at2026-09-15T19:46:35Z; no retry or bypass.",
+        "September issue attributes reusable original illustrations to Erina He, but no exact image bytes/association were pinned; photographs remain separately restricted."
+      ],
+      "brandingFallback": "Neutral locally rendered initials and publisher name; no copied logo.",
+      "technicalEvidence": {
+        "status": "access-restricted",
+        "httpStatus": 403,
+        "checkedAt": "2026-09-15T19:46:35Z",
+        "noBypass": true
+      }
+    },
+    {
+      "reviewId": "rights-20260915-bls-wm-0142",
+      "recordIds": [
+        "WM-0142"
+      ],
+      "publisher": "U.S. Bureau of Labor Statistics",
+      "feedUrl": "https://www.bls.gov/feed/bls_latest.rss",
+      "reviewedAt": "2026-09-15T19:47:59.923660Z",
+      "expiresAt": "2026-12-14T00:00:00Z",
+      "expiryBasis": "Operational re-review date; not an assertion that the publisher license expires.",
+      "permissions": {
+        "headlineLink": {
+          "status": "approved",
+          "scope": "BLS original text/data are public domain; previously copyrighted illustrations/photos are excluded.",
+          "evidenceUrls": [
+            "https://www.bls.gov/bls/linksite.htm"
+          ],
+          "attribution": "Bureau of Labor Statistics (requested).",
+          "limits": [],
+          "unresolved": []
+        },
+        "excerpt": {
+          "status": "approved",
+          "scope": "BLS original text/data are public domain; previously copyrighted illustrations/photos are excluded.",
+          "evidenceUrls": [
+            "https://www.bls.gov/bls/linksite.htm"
+          ],
+          "attribution": "Bureau of Labor Statistics (requested).",
+          "limits": [],
+          "unresolved": []
+        },
+        "articleImages": {
+          "status": "uncertain",
+          "scope": "Public-domain statement excludes previously copyrighted illustrations and photos.",
+          "evidenceUrls": [
+            "https://www.bls.gov/bls/linksite.htm"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": [
+            "Actual article image and ownership not established."
+          ]
+        },
+        "branding": {
+          "status": "denied",
+          "scope": "BLS emblem is a federally registered trademark; no general reuse grant.",
+          "evidenceUrls": [
+            "https://www.bls.gov/bls/linksite.htm"
+          ],
+          "attribution": "",
+          "limits": [
+            "Use neutral initials."
+          ],
+          "unresolved": []
+        },
+        "fullText": {
+          "status": "approved",
+          "scope": "BLS original text/data are public domain; previously copyrighted illustrations/photos are excluded.",
+          "evidenceUrls": [
+            "https://www.bls.gov/bls/linksite.htm"
+          ],
+          "attribution": "Bureau of Labor Statistics (requested).",
+          "limits": [],
+          "unresolved": []
+        },
+        "storageRedistribution": {
+          "status": "approved",
+          "scope": "BLS original text/data are public domain; previously copyrighted illustrations/photos are excluded.",
+          "evidenceUrls": [
+            "https://www.bls.gov/bls/linksite.htm"
+          ],
+          "attribution": "Bureau of Labor Statistics (requested).",
+          "limits": [],
+          "unresolved": []
+        }
+      },
+      "usQualification": {
+        "status": "verified-us",
+        "scope": "U.S. Department of Labor agency.",
+        "evidenceUrls": [
+          "https://www.bls.gov/bls/linksite.htm"
+        ]
+      },
+      "trafficEvidence": {
+        "status": "unsubstantiated",
+        "scope": "No verified U.S. monthly traffic threshold; feed existence and global audience claims are not traffic evidence.",
+        "evidenceUrls": []
+      },
+      "contentPolicy": {
+        "status": "uncertain",
+        "scope": "Federal economic releases; classify as economics/business rather than a general business newsroom.",
+        "evidenceUrls": [
+          "https://www.bls.gov/bls/linksite.htm"
+        ]
+      },
+      "productionEnabled": false,
+      "holdReasons": [
+        "No current reusable article-image association established; image-led card requirement unmet."
+      ],
+      "brandingFallback": "Neutral locally rendered initials and publisher name; no copied logo."
+    },
+    {
+      "reviewId": "rights-20260915-futurity-wm-0160",
+      "recordIds": [
+        "WM-0160"
+      ],
+      "publisher": "Futurity",
+      "feedUrl": "https://www.futurity.org/feed",
+      "reviewedAt": "2026-09-15T19:47:59.923660Z",
+      "expiresAt": "2026-12-14T00:00:00Z",
+      "expiryBasis": "Operational re-review date; not an assertion that the publisher license expires.",
+      "permissions": {
+        "headlineLink": {
+          "status": "approved",
+          "scope": "Futurity original article text under CC BY4.0, as identified by the current article sharing notice.",
+          "evidenceUrls": [
+            "https://www.futurity.org/about/",
+            "https://www.futurity.org/insects-pfas-contamination-forever-chemicals-3345082/",
+            "https://creativecommons.org/licenses/by/4.0/"
+          ],
+          "attribution": "Retain author/university attribution, Futurity.org link, CC BY4.0 link and indicate excerpt/changes.",
+          "limits": [
+            "No additional restrictions on licensed text."
+          ],
+          "unresolved": []
+        },
+        "excerpt": {
+          "status": "approved",
+          "scope": "Futurity original article text under CC BY4.0, as identified by the current article sharing notice.",
+          "evidenceUrls": [
+            "https://www.futurity.org/about/",
+            "https://www.futurity.org/insects-pfas-contamination-forever-chemicals-3345082/",
+            "https://creativecommons.org/licenses/by/4.0/"
+          ],
+          "attribution": "Retain author/university attribution, Futurity.org link, CC BY4.0 link and indicate excerpt/changes.",
+          "limits": [
+            "No additional restrictions on licensed text."
+          ],
+          "unresolved": []
+        },
+        "articleImages": {
+          "status": "uncertain",
+          "scope": "Article text license is not a blanket grant for separately credited stock photographs; current PFAS/genome examples credit Getty Images.",
+          "evidenceUrls": [
+            "https://www.futurity.org/about/",
+            "https://www.futurity.org/insects-pfas-contamination-forever-chemicals-3345082/",
+            "https://creativecommons.org/licenses/by/4.0/"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": [
+            "Exact reusable photo license required; do not use Getty images based on article CC notice."
+          ]
+        },
+        "branding": {
+          "status": "uncertain",
+          "scope": "No affirmative grant for this commercial app use established.",
+          "evidenceUrls": [
+            "https://www.futurity.org/about/",
+            "https://www.futurity.org/insects-pfas-contamination-forever-chemicals-3345082/",
+            "https://creativecommons.org/licenses/by/4.0/"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": [
+            "Separate permission or narrower reviewed scope required."
+          ]
+        },
+        "fullText": {
+          "status": "approved",
+          "scope": "Futurity original article text under CC BY4.0, as identified by the current article sharing notice.",
+          "evidenceUrls": [
+            "https://www.futurity.org/about/",
+            "https://www.futurity.org/insects-pfas-contamination-forever-chemicals-3345082/",
+            "https://creativecommons.org/licenses/by/4.0/"
+          ],
+          "attribution": "Retain author/university attribution, Futurity.org link, CC BY4.0 link and indicate excerpt/changes.",
+          "limits": [
+            "No additional restrictions on licensed text."
+          ],
+          "unresolved": []
+        },
+        "storageRedistribution": {
+          "status": "approved",
+          "scope": "Futurity original article text under CC BY4.0, as identified by the current article sharing notice.",
+          "evidenceUrls": [
+            "https://www.futurity.org/about/",
+            "https://www.futurity.org/insects-pfas-contamination-forever-chemicals-3345082/",
+            "https://creativecommons.org/licenses/by/4.0/"
+          ],
+          "attribution": "Retain author/university attribution, Futurity.org link, CC BY4.0 link and indicate excerpt/changes.",
+          "limits": [
+            "No additional restrictions on licensed text."
+          ],
+          "unresolved": []
+        }
+      },
+      "usQualification": {
+        "status": "us-led-international",
+        "scope": "Editorial lead at University of Rochester and U.S. governing board; member universities include U.S., Europe and Asia. Not evidence every article is U.S. news.",
+        "evidenceUrls": [
+          "https://www.futurity.org/about/"
+        ]
+      },
+      "trafficEvidence": {
+        "status": "unsubstantiated",
+        "scope": "No verified U.S. monthly traffic threshold; feed existence and global audience claims are not traffic evidence.",
+        "evidenceUrls": []
+      },
+      "contentPolicy": {
+        "status": "uncertain",
+        "scope": "University research news; internationally sourced. Each headline/body/image still requires mission review.",
+        "evidenceUrls": [
+          "https://www.futurity.org/about/",
+          "https://www.futurity.org/insects-pfas-contamination-forever-chemicals-3345082/",
+          "https://creativecommons.org/licenses/by/4.0/"
+        ]
+      },
+      "productionEnabled": false,
+      "holdReasons": [
+        "Current sampled images include Getty; no exact commercially reusable image pinned.",
+        "Publisher audience testimonials do not substantiate a U.S. traffic threshold."
+      ],
+      "brandingFallback": "Neutral locally rendered initials and publisher name; no copied logo."
+    },
+    {
+      "reviewId": "rights-20260915-sciencedaily-wm-0151",
+      "recordIds": [
+        "WM-0151"
+      ],
+      "publisher": "ScienceDaily",
+      "feedUrl": "https://www.sciencedaily.com/rss/all.xml",
+      "reviewedAt": "2026-09-15T19:47:59.923660Z",
+      "expiresAt": "2026-12-14T00:00:00Z",
+      "expiryBasis": "Operational re-review date; not an assertion that the publisher license expires.",
+      "permissions": {
+        "headlineLink": {
+          "status": "approved",
+          "scope": "Unaltered RSS headlines and publisher-provided brief summaries with original direct story links.",
+          "evidenceUrls": [
+            "https://www.sciencedaily.com/terms.htm"
+          ],
+          "attribution": "ScienceDaily",
+          "limits": [
+            "No feed-specific advertising or charge for RSS access.",
+            "No intermediary page before original story.",
+            "Only article URLs containing /releases/ are within the headline/summary grant. Retain the original supplied headline and short summary, links and ScienceDaily credit; no intermediary article page."
+          ],
+          "unresolved": []
+        },
+        "excerpt": {
+          "status": "approved",
+          "scope": "Unaltered RSS headlines and publisher-provided brief summaries with original direct story links.",
+          "evidenceUrls": [
+            "https://www.sciencedaily.com/terms.htm"
+          ],
+          "attribution": "ScienceDaily",
+          "limits": [
+            "No feed-specific advertising or charge for RSS access.",
+            "No intermediary page before original story.",
+            "Only article URLs containing /releases/ are within the headline/summary grant. Retain the original supplied headline and short summary, links and ScienceDaily credit; no intermediary article page."
+          ],
+          "unresolved": []
+        },
+        "articleImages": {
+          "status": "denied",
+          "scope": "Photo permission in current terms is personal use only; commercial reuse requires separate owner permission.",
+          "evidenceUrls": [
+            "https://www.sciencedaily.com/terms.htm"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        },
+        "branding": {
+          "status": "uncertain",
+          "scope": "Logo authorization is case-by-case; RSS credit is required but no standalone commercial logo grant established.",
+          "evidenceUrls": [
+            "https://www.sciencedaily.com/terms.htm"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        },
+        "fullText": {
+          "status": "denied",
+          "scope": "RSS grant excludes full stories.",
+          "evidenceUrls": [
+            "https://www.sciencedaily.com/terms.htm"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        },
+        "storageRedistribution": {
+          "status": "denied",
+          "scope": "Current app database/saved-content architecture exceeds explicit limited feed-display scope.",
+          "evidenceUrls": [
+            "https://www.sciencedaily.com/terms.htm"
+          ],
+          "attribution": "",
+          "limits": [
+            "No database/organizational structure without consent.",
+            "No more than normal RSS quantity, described as about40 headlines/summaries."
+          ],
+          "unresolved": []
+        }
+      },
+      "usQualification": {
+        "status": "verified-us",
+        "scope": "Publisher terms give Encinitas, California address.",
+        "evidenceUrls": [
+          "https://www.sciencedaily.com/terms.htm"
+        ]
+      },
+      "trafficEvidence": {
+        "status": "unsubstantiated",
+        "scope": "No verified U.S. monthly traffic threshold; feed existence and global audience claims are not traffic evidence.",
+        "evidenceUrls": []
+      },
+      "contentPolicy": {
+        "status": "uncertain",
+        "scope": "Science/health reporting; rights restrictions independently prevent proposed image-led database admission.",
+        "evidenceUrls": [
+          "https://www.sciencedaily.com/terms.htm"
+        ]
+      },
+      "productionEnabled": false,
+      "holdReasons": [
+        "Commercial photo reuse not granted.",
+        "Database/archive and intermediary restrictions incompatible with current pipeline."
+      ],
+      "brandingFallback": "Neutral locally rendered initials and publisher name; no copied logo."
+    },
+    {
+      "reviewId": "rights-20260915-sciencedaily-wm-0188",
+      "recordIds": [
+        "WM-0188"
+      ],
+      "publisher": "ScienceDaily",
+      "feedUrl": "https://www.sciencedaily.com/rss/top/health.xml",
+      "reviewedAt": "2026-09-15T19:47:59.923660Z",
+      "expiresAt": "2026-12-14T00:00:00Z",
+      "expiryBasis": "Operational re-review date; not an assertion that the publisher license expires.",
+      "permissions": {
+        "headlineLink": {
+          "status": "approved",
+          "scope": "Unaltered RSS headlines and publisher-provided brief summaries with original direct story links.",
+          "evidenceUrls": [
+            "https://www.sciencedaily.com/terms.htm"
+          ],
+          "attribution": "ScienceDaily",
+          "limits": [
+            "No feed-specific advertising or charge for RSS access.",
+            "No intermediary page before original story.",
+            "Only article URLs containing /releases/ are within the headline/summary grant. Retain the original supplied headline and short summary, links and ScienceDaily credit; no intermediary article page."
+          ],
+          "unresolved": []
+        },
+        "excerpt": {
+          "status": "approved",
+          "scope": "Unaltered RSS headlines and publisher-provided brief summaries with original direct story links.",
+          "evidenceUrls": [
+            "https://www.sciencedaily.com/terms.htm"
+          ],
+          "attribution": "ScienceDaily",
+          "limits": [
+            "No feed-specific advertising or charge for RSS access.",
+            "No intermediary page before original story.",
+            "Only article URLs containing /releases/ are within the headline/summary grant. Retain the original supplied headline and short summary, links and ScienceDaily credit; no intermediary article page."
+          ],
+          "unresolved": []
+        },
+        "articleImages": {
+          "status": "denied",
+          "scope": "Photo permission in current terms is personal use only; commercial reuse requires separate owner permission.",
+          "evidenceUrls": [
+            "https://www.sciencedaily.com/terms.htm"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        },
+        "branding": {
+          "status": "uncertain",
+          "scope": "Logo authorization is case-by-case; RSS credit is required but no standalone commercial logo grant established.",
+          "evidenceUrls": [
+            "https://www.sciencedaily.com/terms.htm"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        },
+        "fullText": {
+          "status": "denied",
+          "scope": "RSS grant excludes full stories.",
+          "evidenceUrls": [
+            "https://www.sciencedaily.com/terms.htm"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        },
+        "storageRedistribution": {
+          "status": "denied",
+          "scope": "Current app database/saved-content architecture exceeds explicit limited feed-display scope.",
+          "evidenceUrls": [
+            "https://www.sciencedaily.com/terms.htm"
+          ],
+          "attribution": "",
+          "limits": [
+            "No database/organizational structure without consent.",
+            "No more than normal RSS quantity, described as about40 headlines/summaries."
+          ],
+          "unresolved": []
+        }
+      },
+      "usQualification": {
+        "status": "verified-us",
+        "scope": "Publisher terms give Encinitas, California address.",
+        "evidenceUrls": [
+          "https://www.sciencedaily.com/terms.htm"
+        ]
+      },
+      "trafficEvidence": {
+        "status": "unsubstantiated",
+        "scope": "No verified U.S. monthly traffic threshold; feed existence and global audience claims are not traffic evidence.",
+        "evidenceUrls": []
+      },
+      "contentPolicy": {
+        "status": "uncertain",
+        "scope": "Science/health reporting; rights restrictions independently prevent proposed image-led database admission.",
+        "evidenceUrls": [
+          "https://www.sciencedaily.com/terms.htm"
+        ]
+      },
+      "productionEnabled": false,
+      "holdReasons": [
+        "Commercial photo reuse not granted.",
+        "Database/archive and intermediary restrictions incompatible with current pipeline."
+      ],
+      "brandingFallback": "Neutral locally rendered initials and publisher name; no copied logo."
+    },
+    {
+      "reviewId": "rights-20260915-cloudflare-wm-0064",
+      "recordIds": [
+        "WM-0064"
+      ],
+      "publisher": "Cloudflare",
+      "feedUrl": "https://blog.cloudflare.com/rss/",
+      "reviewedAt": "2026-09-15T19:47:59.923660Z",
+      "expiresAt": "2026-12-14T00:00:00Z",
+      "expiryBasis": "Operational re-review date; not an assertion that the publisher license expires.",
+      "permissions": {
+        "headlineLink": {
+          "status": "uncertain",
+          "scope": "Current terms reserve materials to Cloudflare/licensors; no current blanket blog CC or commercial RSS redistribution grant was found.",
+          "evidenceUrls": [
+            "https://www.cloudflare.com/website-terms/",
+            "https://blog.cloudflare.com/post-quantum-dnssec-1111/"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": [
+            "Need an express feed/content grant; legacy assumptions or CC credits on individual photographs are insufficient."
+          ]
+        },
+        "excerpt": {
+          "status": "uncertain",
+          "scope": "Current terms reserve materials to Cloudflare/licensors; no current blanket blog CC or commercial RSS redistribution grant was found.",
+          "evidenceUrls": [
+            "https://www.cloudflare.com/website-terms/",
+            "https://blog.cloudflare.com/post-quantum-dnssec-1111/"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": [
+            "Need an express feed/content grant; legacy assumptions or CC credits on individual photographs are insufficient."
+          ]
+        },
+        "articleImages": {
+          "status": "uncertain",
+          "scope": "Current terms reserve materials to Cloudflare/licensors; no current blanket blog CC or commercial RSS redistribution grant was found.",
+          "evidenceUrls": [
+            "https://www.cloudflare.com/website-terms/",
+            "https://blog.cloudflare.com/post-quantum-dnssec-1111/"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": [
+            "Need an express feed/content grant; legacy assumptions or CC credits on individual photographs are insufficient."
+          ]
+        },
+        "branding": {
+          "status": "uncertain",
+          "scope": "Current terms reserve materials to Cloudflare/licensors; no current blanket blog CC or commercial RSS redistribution grant was found.",
+          "evidenceUrls": [
+            "https://www.cloudflare.com/website-terms/",
+            "https://blog.cloudflare.com/post-quantum-dnssec-1111/"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": [
+            "Need an express feed/content grant; legacy assumptions or CC credits on individual photographs are insufficient."
+          ]
+        },
+        "fullText": {
+          "status": "uncertain",
+          "scope": "Current terms reserve materials to Cloudflare/licensors; no current blanket blog CC or commercial RSS redistribution grant was found.",
+          "evidenceUrls": [
+            "https://www.cloudflare.com/website-terms/",
+            "https://blog.cloudflare.com/post-quantum-dnssec-1111/"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": [
+            "Need an express feed/content grant; legacy assumptions or CC credits on individual photographs are insufficient."
+          ]
+        },
+        "storageRedistribution": {
+          "status": "uncertain",
+          "scope": "Current terms reserve materials to Cloudflare/licensors; no current blanket blog CC or commercial RSS redistribution grant was found.",
+          "evidenceUrls": [
+            "https://www.cloudflare.com/website-terms/",
+            "https://blog.cloudflare.com/post-quantum-dnssec-1111/"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": [
+            "Need an express feed/content grant; legacy assumptions or CC credits on individual photographs are insufficient."
+          ]
+        }
+      },
+      "usQualification": {
+        "status": "verified-us",
+        "scope": "Current official terms identify operator at101 Townsend St, San Francisco, California.",
+        "evidenceUrls": [
+          "https://www.cloudflare.com/website-terms/"
+        ]
+      },
+      "trafficEvidence": {
+        "status": "unsubstantiated",
+        "scope": "No verified U.S. monthly traffic threshold; feed existence and global audience claims are not traffic evidence.",
+        "evidenceUrls": []
+      },
+      "contentPolicy": {
+        "status": "uncertain",
+        "scope": "Corporate technology/security blog; reviewed September10 article and current legal/footer scope.",
+        "evidenceUrls": [
+          "https://www.cloudflare.com/website-terms/",
+          "https://blog.cloudflare.com/post-quantum-dnssec-1111/"
+        ]
+      },
+      "productionEnabled": false,
+      "holdReasons": [
+        "No current CC BY4.0 blanket blog license found; current article/footer does not supply it."
+      ],
+      "brandingFallback": "Neutral locally rendered initials and publisher name; no copied logo."
+    },
+    {
+      "reviewId": "rights-20260915-freecodecamp-wm-0068",
+      "recordIds": [
+        "WM-0068"
+      ],
+      "publisher": "freeCodeCamp",
+      "feedUrl": "https://www.freecodecamp.org/news/rss",
+      "reviewedAt": "2026-09-15T19:47:59.923660Z",
+      "expiresAt": "2026-12-14T00:00:00Z",
+      "expiryBasis": "Operational re-review date; not an assertion that the publisher license expires.",
+      "permissions": {
+        "headlineLink": {
+          "status": "uncertain",
+          "scope": "News terms do not provide a blanket commercial redistribution license; contributors retain their own content rights.",
+          "evidenceUrls": [
+            "https://www.freecodecamp.org/news/terms-of-service/"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": [
+            "Do not apply curriculum/code open-source licenses to all News articles or images."
+          ]
+        },
+        "excerpt": {
+          "status": "uncertain",
+          "scope": "News terms do not provide a blanket commercial redistribution license; contributors retain their own content rights.",
+          "evidenceUrls": [
+            "https://www.freecodecamp.org/news/terms-of-service/"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": [
+            "Do not apply curriculum/code open-source licenses to all News articles or images."
+          ]
+        },
+        "articleImages": {
+          "status": "denied",
+          "scope": "Terms prohibit hyperlinking images/non-hypertext content; no separate image grant established.",
+          "evidenceUrls": [
+            "https://www.freecodecamp.org/news/terms-of-service/"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        },
+        "branding": {
+          "status": "uncertain",
+          "scope": "News terms do not provide a blanket commercial redistribution license; contributors retain their own content rights.",
+          "evidenceUrls": [
+            "https://www.freecodecamp.org/news/terms-of-service/"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": [
+            "Do not apply curriculum/code open-source licenses to all News articles or images."
+          ]
+        },
+        "fullText": {
+          "status": "uncertain",
+          "scope": "News terms do not provide a blanket commercial redistribution license; contributors retain their own content rights.",
+          "evidenceUrls": [
+            "https://www.freecodecamp.org/news/terms-of-service/"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": [
+            "Do not apply curriculum/code open-source licenses to all News articles or images."
+          ]
+        },
+        "storageRedistribution": {
+          "status": "denied",
+          "scope": "Terms restrict non-browser automated access except public search-engine indexing; no commercial feed cache grant established.",
+          "evidenceUrls": [
+            "https://www.freecodecamp.org/news/terms-of-service/"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        }
+      },
+      "usQualification": {
+        "status": "unverified",
+        "scope": "U.S. publication country not independently established by this bounded rights review.",
+        "evidenceUrls": []
+      },
+      "trafficEvidence": {
+        "status": "unsubstantiated",
+        "scope": "No verified U.S. monthly traffic threshold; feed existence and global audience claims are not traffic evidence.",
+        "evidenceUrls": []
+      },
+      "contentPolicy": {
+        "status": "uncertain",
+        "scope": "Programming education; licensing/access scope must be resolved separately from content suitability.",
+        "evidenceUrls": [
+          "https://www.freecodecamp.org/news/terms-of-service/"
+        ]
+      },
+      "productionEnabled": false,
+      "holdReasons": [
+        "News terms and image-linking restrictions do not authorize this RSS/photo redistribution model."
+      ],
+      "brandingFallback": "Neutral locally rendered initials and publisher name; no copied logo."
+    },
+    {
+      "reviewId": "rights-20260915-columbia-wm-0156",
+      "recordIds": [
+        "WM-0156"
+      ],
+      "publisher": "Columbia - State of the Planet",
+      "feedUrl": "https://news.climate.columbia.edu/feed",
+      "reviewedAt": "2026-09-15T19:47:59.923660Z",
+      "expiresAt": "2026-12-14T00:00:00Z",
+      "expiryBasis": "Operational re-review date; not an assertion that the publisher license expires.",
+      "permissions": {
+        "headlineLink": {
+          "status": "uncertain",
+          "scope": "No affirmative grant for this commercial app use established.",
+          "evidenceUrls": [
+            "https://news.climate.columbia.edu/about/",
+            "https://communications.news.columbia.edu/content/our-services"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": [
+            "Separate permission or narrower reviewed scope required."
+          ]
+        },
+        "excerpt": {
+          "status": "uncertain",
+          "scope": "No affirmative grant for this commercial app use established.",
+          "evidenceUrls": [
+            "https://news.climate.columbia.edu/about/",
+            "https://communications.news.columbia.edu/content/our-services"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": [
+            "Separate permission or narrower reviewed scope required."
+          ]
+        },
+        "articleImages": {
+          "status": "uncertain",
+          "scope": "No affirmative grant for this commercial app use established.",
+          "evidenceUrls": [
+            "https://news.climate.columbia.edu/about/",
+            "https://communications.news.columbia.edu/content/our-services"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": [
+            "Separate permission or narrower reviewed scope required."
+          ]
+        },
+        "branding": {
+          "status": "uncertain",
+          "scope": "No affirmative grant for this commercial app use established.",
+          "evidenceUrls": [
+            "https://news.climate.columbia.edu/about/",
+            "https://communications.news.columbia.edu/content/our-services"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": [
+            "Separate permission or narrower reviewed scope required."
+          ]
+        },
+        "fullText": {
+          "status": "uncertain",
+          "scope": "No affirmative grant for this commercial app use established.",
+          "evidenceUrls": [
+            "https://news.climate.columbia.edu/about/",
+            "https://communications.news.columbia.edu/content/our-services"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": [
+            "Separate permission or narrower reviewed scope required."
+          ]
+        },
+        "storageRedistribution": {
+          "status": "uncertain",
+          "scope": "No affirmative grant for this commercial app use established.",
+          "evidenceUrls": [
+            "https://news.climate.columbia.edu/about/",
+            "https://communications.news.columbia.edu/content/our-services"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": [
+            "Separate permission or narrower reviewed scope required."
+          ]
+        }
+      },
+      "usQualification": {
+        "status": "unverified",
+        "scope": "U.S. publication country not independently established by this bounded rights review.",
+        "evidenceUrls": []
+      },
+      "trafficEvidence": {
+        "status": "unsubstantiated",
+        "scope": "No verified U.S. monthly traffic threshold; feed existence and global audience claims are not traffic evidence.",
+        "evidenceUrls": []
+      },
+      "contentPolicy": {
+        "status": "uncertain",
+        "scope": "Climate-school science/environment reporting; some articles republished from other outlets. A university publisher is not automatically public domain.",
+        "evidenceUrls": [
+          "https://news.climate.columbia.edu/about/",
+          "https://communications.news.columbia.edu/content/our-services"
+        ]
+      },
+      "productionEnabled": false,
+      "holdReasons": [
+        "No publisher-wide commercial excerpt/photo/cache grant found in reviewed official pages.",
+        "University image service directs permission requests; no request made."
+      ],
+      "brandingFallback": "Neutral locally rendered initials and publisher name; no copied logo."
+    },
+    {
+      "reviewId": "rights-20260915-eos-wm-0158",
+      "recordIds": [
+        "WM-0158"
+      ],
+      "publisher": "Eos",
+      "feedUrl": "https://eos.org/feed",
+      "reviewedAt": "2026-09-15T19:47:59.923660Z",
+      "expiresAt": "2026-12-14T00:00:00Z",
+      "expiryBasis": "Operational re-review date; not an assertion that the publisher license expires.",
+      "permissions": {
+        "headlineLink": {
+          "status": "uncertain",
+          "scope": "No affirmative grant for this commercial app use established.",
+          "evidenceUrls": [
+            "https://eos.org/submit",
+            "https://eos.org/about-eos",
+            "https://eos.org/articles/plutos-atmosphere-may-be-collapsing"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": [
+            "Separate permission or narrower reviewed scope required."
+          ]
+        },
+        "excerpt": {
+          "status": "uncertain",
+          "scope": "No affirmative grant for this commercial app use established.",
+          "evidenceUrls": [
+            "https://eos.org/submit",
+            "https://eos.org/about-eos",
+            "https://eos.org/articles/plutos-atmosphere-may-be-collapsing"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": [
+            "Separate permission or narrower reviewed scope required."
+          ]
+        },
+        "articleImages": {
+          "status": "uncertain",
+          "scope": "No affirmative grant for this commercial app use established.",
+          "evidenceUrls": [
+            "https://eos.org/submit",
+            "https://eos.org/about-eos",
+            "https://eos.org/articles/plutos-atmosphere-may-be-collapsing"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": [
+            "Separate permission or narrower reviewed scope required."
+          ]
+        },
+        "branding": {
+          "status": "uncertain",
+          "scope": "No affirmative grant for this commercial app use established.",
+          "evidenceUrls": [
+            "https://eos.org/submit",
+            "https://eos.org/about-eos",
+            "https://eos.org/articles/plutos-atmosphere-may-be-collapsing"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": [
+            "Separate permission or narrower reviewed scope required."
+          ]
+        },
+        "fullText": {
+          "status": "uncertain",
+          "scope": "No affirmative grant for this commercial app use established.",
+          "evidenceUrls": [
+            "https://eos.org/submit",
+            "https://eos.org/about-eos",
+            "https://eos.org/articles/plutos-atmosphere-may-be-collapsing"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": [
+            "Separate permission or narrower reviewed scope required."
+          ]
+        },
+        "storageRedistribution": {
+          "status": "uncertain",
+          "scope": "No affirmative grant for this commercial app use established.",
+          "evidenceUrls": [
+            "https://eos.org/submit",
+            "https://eos.org/about-eos",
+            "https://eos.org/articles/plutos-atmosphere-may-be-collapsing"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": [
+            "Separate permission or narrower reviewed scope required."
+          ]
+        }
+      },
+      "usQualification": {
+        "status": "unverified",
+        "scope": "U.S. publication country not independently established by this bounded rights review.",
+        "evidenceUrls": []
+      },
+      "trafficEvidence": {
+        "status": "unsubstantiated",
+        "scope": "No verified U.S. monthly traffic threshold; feed existence and global audience claims are not traffic evidence.",
+        "evidenceUrls": []
+      },
+      "contentPolicy": {
+        "status": "uncertain",
+        "scope": "Earth/space science reporting; author agreements vary by item between CC BY, CC BY-NC-ND, public domain and Crown copyright.",
+        "evidenceUrls": [
+          "https://eos.org/submit",
+          "https://eos.org/about-eos",
+          "https://eos.org/articles/plutos-atmosphere-may-be-collapsing"
+        ]
+      },
+      "productionEnabled": false,
+      "holdReasons": [
+        "Current Pluto article footer explicitly licenses text CC BY-NC-ND3.0 US; current commercial text grant is absent.",
+        "Article images have separate rights; a NASA hero credit cannot authorize Eos text."
+      ],
+      "brandingFallback": "Neutral locally rendered initials and publisher name; no copied logo.",
+      "articleLevelEvidence": [
+        {
+          "articleUrl": "https://eos.org/articles/plutos-atmosphere-may-be-collapsing",
+          "textLicense": "CC BY-NC-ND3.0 US",
+          "licenseUrl": "https://creativecommons.org/licenses/by-nc-nd/3.0/us/",
+          "savedPrimaryHtml": "work/feed-candidates/reviews/eos-pluto.html",
+          "commercialCardStatus": "held"
+        }
+      ]
+    },
+    {
+      "reviewId": "rights-20260915-quanta-wm-0148",
+      "recordIds": [
+        "WM-0148"
+      ],
+      "publisher": "Quanta Magazine",
+      "feedUrl": "https://www.quantamagazine.org/feed",
+      "reviewedAt": "2026-09-15T19:47:59.923660Z",
+      "expiresAt": "2026-12-14T00:00:00Z",
+      "expiryBasis": "Operational re-review date; not an assertion that the publisher license expires.",
+      "permissions": {
+        "headlineLink": {
+          "status": "denied",
+          "scope": "Current publisher terms limit content to personal noncommercial use; commercial reproduction/distribution/display/caching requires permission.",
+          "evidenceUrls": [
+            "https://www.quantamagazine.org/terms-conditions/",
+            "https://www.quantamagazine.org/about/"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        },
+        "excerpt": {
+          "status": "denied",
+          "scope": "Current publisher terms limit content to personal noncommercial use; commercial reproduction/distribution/display/caching requires permission.",
+          "evidenceUrls": [
+            "https://www.quantamagazine.org/terms-conditions/",
+            "https://www.quantamagazine.org/about/"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        },
+        "articleImages": {
+          "status": "denied",
+          "scope": "Current publisher terms limit content to personal noncommercial use; commercial reproduction/distribution/display/caching requires permission.",
+          "evidenceUrls": [
+            "https://www.quantamagazine.org/terms-conditions/",
+            "https://www.quantamagazine.org/about/"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        },
+        "branding": {
+          "status": "denied",
+          "scope": "Current publisher terms limit content to personal noncommercial use; commercial reproduction/distribution/display/caching requires permission.",
+          "evidenceUrls": [
+            "https://www.quantamagazine.org/terms-conditions/",
+            "https://www.quantamagazine.org/about/"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        },
+        "fullText": {
+          "status": "denied",
+          "scope": "Current publisher terms limit content to personal noncommercial use; commercial reproduction/distribution/display/caching requires permission.",
+          "evidenceUrls": [
+            "https://www.quantamagazine.org/terms-conditions/",
+            "https://www.quantamagazine.org/about/"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        },
+        "storageRedistribution": {
+          "status": "denied",
+          "scope": "Current publisher terms limit content to personal noncommercial use; commercial reproduction/distribution/display/caching requires permission.",
+          "evidenceUrls": [
+            "https://www.quantamagazine.org/terms-conditions/",
+            "https://www.quantamagazine.org/about/"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        }
+      },
+      "usQualification": {
+        "status": "verified-us",
+        "scope": "About page identifies Simons Foundation publication in New York.",
+        "evidenceUrls": [
+          "https://www.quantamagazine.org/about/"
+        ]
+      },
+      "trafficEvidence": {
+        "status": "unsubstantiated",
+        "scope": "No verified U.S. monthly traffic threshold; feed existence and global audience claims are not traffic evidence.",
+        "evidenceUrls": []
+      },
+      "contentPolicy": {
+        "status": "uncertain",
+        "scope": "Science/mathematics journalism; existing syndication partners do not grant Wingman a license.",
+        "evidenceUrls": [
+          "https://www.quantamagazine.org/terms-conditions/",
+          "https://www.quantamagazine.org/about/"
+        ]
+      },
+      "productionEnabled": false,
+      "holdReasons": [
+        "Personal/noncommercial restrictions and automated collection restrictions; no syndication agreement."
+      ],
+      "brandingFallback": "Neutral locally rendered initials and publisher name; no copied logo."
+    },
+    {
+      "reviewId": "rights-20260915-mindsite-wm-0198",
+      "recordIds": [
+        "WM-0198"
+      ],
+      "publisher": "MindSite News",
+      "feedUrl": "https://mindsitenews.org/feed",
+      "reviewedAt": "2026-09-15T19:47:59.923660Z",
+      "expiresAt": "2026-12-14T00:00:00Z",
+      "expiryBasis": "Operational re-review date; not an assertion that the publisher license expires.",
+      "permissions": {
+        "headlineLink": {
+          "status": "uncertain",
+          "scope": "Conditional republication grant covers qualifying news outlets including for-profit outlets, but this app/card use and exact article rights are not established.",
+          "evidenceUrls": [
+            "https://mindsitenews.org/republishing-our-stories-what-you-need-to-know/",
+            "https://mindsitenews.org/news-agency-partners/"
+          ],
+          "attribution": "Reporter and MindSite News; required links/tagline if qualifying.",
+          "limits": [
+            "Guidance lists CC BY-NC-ND4.0 with explicit news-outlet exception.",
+            "Shortening/headline changes need permission.",
+            "All-rights-reserved and agency partner material excluded."
+          ],
+          "unresolved": [
+            "Commercial browser aggregation is not assumed to be the qualifying news-outlet case."
+          ]
+        },
+        "excerpt": {
+          "status": "uncertain",
+          "scope": "Conditional republication grant covers qualifying news outlets including for-profit outlets, but this app/card use and exact article rights are not established.",
+          "evidenceUrls": [
+            "https://mindsitenews.org/republishing-our-stories-what-you-need-to-know/",
+            "https://mindsitenews.org/news-agency-partners/"
+          ],
+          "attribution": "Reporter and MindSite News; required links/tagline if qualifying.",
+          "limits": [
+            "Guidance lists CC BY-NC-ND4.0 with explicit news-outlet exception.",
+            "Shortening/headline changes need permission.",
+            "All-rights-reserved and agency partner material excluded."
+          ],
+          "unresolved": [
+            "Commercial browser aggregation is not assumed to be the qualifying news-outlet case."
+          ]
+        },
+        "articleImages": {
+          "status": "uncertain",
+          "scope": "Conditional republication grant covers qualifying news outlets including for-profit outlets, but this app/card use and exact article rights are not established.",
+          "evidenceUrls": [
+            "https://mindsitenews.org/republishing-our-stories-what-you-need-to-know/",
+            "https://mindsitenews.org/news-agency-partners/"
+          ],
+          "attribution": "Reporter and MindSite News; required links/tagline if qualifying.",
+          "limits": [
+            "Guidance lists CC BY-NC-ND4.0 with explicit news-outlet exception.",
+            "Shortening/headline changes need permission.",
+            "All-rights-reserved and agency partner material excluded."
+          ],
+          "unresolved": [
+            "Commercial browser aggregation is not assumed to be the qualifying news-outlet case."
+          ]
+        },
+        "branding": {
+          "status": "uncertain",
+          "scope": "Conditional republication grant covers qualifying news outlets including for-profit outlets, but this app/card use and exact article rights are not established.",
+          "evidenceUrls": [
+            "https://mindsitenews.org/republishing-our-stories-what-you-need-to-know/",
+            "https://mindsitenews.org/news-agency-partners/"
+          ],
+          "attribution": "Reporter and MindSite News; required links/tagline if qualifying.",
+          "limits": [
+            "Guidance lists CC BY-NC-ND4.0 with explicit news-outlet exception.",
+            "Shortening/headline changes need permission.",
+            "All-rights-reserved and agency partner material excluded."
+          ],
+          "unresolved": [
+            "Commercial browser aggregation is not assumed to be the qualifying news-outlet case."
+          ]
+        },
+        "fullText": {
+          "status": "uncertain",
+          "scope": "Conditional republication grant covers qualifying news outlets including for-profit outlets, but this app/card use and exact article rights are not established.",
+          "evidenceUrls": [
+            "https://mindsitenews.org/republishing-our-stories-what-you-need-to-know/",
+            "https://mindsitenews.org/news-agency-partners/"
+          ],
+          "attribution": "Reporter and MindSite News; required links/tagline if qualifying.",
+          "limits": [
+            "Guidance lists CC BY-NC-ND4.0 with explicit news-outlet exception.",
+            "Shortening/headline changes need permission.",
+            "All-rights-reserved and agency partner material excluded."
+          ],
+          "unresolved": [
+            "Commercial browser aggregation is not assumed to be the qualifying news-outlet case."
+          ]
+        },
+        "storageRedistribution": {
+          "status": "uncertain",
+          "scope": "Conditional republication grant covers qualifying news outlets including for-profit outlets, but this app/card use and exact article rights are not established.",
+          "evidenceUrls": [
+            "https://mindsitenews.org/republishing-our-stories-what-you-need-to-know/",
+            "https://mindsitenews.org/news-agency-partners/"
+          ],
+          "attribution": "Reporter and MindSite News; required links/tagline if qualifying.",
+          "limits": [
+            "Guidance lists CC BY-NC-ND4.0 with explicit news-outlet exception.",
+            "Shortening/headline changes need permission.",
+            "All-rights-reserved and agency partner material excluded."
+          ],
+          "unresolved": [
+            "Commercial browser aggregation is not assumed to be the qualifying news-outlet case."
+          ]
+        }
+      },
+      "usQualification": {
+        "status": "unverified",
+        "scope": "U.S. publication country not independently established by this bounded rights review.",
+        "evidenceUrls": []
+      },
+      "trafficEvidence": {
+        "status": "unsubstantiated",
+        "scope": "No verified U.S. monthly traffic threshold; feed existence and global audience claims are not traffic evidence.",
+        "evidenceUrls": []
+      },
+      "contentPolicy": {
+        "status": "uncertain",
+        "scope": "Mental-health journalism; partner material and stock photos require separate treatment.",
+        "evidenceUrls": [
+          "https://mindsitenews.org/republishing-our-stories-what-you-need-to-know/",
+          "https://mindsitenews.org/news-agency-partners/"
+        ]
+      },
+      "productionEnabled": false,
+      "holdReasons": [
+        "Current article supplies a CC BY-ND4.0 republication package with contributed photos, but FAQ names CC BY-NC-ND4.0 plus a for-profit news-outlet exception and requires approval for shortening.",
+        "Do not silently treat an excerpt card as the approved intact republication format or inherit rights for Shutterstock/agency imagery."
+      ],
+      "brandingFallback": "Neutral locally rendered initials and publisher name; no copied logo.",
+      "articleLevelEvidence": [
+        {
+          "articleUrl": "https://mindsitenews.org/2026/08/20/high-schooler-agonizes-that-her-parents-will-be-seized-ice-arrests/",
+          "publishedAt": "2026-08-20",
+          "textLicenseInArticle": "CC BY-ND4.0",
+          "licenseUrl": "https://creativecommons.org/licenses/by-nd/4.0/",
+          "photoCredit": "Julie Leopo for MindSite News/CatchLight",
+          "exactPublisherSuppliedPhoto": "https://dl3wjxrn8qv3a.cloudfront.net/wp-content/uploads/2026/08/13181817/1gallery-2-1024x683.jpg",
+          "photoNotDownloaded": true,
+          "remainingIssue": "Article-specific no-NC notice is promising for intact republication, but publisher FAQ says shortening needs permission. Native excerpt-only scope and conflict with FAQ CC BY-NC-ND notice are not resolved by this review."
+        }
+      ]
+    },
+    {
+      "reviewId": "rights-20260915-wpbeginner-wm-0085",
+      "recordIds": [
+        "WM-0085"
+      ],
+      "publisher": "WPBeginner",
+      "feedUrl": "https://www.wpbeginner.com/feed/",
+      "reviewedAt": "2026-09-15T19:47:59.923660Z",
+      "expiresAt": "2026-12-14T00:00:00Z",
+      "expiryBasis": "Operational re-review date; not an assertion that the publisher license expires.",
+      "permissions": {
+        "headlineLink": {
+          "status": "denied",
+          "scope": "Current terms restrict materials to personal noncommercial use and reserve commercial reproduction/software use.",
+          "evidenceUrls": [
+            "https://www.wpbeginner.com/terms-of-use/"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        },
+        "excerpt": {
+          "status": "denied",
+          "scope": "Current terms restrict materials to personal noncommercial use and reserve commercial reproduction/software use.",
+          "evidenceUrls": [
+            "https://www.wpbeginner.com/terms-of-use/"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        },
+        "articleImages": {
+          "status": "denied",
+          "scope": "Current terms restrict materials to personal noncommercial use and reserve commercial reproduction/software use.",
+          "evidenceUrls": [
+            "https://www.wpbeginner.com/terms-of-use/"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        },
+        "branding": {
+          "status": "denied",
+          "scope": "Current terms restrict materials to personal noncommercial use and reserve commercial reproduction/software use.",
+          "evidenceUrls": [
+            "https://www.wpbeginner.com/terms-of-use/"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        },
+        "fullText": {
+          "status": "denied",
+          "scope": "Current terms restrict materials to personal noncommercial use and reserve commercial reproduction/software use.",
+          "evidenceUrls": [
+            "https://www.wpbeginner.com/terms-of-use/"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        },
+        "storageRedistribution": {
+          "status": "denied",
+          "scope": "Current terms restrict materials to personal noncommercial use and reserve commercial reproduction/software use.",
+          "evidenceUrls": [
+            "https://www.wpbeginner.com/terms-of-use/"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        }
+      },
+      "usQualification": {
+        "status": "unverified",
+        "scope": "U.S. publication country not independently established by this bounded rights review.",
+        "evidenceUrls": []
+      },
+      "trafficEvidence": {
+        "status": "unsubstantiated",
+        "scope": "No verified U.S. monthly traffic threshold; feed existence and global audience claims are not traffic evidence.",
+        "evidenceUrls": []
+      },
+      "contentPolicy": {
+        "status": "uncertain",
+        "scope": "WordPress educational publication; content topic does not override commercial-use restrictions.",
+        "evidenceUrls": [
+          "https://www.wpbeginner.com/terms-of-use/"
+        ]
+      },
+      "productionEnabled": false,
+      "holdReasons": [
+        "No commercial app content/image/cache grant under current terms."
+      ],
+      "brandingFallback": "Neutral locally rendered initials and publisher name; no copied logo."
+    },
+    {
+      "reviewId": "rights-20260915-minimalistbaker-wm-0166",
+      "recordIds": [
+        "WM-0166"
+      ],
+      "publisher": "Minimalist Baker",
+      "feedUrl": "https://minimalistbaker.com/feed",
+      "reviewedAt": "2026-09-15T19:47:59.923660Z",
+      "expiresAt": "2026-12-14T00:00:00Z",
+      "expiryBasis": "Operational re-review date; not an assertion that the publisher license expires.",
+      "permissions": {
+        "headlineLink": {
+          "status": "uncertain",
+          "scope": "No blanket commercial app redistribution grant established.",
+          "evidenceUrls": [
+            "https://support.minimalistbaker.com/article/36-sharing-our-recipes-and-images",
+            "https://minimalistbaker.com/terms-of-service/"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        },
+        "excerpt": {
+          "status": "uncertain",
+          "scope": "No blanket commercial app redistribution grant established.",
+          "evidenceUrls": [
+            "https://support.minimalistbaker.com/article/36-sharing-our-recipes-and-images",
+            "https://minimalistbaker.com/terms-of-service/"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        },
+        "articleImages": {
+          "status": "denied",
+          "scope": "Limited one-image recipe-roundup permission does not permit images in commercial/paid products; systematic use excluded.",
+          "evidenceUrls": [
+            "https://support.minimalistbaker.com/article/36-sharing-our-recipes-and-images",
+            "https://minimalistbaker.com/terms-of-service/"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        },
+        "branding": {
+          "status": "uncertain",
+          "scope": "No blanket commercial app redistribution grant established.",
+          "evidenceUrls": [
+            "https://support.minimalistbaker.com/article/36-sharing-our-recipes-and-images",
+            "https://minimalistbaker.com/terms-of-service/"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        },
+        "fullText": {
+          "status": "denied",
+          "scope": "Recipe/instruction republication not permitted by sharing guidance.",
+          "evidenceUrls": [
+            "https://support.minimalistbaker.com/article/36-sharing-our-recipes-and-images",
+            "https://minimalistbaker.com/terms-of-service/"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        },
+        "storageRedistribution": {
+          "status": "uncertain",
+          "scope": "No blanket commercial app redistribution grant established.",
+          "evidenceUrls": [
+            "https://support.minimalistbaker.com/article/36-sharing-our-recipes-and-images",
+            "https://minimalistbaker.com/terms-of-service/"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        }
+      },
+      "usQualification": {
+        "status": "verified-us",
+        "scope": "Terms identify San Antonio, Texas contact address.",
+        "evidenceUrls": [
+          "https://minimalistbaker.com/terms-of-service/"
+        ]
+      },
+      "trafficEvidence": {
+        "status": "unsubstantiated",
+        "scope": "No verified U.S. monthly traffic threshold; feed existence and global audience claims are not traffic evidence.",
+        "evidenceUrls": []
+      },
+      "contentPolicy": {
+        "status": "uncertain",
+        "scope": "Recipe/lifestyle feed; screened for alcohol or prohibited promotions independently.",
+        "evidenceUrls": [
+          "https://support.minimalistbaker.com/article/36-sharing-our-recipes-and-images",
+          "https://minimalistbaker.com/terms-of-service/"
+        ]
+      },
+      "productionEnabled": false,
+      "holdReasons": [
+        "Commercial product image use expressly excluded; one-image blog-roundup permission is not an app license."
+      ],
+      "brandingFallback": "Neutral locally rendered initials and publisher name; no copied logo."
+    },
+    {
+      "reviewId": "rights-20260915-downshiftology-wm-0163",
+      "recordIds": [
+        "WM-0163"
+      ],
+      "publisher": "Downshiftology",
+      "feedUrl": "https://downshiftology.com/feed",
+      "reviewedAt": "2026-09-15T19:47:59.923660Z",
+      "expiresAt": "2026-12-14T00:00:00Z",
+      "expiryBasis": "Operational re-review date; not an assertion that the publisher license expires.",
+      "permissions": {
+        "headlineLink": {
+          "status": "uncertain",
+          "scope": "No affirmative commercial RSS/image/database grant found; terms reserve images/products for personal noncommercial use.",
+          "evidenceUrls": [
+            "https://downshiftology.com/terms-use/"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        },
+        "excerpt": {
+          "status": "uncertain",
+          "scope": "No affirmative commercial RSS/image/database grant found; terms reserve images/products for personal noncommercial use.",
+          "evidenceUrls": [
+            "https://downshiftology.com/terms-use/"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        },
+        "articleImages": {
+          "status": "denied",
+          "scope": "Images/downloadable products limited to personal noncommercial use.",
+          "evidenceUrls": [
+            "https://downshiftology.com/terms-use/"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        },
+        "branding": {
+          "status": "denied",
+          "scope": "Marks/logos may not be copied without permission.",
+          "evidenceUrls": [
+            "https://downshiftology.com/terms-use/"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        },
+        "fullText": {
+          "status": "uncertain",
+          "scope": "No affirmative commercial RSS/image/database grant found; terms reserve images/products for personal noncommercial use.",
+          "evidenceUrls": [
+            "https://downshiftology.com/terms-use/"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        },
+        "storageRedistribution": {
+          "status": "uncertain",
+          "scope": "No affirmative commercial RSS/image/database grant found; terms reserve images/products for personal noncommercial use.",
+          "evidenceUrls": [
+            "https://downshiftology.com/terms-use/"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        }
+      },
+      "usQualification": {
+        "status": "unverified",
+        "scope": "U.S. publication country not independently established by this bounded rights review.",
+        "evidenceUrls": []
+      },
+      "trafficEvidence": {
+        "status": "unsubstantiated",
+        "scope": "No verified U.S. monthly traffic threshold; feed existence and global audience claims are not traffic evidence.",
+        "evidenceUrls": []
+      },
+      "contentPolicy": {
+        "status": "uncertain",
+        "scope": "Food/lifestyle publication; licensing remains separate from article mission review.",
+        "evidenceUrls": [
+          "https://downshiftology.com/terms-use/"
+        ]
+      },
+      "productionEnabled": false,
+      "holdReasons": [
+        "Commercial photo/card redistribution not authorized by reviewed terms."
+      ],
+      "brandingFallback": "Neutral locally rendered initials and publisher name; no copied logo."
+    },
+    {
+      "reviewId": "rights-20260915-nextmedia-wm-0009",
+      "recordIds": [
+        "WM-0009"
+      ],
+      "publisher": "SB Nation",
+      "feedUrl": "https://www.sbnation.com/rss/index.xml",
+      "reviewedAt": "2026-09-15T19:47:59.923660Z",
+      "expiresAt": "2026-12-14T00:00:00Z",
+      "expiryBasis": "Operational re-review date; not an assertion that the publisher license expires.",
+      "permissions": {
+        "headlineLink": {
+          "status": "denied",
+          "scope": "Current terms prohibit unauthorized commercial copying/redistribution and automated extraction/cache; no separate RSS grant established in this review.",
+          "evidenceUrls": [
+            "https://www.thenextmediacompany.com/terms.html"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        },
+        "excerpt": {
+          "status": "denied",
+          "scope": "Current terms prohibit unauthorized commercial copying/redistribution and automated extraction/cache; no separate RSS grant established in this review.",
+          "evidenceUrls": [
+            "https://www.thenextmediacompany.com/terms.html"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        },
+        "articleImages": {
+          "status": "denied",
+          "scope": "Current terms prohibit unauthorized commercial copying/redistribution and automated extraction/cache; no separate RSS grant established in this review.",
+          "evidenceUrls": [
+            "https://www.thenextmediacompany.com/terms.html"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        },
+        "branding": {
+          "status": "denied",
+          "scope": "Current terms prohibit unauthorized commercial copying/redistribution and automated extraction/cache; no separate RSS grant established in this review.",
+          "evidenceUrls": [
+            "https://www.thenextmediacompany.com/terms.html"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        },
+        "fullText": {
+          "status": "denied",
+          "scope": "Current terms prohibit unauthorized commercial copying/redistribution and automated extraction/cache; no separate RSS grant established in this review.",
+          "evidenceUrls": [
+            "https://www.thenextmediacompany.com/terms.html"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        },
+        "storageRedistribution": {
+          "status": "denied",
+          "scope": "Current terms prohibit unauthorized commercial copying/redistribution and automated extraction/cache; no separate RSS grant established in this review.",
+          "evidenceUrls": [
+            "https://www.thenextmediacompany.com/terms.html"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        }
+      },
+      "usQualification": {
+        "status": "verified-us",
+        "scope": "Official terms identify Washington, DC operator; current July2026 terms list covered brands.",
+        "evidenceUrls": [
+          "https://www.thenextmediacompany.com/terms.html"
+        ]
+      },
+      "trafficEvidence": {
+        "status": "unsubstantiated",
+        "scope": "No verified U.S. monthly traffic threshold; feed existence and global audience claims are not traffic evidence.",
+        "evidenceUrls": []
+      },
+      "contentPolicy": {
+        "status": "uncertain",
+        "scope": "Mixed news/entertainment/food/sports topics require per-item mission checks; publisher terms are a separate admission gate.",
+        "evidenceUrls": [
+          "https://www.thenextmediacompany.com/terms.html"
+        ]
+      },
+      "productionEnabled": false,
+      "holdReasons": [
+        "No applicable commercial content/photo/cache grant; separate syndication authorization needed."
+      ],
+      "brandingFallback": "Neutral locally rendered initials and publisher name; no copied logo."
+    },
+    {
+      "reviewId": "rights-20260915-nextmedia-wm-0040",
+      "recordIds": [
+        "WM-0040"
+      ],
+      "publisher": "POPSUGAR",
+      "feedUrl": "https://www.popsugar.com/entertainment/feed",
+      "reviewedAt": "2026-09-15T19:47:59.923660Z",
+      "expiresAt": "2026-12-14T00:00:00Z",
+      "expiryBasis": "Operational re-review date; not an assertion that the publisher license expires.",
+      "permissions": {
+        "headlineLink": {
+          "status": "denied",
+          "scope": "Current terms prohibit unauthorized commercial copying/redistribution and automated extraction/cache; no separate RSS grant established in this review.",
+          "evidenceUrls": [
+            "https://www.thenextmediacompany.com/terms.html"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        },
+        "excerpt": {
+          "status": "denied",
+          "scope": "Current terms prohibit unauthorized commercial copying/redistribution and automated extraction/cache; no separate RSS grant established in this review.",
+          "evidenceUrls": [
+            "https://www.thenextmediacompany.com/terms.html"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        },
+        "articleImages": {
+          "status": "denied",
+          "scope": "Current terms prohibit unauthorized commercial copying/redistribution and automated extraction/cache; no separate RSS grant established in this review.",
+          "evidenceUrls": [
+            "https://www.thenextmediacompany.com/terms.html"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        },
+        "branding": {
+          "status": "denied",
+          "scope": "Current terms prohibit unauthorized commercial copying/redistribution and automated extraction/cache; no separate RSS grant established in this review.",
+          "evidenceUrls": [
+            "https://www.thenextmediacompany.com/terms.html"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        },
+        "fullText": {
+          "status": "denied",
+          "scope": "Current terms prohibit unauthorized commercial copying/redistribution and automated extraction/cache; no separate RSS grant established in this review.",
+          "evidenceUrls": [
+            "https://www.thenextmediacompany.com/terms.html"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        },
+        "storageRedistribution": {
+          "status": "denied",
+          "scope": "Current terms prohibit unauthorized commercial copying/redistribution and automated extraction/cache; no separate RSS grant established in this review.",
+          "evidenceUrls": [
+            "https://www.thenextmediacompany.com/terms.html"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        }
+      },
+      "usQualification": {
+        "status": "verified-us",
+        "scope": "Official terms identify Washington, DC operator; current July2026 terms list covered brands.",
+        "evidenceUrls": [
+          "https://www.thenextmediacompany.com/terms.html"
+        ]
+      },
+      "trafficEvidence": {
+        "status": "unsubstantiated",
+        "scope": "No verified U.S. monthly traffic threshold; feed existence and global audience claims are not traffic evidence.",
+        "evidenceUrls": []
+      },
+      "contentPolicy": {
+        "status": "uncertain",
+        "scope": "Mixed news/entertainment/food/sports topics require per-item mission checks; publisher terms are a separate admission gate.",
+        "evidenceUrls": [
+          "https://www.thenextmediacompany.com/terms.html"
+        ]
+      },
+      "productionEnabled": false,
+      "holdReasons": [
+        "No applicable commercial content/photo/cache grant; separate syndication authorization needed."
+      ],
+      "brandingFallback": "Neutral locally rendered initials and publisher name; no copied logo."
+    },
+    {
+      "reviewId": "rights-20260915-nextmedia-wm-0055",
+      "recordIds": [
+        "WM-0055"
+      ],
+      "publisher": "The Verge",
+      "feedUrl": "https://www.theverge.com/rss/index.xml",
+      "reviewedAt": "2026-09-15T19:47:59.923660Z",
+      "expiresAt": "2026-12-14T00:00:00Z",
+      "expiryBasis": "Operational re-review date; not an assertion that the publisher license expires.",
+      "permissions": {
+        "headlineLink": {
+          "status": "denied",
+          "scope": "Current terms prohibit unauthorized commercial copying/redistribution and automated extraction/cache; no separate RSS grant established in this review.",
+          "evidenceUrls": [
+            "https://www.thenextmediacompany.com/terms.html"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        },
+        "excerpt": {
+          "status": "denied",
+          "scope": "Current terms prohibit unauthorized commercial copying/redistribution and automated extraction/cache; no separate RSS grant established in this review.",
+          "evidenceUrls": [
+            "https://www.thenextmediacompany.com/terms.html"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        },
+        "articleImages": {
+          "status": "denied",
+          "scope": "Current terms prohibit unauthorized commercial copying/redistribution and automated extraction/cache; no separate RSS grant established in this review.",
+          "evidenceUrls": [
+            "https://www.thenextmediacompany.com/terms.html"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        },
+        "branding": {
+          "status": "denied",
+          "scope": "Current terms prohibit unauthorized commercial copying/redistribution and automated extraction/cache; no separate RSS grant established in this review.",
+          "evidenceUrls": [
+            "https://www.thenextmediacompany.com/terms.html"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        },
+        "fullText": {
+          "status": "denied",
+          "scope": "Current terms prohibit unauthorized commercial copying/redistribution and automated extraction/cache; no separate RSS grant established in this review.",
+          "evidenceUrls": [
+            "https://www.thenextmediacompany.com/terms.html"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        },
+        "storageRedistribution": {
+          "status": "denied",
+          "scope": "Current terms prohibit unauthorized commercial copying/redistribution and automated extraction/cache; no separate RSS grant established in this review.",
+          "evidenceUrls": [
+            "https://www.thenextmediacompany.com/terms.html"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        }
+      },
+      "usQualification": {
+        "status": "verified-us",
+        "scope": "Official terms identify Washington, DC operator; current July2026 terms list covered brands.",
+        "evidenceUrls": [
+          "https://www.thenextmediacompany.com/terms.html"
+        ]
+      },
+      "trafficEvidence": {
+        "status": "unsubstantiated",
+        "scope": "No verified U.S. monthly traffic threshold; feed existence and global audience claims are not traffic evidence.",
+        "evidenceUrls": []
+      },
+      "contentPolicy": {
+        "status": "uncertain",
+        "scope": "Mixed news/entertainment/food/sports topics require per-item mission checks; publisher terms are a separate admission gate.",
+        "evidenceUrls": [
+          "https://www.thenextmediacompany.com/terms.html"
+        ]
+      },
+      "productionEnabled": false,
+      "holdReasons": [
+        "No applicable commercial content/photo/cache grant; separate syndication authorization needed."
+      ],
+      "brandingFallback": "Neutral locally rendered initials and publisher name; no copied logo."
+    },
+    {
+      "reviewId": "rights-20260915-nextmedia-wm-0164",
+      "recordIds": [
+        "WM-0164"
+      ],
+      "publisher": "Eater",
+      "feedUrl": "https://www.eater.com/rss/index.xml",
+      "reviewedAt": "2026-09-15T19:47:59.923660Z",
+      "expiresAt": "2026-12-14T00:00:00Z",
+      "expiryBasis": "Operational re-review date; not an assertion that the publisher license expires.",
+      "permissions": {
+        "headlineLink": {
+          "status": "denied",
+          "scope": "Current terms prohibit unauthorized commercial copying/redistribution and automated extraction/cache; no separate RSS grant established in this review.",
+          "evidenceUrls": [
+            "https://www.thenextmediacompany.com/terms.html"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        },
+        "excerpt": {
+          "status": "denied",
+          "scope": "Current terms prohibit unauthorized commercial copying/redistribution and automated extraction/cache; no separate RSS grant established in this review.",
+          "evidenceUrls": [
+            "https://www.thenextmediacompany.com/terms.html"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        },
+        "articleImages": {
+          "status": "denied",
+          "scope": "Current terms prohibit unauthorized commercial copying/redistribution and automated extraction/cache; no separate RSS grant established in this review.",
+          "evidenceUrls": [
+            "https://www.thenextmediacompany.com/terms.html"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        },
+        "branding": {
+          "status": "denied",
+          "scope": "Current terms prohibit unauthorized commercial copying/redistribution and automated extraction/cache; no separate RSS grant established in this review.",
+          "evidenceUrls": [
+            "https://www.thenextmediacompany.com/terms.html"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        },
+        "fullText": {
+          "status": "denied",
+          "scope": "Current terms prohibit unauthorized commercial copying/redistribution and automated extraction/cache; no separate RSS grant established in this review.",
+          "evidenceUrls": [
+            "https://www.thenextmediacompany.com/terms.html"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        },
+        "storageRedistribution": {
+          "status": "denied",
+          "scope": "Current terms prohibit unauthorized commercial copying/redistribution and automated extraction/cache; no separate RSS grant established in this review.",
+          "evidenceUrls": [
+            "https://www.thenextmediacompany.com/terms.html"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        }
+      },
+      "usQualification": {
+        "status": "verified-us",
+        "scope": "Official terms identify Washington, DC operator; current July2026 terms list covered brands.",
+        "evidenceUrls": [
+          "https://www.thenextmediacompany.com/terms.html"
+        ]
+      },
+      "trafficEvidence": {
+        "status": "unsubstantiated",
+        "scope": "No verified U.S. monthly traffic threshold; feed existence and global audience claims are not traffic evidence.",
+        "evidenceUrls": []
+      },
+      "contentPolicy": {
+        "status": "uncertain",
+        "scope": "Mixed news/entertainment/food/sports topics require per-item mission checks; publisher terms are a separate admission gate.",
+        "evidenceUrls": [
+          "https://www.thenextmediacompany.com/terms.html"
+        ]
+      },
+      "productionEnabled": false,
+      "holdReasons": [
+        "No applicable commercial content/photo/cache grant; separate syndication authorization needed."
+      ],
+      "brandingFallback": "Neutral locally rendered initials and publisher name; no copied logo."
+    },
+    {
+      "reviewId": "rights-20260915-vox-wm-0118",
+      "recordIds": [
+        "WM-0118"
+      ],
+      "publisher": "Vox",
+      "feedUrl": "https://www.vox.com/rss/world-politics/index.xml",
+      "reviewedAt": "2026-09-15T19:47:59.923660Z",
+      "expiresAt": "2026-12-14T00:00:00Z",
+      "expiryBasis": "Operational re-review date; not an assertion that the publisher license expires.",
+      "permissions": {
+        "headlineLink": {
+          "status": "denied",
+          "scope": "Current terms prohibit unauthorized commercial copying/redistribution and automated extraction/cache; no separate RSS grant established in this review.",
+          "evidenceUrls": [
+            "https://www.voxmedia.com/terms-of-use/"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        },
+        "excerpt": {
+          "status": "denied",
+          "scope": "Current terms prohibit unauthorized commercial copying/redistribution and automated extraction/cache; no separate RSS grant established in this review.",
+          "evidenceUrls": [
+            "https://www.voxmedia.com/terms-of-use/"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        },
+        "articleImages": {
+          "status": "denied",
+          "scope": "Current terms prohibit unauthorized commercial copying/redistribution and automated extraction/cache; no separate RSS grant established in this review.",
+          "evidenceUrls": [
+            "https://www.voxmedia.com/terms-of-use/"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        },
+        "branding": {
+          "status": "denied",
+          "scope": "Current terms prohibit unauthorized commercial copying/redistribution and automated extraction/cache; no separate RSS grant established in this review.",
+          "evidenceUrls": [
+            "https://www.voxmedia.com/terms-of-use/"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        },
+        "fullText": {
+          "status": "denied",
+          "scope": "Current terms prohibit unauthorized commercial copying/redistribution and automated extraction/cache; no separate RSS grant established in this review.",
+          "evidenceUrls": [
+            "https://www.voxmedia.com/terms-of-use/"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        },
+        "storageRedistribution": {
+          "status": "denied",
+          "scope": "Current terms prohibit unauthorized commercial copying/redistribution and automated extraction/cache; no separate RSS grant established in this review.",
+          "evidenceUrls": [
+            "https://www.voxmedia.com/terms-of-use/"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        }
+      },
+      "usQualification": {
+        "status": "verified-us",
+        "scope": "Official terms identify Washington, DC operator; current July2026 terms list covered brands.",
+        "evidenceUrls": [
+          "https://www.voxmedia.com/terms-of-use/"
+        ]
+      },
+      "trafficEvidence": {
+        "status": "unsubstantiated",
+        "scope": "No verified U.S. monthly traffic threshold; feed existence and global audience claims are not traffic evidence.",
+        "evidenceUrls": []
+      },
+      "contentPolicy": {
+        "status": "uncertain",
+        "scope": "Mixed news/entertainment/food/sports topics require per-item mission checks; publisher terms are a separate admission gate.",
+        "evidenceUrls": [
+          "https://www.voxmedia.com/terms-of-use/"
+        ]
+      },
+      "productionEnabled": false,
+      "holdReasons": [
+        "No applicable commercial content/photo/cache grant; separate syndication authorization needed."
+      ],
+      "brandingFallback": "Neutral locally rendered initials and publisher name; no copied logo."
+    },
+    {
+      "reviewId": "rights-20260915-vox-wm-0154",
+      "recordIds": [
+        "WM-0154"
+      ],
+      "publisher": "Vox",
+      "feedUrl": "https://www.vox.com/rss/science/index.xml",
+      "reviewedAt": "2026-09-15T19:47:59.923660Z",
+      "expiresAt": "2026-12-14T00:00:00Z",
+      "expiryBasis": "Operational re-review date; not an assertion that the publisher license expires.",
+      "permissions": {
+        "headlineLink": {
+          "status": "denied",
+          "scope": "Current terms prohibit unauthorized commercial copying/redistribution and automated extraction/cache; no separate RSS grant established in this review.",
+          "evidenceUrls": [
+            "https://www.voxmedia.com/terms-of-use/"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        },
+        "excerpt": {
+          "status": "denied",
+          "scope": "Current terms prohibit unauthorized commercial copying/redistribution and automated extraction/cache; no separate RSS grant established in this review.",
+          "evidenceUrls": [
+            "https://www.voxmedia.com/terms-of-use/"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        },
+        "articleImages": {
+          "status": "denied",
+          "scope": "Current terms prohibit unauthorized commercial copying/redistribution and automated extraction/cache; no separate RSS grant established in this review.",
+          "evidenceUrls": [
+            "https://www.voxmedia.com/terms-of-use/"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        },
+        "branding": {
+          "status": "denied",
+          "scope": "Current terms prohibit unauthorized commercial copying/redistribution and automated extraction/cache; no separate RSS grant established in this review.",
+          "evidenceUrls": [
+            "https://www.voxmedia.com/terms-of-use/"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        },
+        "fullText": {
+          "status": "denied",
+          "scope": "Current terms prohibit unauthorized commercial copying/redistribution and automated extraction/cache; no separate RSS grant established in this review.",
+          "evidenceUrls": [
+            "https://www.voxmedia.com/terms-of-use/"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        },
+        "storageRedistribution": {
+          "status": "denied",
+          "scope": "Current terms prohibit unauthorized commercial copying/redistribution and automated extraction/cache; no separate RSS grant established in this review.",
+          "evidenceUrls": [
+            "https://www.voxmedia.com/terms-of-use/"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": []
+        }
+      },
+      "usQualification": {
+        "status": "verified-us",
+        "scope": "Official terms identify Washington, DC operator; current July2026 terms list covered brands.",
+        "evidenceUrls": [
+          "https://www.voxmedia.com/terms-of-use/"
+        ]
+      },
+      "trafficEvidence": {
+        "status": "unsubstantiated",
+        "scope": "No verified U.S. monthly traffic threshold; feed existence and global audience claims are not traffic evidence.",
+        "evidenceUrls": []
+      },
+      "contentPolicy": {
+        "status": "uncertain",
+        "scope": "Mixed news/entertainment/food/sports topics require per-item mission checks; publisher terms are a separate admission gate.",
+        "evidenceUrls": [
+          "https://www.voxmedia.com/terms-of-use/"
+        ]
+      },
+      "productionEnabled": false,
+      "holdReasons": [
+        "No applicable commercial content/photo/cache grant; separate syndication authorization needed."
+      ],
+      "brandingFallback": "Neutral locally rendered initials and publisher name; no copied logo."
+    },
+    {
+      "reviewId": "rights-20260915-conversation-wm-0123",
+      "recordIds": [
+        "WM-0123"
+      ],
+      "publisher": "The Conversation US",
+      "feedUrl": "https://theconversation.com/us/articles.atom",
+      "reviewedAt": "2026-09-15T19:47:59.923660Z",
+      "expiresAt": "2026-12-14T00:00:00Z",
+      "expiryBasis": "Operational re-review date; not an assertion that the publisher license expires.",
+      "permissions": {
+        "headlineLink": {
+          "status": "uncertain",
+          "scope": "No affirmative grant for this commercial app use established.",
+          "evidenceUrls": [
+            "https://theconversation.com/us/republishing-guidelines"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": [
+            "Separate permission or narrower reviewed scope required."
+          ]
+        },
+        "excerpt": {
+          "status": "uncertain",
+          "scope": "No affirmative grant for this commercial app use established.",
+          "evidenceUrls": [
+            "https://theconversation.com/us/republishing-guidelines"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": [
+            "Separate permission or narrower reviewed scope required."
+          ]
+        },
+        "articleImages": {
+          "status": "uncertain",
+          "scope": "No affirmative grant for this commercial app use established.",
+          "evidenceUrls": [
+            "https://theconversation.com/us/republishing-guidelines"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": [
+            "Separate permission or narrower reviewed scope required."
+          ]
+        },
+        "branding": {
+          "status": "uncertain",
+          "scope": "No affirmative grant for this commercial app use established.",
+          "evidenceUrls": [
+            "https://theconversation.com/us/republishing-guidelines"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": [
+            "Separate permission or narrower reviewed scope required."
+          ]
+        },
+        "fullText": {
+          "status": "uncertain",
+          "scope": "No affirmative grant for this commercial app use established.",
+          "evidenceUrls": [
+            "https://theconversation.com/us/republishing-guidelines"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": [
+            "Separate permission or narrower reviewed scope required."
+          ]
+        },
+        "storageRedistribution": {
+          "status": "uncertain",
+          "scope": "No affirmative grant for this commercial app use established.",
+          "evidenceUrls": [
+            "https://theconversation.com/us/republishing-guidelines"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": [
+            "Separate permission or narrower reviewed scope required."
+          ]
+        }
+      },
+      "usQualification": {
+        "status": "unverified",
+        "scope": "U.S. publication country not independently established by this bounded rights review.",
+        "evidenceUrls": []
+      },
+      "trafficEvidence": {
+        "status": "unsubstantiated",
+        "scope": "No verified U.S. monthly traffic threshold; feed existence and global audience claims are not traffic evidence.",
+        "evidenceUrls": []
+      },
+      "contentPolicy": {
+        "status": "uncertain",
+        "scope": "Research-informed news. Historical CC BY-ND republishing knowledge is not a verified current image/app grant.",
+        "evidenceUrls": [
+          "https://theconversation.com/us/republishing-guidelines"
+        ]
+      },
+      "productionEnabled": false,
+      "holdReasons": [
+        "Current official guidelines could not be accessed by research browser; no bypass attempted.",
+        "Per-image permission and online tracking/republishing conditions require current authoritative resolution."
+      ],
+      "brandingFallback": "Neutral locally rendered initials and publisher name; no copied logo."
+    },
+    {
+      "reviewId": "rights-20260915-scitechdaily-wm-0161",
+      "recordIds": [
+        "WM-0161"
+      ],
+      "publisher": "SciTechDaily",
+      "feedUrl": "https://scitechdaily.com/feed/",
+      "reviewedAt": "2026-09-15T19:58:55.934497Z",
+      "expiresAt": "2026-10-15T00:00:00Z",
+      "expiryBasis": "Operational re-review only, not a license expiry.",
+      "permissions": {
+        "headlineLink": {
+          "status": "denied",
+          "scope": "Current official terms grant only personal noncommercial transitory viewing and prohibit commercial republication, mirroring and systematic collection without consent.",
+          "evidenceUrls": [
+            "https://scitechdaily.com/terms/"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": [
+            "Commercial article/image/cache grant is absent; no consent was requested."
+          ]
+        },
+        "excerpt": {
+          "status": "denied",
+          "scope": "Current official terms grant only personal noncommercial transitory viewing and prohibit commercial republication, mirroring and systematic collection without consent.",
+          "evidenceUrls": [
+            "https://scitechdaily.com/terms/"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": [
+            "Commercial article/image/cache grant is absent; no consent was requested."
+          ]
+        },
+        "articleImages": {
+          "status": "denied",
+          "scope": "Current official terms grant only personal noncommercial transitory viewing and prohibit commercial republication, mirroring and systematic collection without consent.",
+          "evidenceUrls": [
+            "https://scitechdaily.com/terms/"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": [
+            "Commercial article/image/cache grant is absent; no consent was requested."
+          ]
+        },
+        "branding": {
+          "status": "denied",
+          "scope": "Current official terms grant only personal noncommercial transitory viewing and prohibit commercial republication, mirroring and systematic collection without consent.",
+          "evidenceUrls": [
+            "https://scitechdaily.com/terms/"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": [
+            "Commercial article/image/cache grant is absent; no consent was requested."
+          ]
+        },
+        "fullText": {
+          "status": "denied",
+          "scope": "Current official terms grant only personal noncommercial transitory viewing and prohibit commercial republication, mirroring and systematic collection without consent.",
+          "evidenceUrls": [
+            "https://scitechdaily.com/terms/"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": [
+            "Commercial article/image/cache grant is absent; no consent was requested."
+          ]
+        },
+        "storageRedistribution": {
+          "status": "denied",
+          "scope": "Current official terms grant only personal noncommercial transitory viewing and prohibit commercial republication, mirroring and systematic collection without consent.",
+          "evidenceUrls": [
+            "https://scitechdaily.com/terms/"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": [
+            "Commercial article/image/cache grant is absent; no consent was requested."
+          ]
+        }
+      },
+      "usQualification": {
+        "status": "unverified",
+        "scope": "U.S. legal jurisdiction alone is not U.S. publication-country or audience evidence.",
+        "evidenceUrls": [
+          "https://scitechdaily.com/terms/"
+        ]
+      },
+      "trafficEvidence": {
+        "status": "unsubstantiated",
+        "scope": "No verified U.S. monthly traffic threshold.",
+        "evidenceUrls": []
+      },
+      "contentPolicy": {
+        "status": "uncertain",
+        "scope": "No blanket mission approval of future feed items.",
+        "evidenceUrls": [
+          "https://scitechdaily.com/terms/"
+        ]
+      },
+      "productionEnabled": false,
+      "holdReasons": [
+        "Commercial article/image/cache grant is absent; no consent was requested."
+      ],
+      "brandingFallback": "Neutral locally rendered initials; no copied logo."
+    },
+    {
+      "reviewId": "rights-20260915-fern-wm-0172",
+      "recordIds": [
+        "WM-0172"
+      ],
+      "publisher": "Food and Environment Reporting Network",
+      "feedUrl": "https://thefern.org/feed",
+      "reviewedAt": "2026-09-15T19:58:55.934497Z",
+      "expiresAt": "2026-10-15T00:00:00Z",
+      "expiryBasis": "Operational re-review only, not a license expiry.",
+      "permissions": {
+        "headlineLink": {
+          "status": "denied",
+          "scope": "Current September15 article explicitly requires FERN express permission for reproduction/reposting; a partner publication relationship is not a blanket grant.",
+          "evidenceUrls": [
+            "https://thefern.org/2026/09/the-unwilding-of-patagonias-pollinators/"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": [
+            "No free commercial syndication/photo grant for this app; current story expressly requires permission."
+          ]
+        },
+        "excerpt": {
+          "status": "denied",
+          "scope": "Current September15 article explicitly requires FERN express permission for reproduction/reposting; a partner publication relationship is not a blanket grant.",
+          "evidenceUrls": [
+            "https://thefern.org/2026/09/the-unwilding-of-patagonias-pollinators/"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": [
+            "No free commercial syndication/photo grant for this app; current story expressly requires permission."
+          ]
+        },
+        "articleImages": {
+          "status": "denied",
+          "scope": "Current September15 article explicitly requires FERN express permission for reproduction/reposting; a partner publication relationship is not a blanket grant.",
+          "evidenceUrls": [
+            "https://thefern.org/2026/09/the-unwilding-of-patagonias-pollinators/"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": [
+            "No free commercial syndication/photo grant for this app; current story expressly requires permission."
+          ]
+        },
+        "branding": {
+          "status": "denied",
+          "scope": "Current September15 article explicitly requires FERN express permission for reproduction/reposting; a partner publication relationship is not a blanket grant.",
+          "evidenceUrls": [
+            "https://thefern.org/2026/09/the-unwilding-of-patagonias-pollinators/"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": [
+            "No free commercial syndication/photo grant for this app; current story expressly requires permission."
+          ]
+        },
+        "fullText": {
+          "status": "denied",
+          "scope": "Current September15 article explicitly requires FERN express permission for reproduction/reposting; a partner publication relationship is not a blanket grant.",
+          "evidenceUrls": [
+            "https://thefern.org/2026/09/the-unwilding-of-patagonias-pollinators/"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": [
+            "No free commercial syndication/photo grant for this app; current story expressly requires permission."
+          ]
+        },
+        "storageRedistribution": {
+          "status": "denied",
+          "scope": "Current September15 article explicitly requires FERN express permission for reproduction/reposting; a partner publication relationship is not a blanket grant.",
+          "evidenceUrls": [
+            "https://thefern.org/2026/09/the-unwilding-of-patagonias-pollinators/"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": [
+            "No free commercial syndication/photo grant for this app; current story expressly requires permission."
+          ]
+        }
+      },
+      "usQualification": {
+        "status": "unverified",
+        "scope": "U.S. legal jurisdiction alone is not U.S. publication-country or audience evidence.",
+        "evidenceUrls": [
+          "https://thefern.org/2026/09/the-unwilding-of-patagonias-pollinators/"
+        ]
+      },
+      "trafficEvidence": {
+        "status": "unsubstantiated",
+        "scope": "No verified U.S. monthly traffic threshold.",
+        "evidenceUrls": []
+      },
+      "contentPolicy": {
+        "status": "uncertain",
+        "scope": "No blanket mission approval of future feed items.",
+        "evidenceUrls": [
+          "https://thefern.org/2026/09/the-unwilding-of-patagonias-pollinators/"
+        ]
+      },
+      "productionEnabled": false,
+      "holdReasons": [
+        "No free commercial syndication/photo grant for this app; current story expressly requires permission."
+      ],
+      "brandingFallback": "Neutral locally rendered initials; no copied logo."
+    },
+    {
+      "reviewId": "rights-20260915-stackoverflow-wm-0081",
+      "recordIds": [
+        "WM-0081"
+      ],
+      "publisher": "Stack Overflow Blog",
+      "feedUrl": "https://stackoverflow.blog/feed",
+      "reviewedAt": "2026-09-15T19:58:55.934497Z",
+      "expiresAt": "2026-10-15T00:00:00Z",
+      "expiryBasis": "Operational re-review only, not a license expiry.",
+      "permissions": {
+        "headlineLink": {
+          "status": "approved",
+          "scope": "Only individually marked CC BY-SA4.0 article text, with attribution, license link and share-alike obligations for adaptations; no future-post or image-rights inheritance.",
+          "evidenceUrls": [
+            "https://stackoverflow.blog/cc-by-sa/",
+            "https://stackoverflow.blog/2026/08/20/quantum-augmented-applications-integrating-quantum-subroutines-into-classical-software-stacks/"
+          ],
+          "attribution": "Author, Stack Overflow Blog, original link, CC BY-SA4.0; indicate edits.",
+          "limits": [
+            "Specific current image-led article admission remains held."
+          ],
+          "unresolved": []
+        },
+        "excerpt": {
+          "status": "approved",
+          "scope": "Only individually marked CC BY-SA4.0 article text, with attribution, license link and share-alike obligations for adaptations; no future-post or image-rights inheritance.",
+          "evidenceUrls": [
+            "https://stackoverflow.blog/cc-by-sa/",
+            "https://stackoverflow.blog/2026/08/20/quantum-augmented-applications-integrating-quantum-subroutines-into-classical-software-stacks/"
+          ],
+          "attribution": "Author, Stack Overflow Blog, original link, CC BY-SA4.0; indicate edits.",
+          "limits": [
+            "Specific current image-led article admission remains held."
+          ],
+          "unresolved": []
+        },
+        "articleImages": {
+          "status": "uncertain",
+          "scope": "Only individually marked CC BY-SA4.0 blog posts have an explicit reuse license; this is not a blanket blog/image/logo grant.",
+          "evidenceUrls": [
+            "https://stackoverflow.blog/cc-by-sa/",
+            "https://stackoverflow.blog/2026/08/20/quantum-augmented-applications-integrating-quantum-subroutines-into-classical-software-stacks/"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": [
+            "No current reviewed actual story-photo pair established.",
+            "One examined article expressly used AI-generated imagery; it was excluded. Other marked posts contain diagrams or no usable article photo."
+          ]
+        },
+        "branding": {
+          "status": "uncertain",
+          "scope": "Only individually marked CC BY-SA4.0 blog posts have an explicit reuse license; this is not a blanket blog/image/logo grant.",
+          "evidenceUrls": [
+            "https://stackoverflow.blog/cc-by-sa/",
+            "https://stackoverflow.blog/2026/08/20/quantum-augmented-applications-integrating-quantum-subroutines-into-classical-software-stacks/"
+          ],
+          "attribution": "",
+          "limits": [],
+          "unresolved": [
+            "No current reviewed actual story-photo pair established.",
+            "One examined article expressly used AI-generated imagery; it was excluded. Other marked posts contain diagrams or no usable article photo."
+          ]
+        },
+        "fullText": {
+          "status": "approved",
+          "scope": "Only individually marked CC BY-SA4.0 article text, with attribution, license link and share-alike obligations for adaptations; no future-post or image-rights inheritance.",
+          "evidenceUrls": [
+            "https://stackoverflow.blog/cc-by-sa/",
+            "https://stackoverflow.blog/2026/08/20/quantum-augmented-applications-integrating-quantum-subroutines-into-classical-software-stacks/"
+          ],
+          "attribution": "Author, Stack Overflow Blog, original link, CC BY-SA4.0; indicate edits.",
+          "limits": [
+            "Specific current image-led article admission remains held."
+          ],
+          "unresolved": []
+        },
+        "storageRedistribution": {
+          "status": "approved",
+          "scope": "Only individually marked CC BY-SA4.0 article text, with attribution, license link and share-alike obligations for adaptations; no future-post or image-rights inheritance.",
+          "evidenceUrls": [
+            "https://stackoverflow.blog/cc-by-sa/",
+            "https://stackoverflow.blog/2026/08/20/quantum-augmented-applications-integrating-quantum-subroutines-into-classical-software-stacks/"
+          ],
+          "attribution": "Author, Stack Overflow Blog, original link, CC BY-SA4.0; indicate edits.",
+          "limits": [
+            "Specific current image-led article admission remains held."
+          ],
+          "unresolved": []
+        }
+      },
+      "usQualification": {
+        "status": "unverified",
+        "scope": "U.S. legal jurisdiction alone is not U.S. publication-country or audience evidence.",
+        "evidenceUrls": [
+          "https://stackoverflow.blog/cc-by-sa/",
+          "https://stackoverflow.blog/2026/08/20/quantum-augmented-applications-integrating-quantum-subroutines-into-classical-software-stacks/"
+        ]
+      },
+      "trafficEvidence": {
+        "status": "unsubstantiated",
+        "scope": "No verified U.S. monthly traffic threshold.",
+        "evidenceUrls": []
+      },
+      "contentPolicy": {
+        "status": "uncertain",
+        "scope": "No blanket mission approval of future feed items.",
+        "evidenceUrls": [
+          "https://stackoverflow.blog/cc-by-sa/",
+          "https://stackoverflow.blog/2026/08/20/quantum-augmented-applications-integrating-quantum-subroutines-into-classical-software-stacks/"
+        ]
+      },
+      "productionEnabled": false,
+      "holdReasons": [
+        "No current reviewed actual story-photo pair established.",
+        "One examined article expressly used AI-generated imagery; it was excluded. Other marked posts contain diagrams or no usable article photo."
+      ],
+      "brandingFallback": "Neutral locally rendered initials; no copied logo."
+    }
+  ],
+  "unreviewedRecordIds": [
+    "WM-0001",
+    "WM-0002",
+    "WM-0003",
+    "WM-0004",
+    "WM-0005",
+    "WM-0006",
+    "WM-0007",
+    "WM-0008",
+    "WM-0010",
+    "WM-0011",
+    "WM-0012",
+    "WM-0013",
+    "WM-0014",
+    "WM-0015",
+    "WM-0016",
+    "WM-0017",
+    "WM-0018",
+    "WM-0019",
+    "WM-0020",
+    "WM-0021",
+    "WM-0022",
+    "WM-0023",
+    "WM-0024",
+    "WM-0025",
+    "WM-0026",
+    "WM-0027",
+    "WM-0028",
+    "WM-0029",
+    "WM-0030",
+    "WM-0031",
+    "WM-0032",
+    "WM-0033",
+    "WM-0034",
+    "WM-0035",
+    "WM-0036",
+    "WM-0037",
+    "WM-0038",
+    "WM-0039",
+    "WM-0041",
+    "WM-0042",
+    "WM-0043",
+    "WM-0044",
+    "WM-0045",
+    "WM-0046",
+    "WM-0047",
+    "WM-0048",
+    "WM-0049",
+    "WM-0050",
+    "WM-0051",
+    "WM-0052",
+    "WM-0053",
+    "WM-0054",
+    "WM-0056",
+    "WM-0057",
+    "WM-0058",
+    "WM-0059",
+    "WM-0060",
+    "WM-0061",
+    "WM-0062",
+    "WM-0063",
+    "WM-0065",
+    "WM-0066",
+    "WM-0067",
+    "WM-0069",
+    "WM-0070",
+    "WM-0071",
+    "WM-0072",
+    "WM-0073",
+    "WM-0074",
+    "WM-0075",
+    "WM-0076",
+    "WM-0077",
+    "WM-0078",
+    "WM-0079",
+    "WM-0080",
+    "WM-0082",
+    "WM-0083",
+    "WM-0084",
+    "WM-0086",
+    "WM-0087",
+    "WM-0088",
+    "WM-0089",
+    "WM-0090",
+    "WM-0091",
+    "WM-0092",
+    "WM-0093",
+    "WM-0094",
+    "WM-0095",
+    "WM-0096",
+    "WM-0097",
+    "WM-0098",
+    "WM-0099",
+    "WM-0100",
+    "WM-0101",
+    "WM-0102",
+    "WM-0103",
+    "WM-0104",
+    "WM-0105",
+    "WM-0106",
+    "WM-0107",
+    "WM-0108",
+    "WM-0109",
+    "WM-0110",
+    "WM-0111",
+    "WM-0112",
+    "WM-0113",
+    "WM-0114",
+    "WM-0115",
+    "WM-0116",
+    "WM-0117",
+    "WM-0119",
+    "WM-0120",
+    "WM-0121",
+    "WM-0122",
+    "WM-0124",
+    "WM-0125",
+    "WM-0126",
+    "WM-0127",
+    "WM-0128",
+    "WM-0129",
+    "WM-0130",
+    "WM-0131",
+    "WM-0132",
+    "WM-0133",
+    "WM-0134",
+    "WM-0135",
+    "WM-0136",
+    "WM-0137",
+    "WM-0138",
+    "WM-0139",
+    "WM-0140",
+    "WM-0141",
+    "WM-0143",
+    "WM-0144",
+    "WM-0146",
+    "WM-0147",
+    "WM-0149",
+    "WM-0150",
+    "WM-0152",
+    "WM-0153",
+    "WM-0155",
+    "WM-0157",
+    "WM-0159",
+    "WM-0162",
+    "WM-0165",
+    "WM-0167",
+    "WM-0168",
+    "WM-0169",
+    "WM-0170",
+    "WM-0171",
+    "WM-0173",
+    "WM-0174",
+    "WM-0175",
+    "WM-0176",
+    "WM-0177",
+    "WM-0178",
+    "WM-0179",
+    "WM-0180",
+    "WM-0181",
+    "WM-0182",
+    "WM-0183",
+    "WM-0184",
+    "WM-0186",
+    "WM-0187",
+    "WM-0189",
+    "WM-0190",
+    "WM-0191",
+    "WM-0192",
+    "WM-0193",
+    "WM-0194",
+    "WM-0195",
+    "WM-0196",
+    "WM-0197",
+    "WM-0199",
+    "WM-0200",
+    "WM-0201",
+    "WM-0202",
+    "WM-0203",
+    "WM-0204",
+    "WM-0205",
+    "WM-0206",
+    "WM-0207",
+    "WM-0208",
+    "WM-0209",
+    "WM-0210",
+    "WM-0211",
+    "WM-0212",
+    "WM-0213",
+    "WM-0214",
+    "WM-0215",
+    "WM-0216",
+    "WM-0217"
+  ],
+  "reviewedRecordCount": 25,
+  "totalImportedRecordCount": 217,
+  "operationalNotes": [
+    "All productionEnabled flags deliberately false; parent-controlled promotion requires exact technical and implementation checks.",
+    "No current approved publisher raster logo; neutral initials are the fallback.",
+    "Traffic threshold remains unsubstantiated for all reviewed records.",
+    "HTTP availability is not rights approval; original research CSV is unchanged."
+  ]
+}

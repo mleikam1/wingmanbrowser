@@ -24,6 +24,9 @@ const _captureEnabled = bool.fromEnvironment('WINGMAN_LIVE_CONTENT_CAPTURES');
 const _freshNewsUsaImages = bool.fromEnvironment(
   'WINGMAN_LIVE_CONTENT_FRESH_NEWSUSA_IMAGES',
 );
+const _requireNasaCapture = bool.fromEnvironment(
+  'WINGMAN_LIVE_CONTENT_NASA_CAPTURE',
+);
 const _snapshotPath = String.fromEnvironment(
   'WINGMAN_LIVE_CONTENT_SNAPSHOT',
   defaultValue: 'work/content-discovery/live-snapshot.json',
@@ -56,8 +59,8 @@ class _RecordedPublisherSnapshot implements FeedProvider {
 
 class _ActualHttp extends HttpOverrides {}
 
-// Replay only prevalidated Science X fixtures. Fresh, source-pinned NewsUSA
-// responses require the separate explicit flag and remain in active memory.
+// Replay prevalidated Science X or exact reviewed-article image fixtures. Fresh,
+// source-pinned NewsUSA needs the explicit flag and remains in active memory.
 class _RecordedImageTransport implements ArticleImageTransport {
   _RecordedImageTransport(this.images, {this.freshNewsUsaArticle});
   final List<Map<String, dynamic>> images;
@@ -92,11 +95,19 @@ class _RecordedImageTransport implements ArticleImageTransport {
         _ActualHttp(),
       );
     }
-    if (!{
-      'phys-org',
-      'tech-xplore',
-      'medical-xpress',
-    }.contains(image.sourceId)) {
+    final reviewed =
+        source.imagePolicy?.kind == 'reviewed-article-image' &&
+        source
+                .imagePolicy!
+                .reviewedArticles[image.articleUrl.toString()]
+                ?.cacheKey ==
+            image.cacheKey;
+    if (!reviewed &&
+        !{
+          'phys-org',
+          'tech-xplore',
+          'medical-xpress',
+        }.contains(image.sourceId)) {
       throw const RssFailure('no-recorded-image');
     }
     final row = images
@@ -107,7 +118,9 @@ class _RecordedImageTransport implements ArticleImageTransport {
               row['articleUrl'] == image.articleUrl.toString(),
         )
         .firstOrNull;
-    if (row == null) throw const RssFailure('no-recorded-image');
+    if (row == null || row['transient'] == true || row['noStore'] == true) {
+      throw const RssFailure('no-recorded-image');
+    }
     final bytes = await File(row['file'] as String).readAsBytes();
     if (bytes.length > rssMaximumWireBytes ||
         sha256.convert(bytes).toString() != row['sha256']) {
@@ -330,6 +343,7 @@ void main() {
         }
 
         final captures = <String>[];
+        Uri? reviewedNasaArticle;
         Future<void> capture(String name) async {
           final images = tester.widgetList<Image>(find.byType(Image)).toList();
           await tester.runAsync(() async {
@@ -379,6 +393,8 @@ void main() {
                 'newsUsaImageRequests': imageTransport.newsUsaRequests.length,
                 'freshNewsUsaImageScope': freshArticle?.canonicalUrl.toString(),
                 'rawTransientImageFilesWritten': 0,
+                'reviewedNasaArticle': reviewedNasaArticle?.toString(),
+                'reviewedArticleImageNetworkRequests': 0,
                 'legacyTopicAndSavedWalkthrough': !_freshNewsUsaImages,
                 'scope':
                     'Flutter render review only. Mixed U.S. and international '
@@ -436,8 +452,61 @@ void main() {
             // Fresh no-store responses are needed only for these five actual
             // Home/Discover/reader views. Separate widget tests exercise topic
             // preferences and saving; avoid more downloads for legacy captures.
+            if (_requireNasaCapture) {
+              await tester.pageBack();
+              await tester.pumpAndSettle();
+              final nasa = snapshot.items
+                  .where(
+                    (item) =>
+                        item.sourceId == 'nasa-photojournal' &&
+                        controller!.canOpen(item) &&
+                        controller.imageBytesFor(item) != null,
+                  )
+                  .firstOrNull;
+              expect(
+                nasa,
+                isNotNull,
+                reason:
+                    'An approved recorded NASA story image must load for this capture.',
+              );
+              for (
+                var page = 0;
+                page < 20 &&
+                    !controller.items.any((item) => item.id == nasa!.id) &&
+                    controller.hasMore;
+                page++
+              ) {
+                await shared.tap(
+                  tester,
+                  find.byKey(const ValueKey('live-feed-load-more')),
+                );
+              }
+              final card = find.byKey(ValueKey('live-card-${nasa!.id}'));
+              await tester.ensureVisible(card);
+              await tester.pumpAndSettle();
+              expect(
+                find.descendant(of: card, matching: find.text(nasa.title)),
+                findsOneWidget,
+              );
+              expect(
+                find.descendant(
+                  of: card,
+                  matching: find.byKey(ValueKey('live-excerpt-${nasa.id}')),
+                ),
+                findsOneWidget,
+              );
+              expect(
+                find.descendant(
+                  of: card,
+                  matching: find.byKey(ValueKey('live-category-${nasa.id}')),
+                ),
+                findsOneWidget,
+              );
+              reviewedNasaArticle = nasa.canonicalUrl;
+              await capture('feed-nasa-photojournal');
+            }
             expect(imageTransport.newsUsaRequests, hasLength(1));
-            expect(captures, hasLength(5));
+            expect(captures, hasLength(_requireNasaCapture ? 6 : 5));
             await writeReceipt();
             return;
           }

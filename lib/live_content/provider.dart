@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'models.dart';
+import 'rss_transport.dart';
 import 'transport.dart';
 import 'transport_native.dart'
     if (dart.library.js_interop) 'transport_web.dart'
@@ -23,7 +24,7 @@ class FeedResponse {
   final Map<String, dynamic>? providerState;
   final String? warning;
 
-  /// Set by the direct publisher parser, never read from snapshot JSON.
+  /// Set by the publisher parser or configured shared provider, never JSON.
   final bool publisherImagesVerified;
 }
 
@@ -42,9 +43,18 @@ class SnapshotFeedProvider implements FeedProvider {
     FeedTransport? transport,
     bool allowLocal = false,
   }) : endpoint = validateEndpoint(endpoint, allowLocal: allowLocal),
+       _allowLocal = allowLocal,
        _transport = transport ?? platform.createFeedTransport();
   final Uri endpoint;
+  final bool _allowLocal;
   final FeedTransport _transport;
+  ArticleImageTransport createImageTransport({
+    FeedTransport Function()? factory,
+  }) => SnapshotImageTransport(
+    endpoint,
+    factory: factory,
+    allowLocal: _allowLocal,
+  );
   static FeedProvider? fromEnvironment() {
     const value = String.fromEnvironment('WINGMAN_FEED_URL');
     const allowLocal = bool.fromEnvironment('WINGMAN_FEED_ALLOW_LOCAL');
@@ -119,6 +129,7 @@ class SnapshotFeedProvider implements FeedProvider {
         ),
         etag: _header(response.headers['etag']),
         lastModified: _header(response.headers['last-modified']),
+        publisherImagesVerified: true,
       );
     } on FeedFailure {
       rethrow;
@@ -136,4 +147,66 @@ class SnapshotFeedProvider implements FeedProvider {
   String? _header(String? value) => _safeHeader(value) ? value : null;
   @override
   void cancel() => _transport.cancel();
+}
+
+/// Only immutable ingested media identities on the configured snapshot origin.
+/// No publisher URL is sent as a parameter, and reads never trigger ingestion.
+class SnapshotImageTransport implements ArticleImageTransport {
+  SnapshotImageTransport(
+    Uri endpoint, {
+    FeedTransport Function()? factory,
+    bool allowLocal = false,
+  }) : endpoint = SnapshotFeedProvider.validateEndpoint(
+         endpoint,
+         allowLocal: allowLocal,
+       ),
+       _factory = factory ?? platform.createFeedTransport;
+  final Uri endpoint;
+  final FeedTransport Function() _factory;
+  final Set<FeedTransport> _active = {};
+  int _epoch = 0;
+
+  @override
+  Future<RssFetchResponse> fetchImage(
+    LiveArticleImage image,
+    ApprovedLiveSource source, {
+    required bool Function(Uri) canOpenDestination,
+  }) async {
+    checkedImageUri(image.url, source);
+    if (image.sourceId != source.source.id ||
+        !canOpenDestination(image.url) ||
+        !canOpenDestination(image.articleUrl) ||
+        _active.length >= 2) {
+      throw const RssFailure('unapproved-shared-image');
+    }
+    final epoch = _epoch;
+    final transport = _factory();
+    _active.add(transport);
+    try {
+      final response = await transport.get(
+        endpoint.replace(path: '/v1/media/${image.cacheKey}'),
+        const {'Accept': 'image/jpeg, image/png, image/webp'},
+      );
+      if (epoch != _epoch || response.bytes.length > 1024 * 1024) {
+        throw const RssFailure('shared-image-cancelled-or-size');
+      }
+      return RssFetchResponse(
+        response.statusCode,
+        response.bytes,
+        response.headers,
+      );
+    } finally {
+      _active.remove(transport);
+      transport.cancel();
+    }
+  }
+
+  @override
+  void cancel() {
+    _epoch++;
+    for (final transport in _active.toList()) {
+      transport.cancel();
+    }
+    _active.clear();
+  }
 }

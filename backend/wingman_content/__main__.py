@@ -2,6 +2,7 @@ import argparse
 import fcntl
 import json
 import os
+import sys
 from pathlib import Path
 from .config import load_config, registry
 from .normalize import DestinationPolicy
@@ -11,6 +12,10 @@ from .server import serve
 
 
 def main():
+    if len(sys.argv) > 1 and sys.argv[1].startswith("candidates-"):
+        from .candidate_cli import main as candidates_main
+        candidates_main(sys.argv[1:])
+        return
     parser = argparse.ArgumentParser(description="Wingman shared content ingestion / read-only service")
     parser.add_argument("command", choices=("ingest", "serve", "registry"))
     parser.add_argument("--config", default=os.environ.get("SOURCE_CONFIG", "backend/sources.json"))

@@ -146,6 +146,12 @@ def inflate_chunks(chunks, encoding="identity", deadline=None):
 
 
 class SecureFeedFetcher:
+    accepted_types = XML_TYPES
+    accept = "application/rss+xml, application/atom+xml, application/xml, text/xml"
+
+    def checked_url(self, url, source):
+        return configured_url(url, source)
+
     def __init__(self, resolver=resolve_public, connector=PinnedHTTPSConnection):
         self.resolver = resolver
         self.connector = connector
@@ -155,14 +161,14 @@ class SecureFeedFetcher:
         url = source["feedUrl"]
         deadline = time.monotonic() + FETCH_DEADLINE_SECONDS
         headers = {"User-Agent": "WingmanContent/1.0 (public RSS cache; no user data)",
-                   "Accept": "application/rss+xml, application/atom+xml, application/xml, text/xml",
+                   "Accept": self.accept,
                    "Accept-Encoding": "gzip", "Connection": "close"}
         for key, value in (validators or {}).items():
             if key in ("If-None-Match", "If-Modified-Since") and isinstance(value, str):
                 if len(value) <= 1024 and not any(ord(c) < 32 or ord(c) == 127 for c in value):
                     headers[key] = value
         for hop in range(MAX_REDIRECTS + 1):
-            parsed = configured_url(url, source)
+            parsed = self.checked_url(url, source)
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 raise FetchError("deadline-exceeded")
@@ -194,12 +200,21 @@ class SecureFeedFetcher:
                 pairs = response.getheaders()
                 if sum(len(k) + len(v) for k, v in pairs) > MAX_HEADERS_BYTES:
                     raise FetchError("header-size-limit")
-                received = {k.lower(): v for k, v in pairs}
+                received = {}
+                for key, value in pairs:
+                    key = key.lower()
+                    if key in received:
+                        if key in ('cache-control', 'pragma', 'vary'):
+                            received[key] += ', ' + value
+                        elif key in ('content-type', 'content-length', 'content-encoding', 'location', 'retry-after', 'age'):
+                            raise FetchError('duplicate-response-metadata')
+                    else:
+                        received[key] = value
                 if response.status in (301, 302, 303, 307, 308):
                     if hop == MAX_REDIRECTS or not received.get("location"):
                         raise FetchError("redirect-limit")
                     url = urljoin(url, received["location"])
-                    configured_url(url, source)
+                    self.checked_url(url, source)
                     # Validators belong to a representation, not a new URL/host.
                     headers.pop("If-None-Match", None)
                     headers.pop("If-Modified-Since", None)
@@ -208,7 +223,7 @@ class SecureFeedFetcher:
                     return FetchResult(304, received, b"")
                 if response.status != 200:
                     raise FetchError("http-%d" % response.status, received.get("retry-after"))
-                if received.get("content-type", "").split(";")[0].strip().lower() not in XML_TYPES:
+                if received.get("content-type", "").split(";")[0].strip().lower() not in self.accepted_types:
                     raise FetchError("unexpected-content-type")
                 length = received.get("content-length")
                 if length and (not length.isdigit() or int(length) > MAX_WIRE_BYTES):

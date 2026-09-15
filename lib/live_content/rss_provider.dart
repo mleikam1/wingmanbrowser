@@ -24,6 +24,7 @@ class RssFeedProvider implements FeedProvider, ResumableFeedProvider {
   }) : _transport = transport ?? platform.createRssTransport(),
        _clock = clock ?? DateTime.now;
   static bool get supported => !kIsWeb;
+  static const maximumEndpointAttempts = 12;
   final LiveSourceRegistry registry;
   final LiveContentEligibility eligibility;
   final bool Function(String, String) allowsEditorialText;
@@ -40,6 +41,15 @@ class RssFeedProvider implements FeedProvider, ResumableFeedProvider {
             utf8.encode(jsonEncode(state)).length > 450 * 1024 ||
             state['sources'] is! Map)) {
       throw const FormatException('Invalid publisher refresh state.');
+    }
+    final scheduler = state?['scheduler'];
+    if (scheduler != null &&
+        (scheduler is! Map ||
+            scheduler['schemaVersion'] != 1 ||
+            (scheduler['cursorAfter'] != null &&
+                (scheduler['cursorAfter'] is! String ||
+                    (scheduler['cursorAfter'] as String).length > 16384)))) {
+      throw const FormatException('Invalid publisher scheduling cursor.');
     }
     _snapshot = snapshot;
     _state = state == null
@@ -67,37 +77,167 @@ class RssFeedProvider implements FeedProvider, ResumableFeedProvider {
         rows = <String, List<LiveContentItem>>{};
     final revoked = <String>{...?_snapshot?.revokedItemIds},
         revokedSources = <String>{...?_snapshot?.revokedSourceIds};
-    var nextIndex = 0, anyFailure = false, rejected = 0;
+    DateTime? date(Object? value) {
+      try {
+        return value == null ? null : feedDate(value);
+      } catch (_) {
+        return null;
+      }
+    }
+
+    Map<String, dynamic> priorFor(ApprovedLiveSource source) {
+      final raw = priorStates[source.source.id];
+      return raw is Map ? feedMap(raw) : <String, dynamic>{};
+    }
+
+    List<LiveContentItem> oldFor(ApprovedLiveSource source) =>
+        (_snapshot?.items ?? const <LiveContentItem>[])
+            .where(
+              (i) =>
+                  i.sourceId == source.source.id &&
+                  i.expiresAt.isAfter(now) &&
+                  eligibility.accepts(i, now: now) &&
+                  (i.publishedAt == null ||
+                      !i.publishedAt!.isBefore(
+                        now.subtract(const Duration(days: 30)),
+                      )),
+            )
+            .toList();
+
+    String configKeyFor(ApprovedLiveSource source) => rssDigest(
+      jsonEncode({
+        'version': 3,
+        'url': source.feedUri.toString(),
+        'hosts': source.feedRedirectHosts.toList()..sort(),
+        'articleHosts': source.allowedArticleHosts.toList()..sort(),
+        'paths': source.articlePathPrefixes.toList()..sort(),
+        'rights': source.source.rights.toJson(),
+        'topics': source.source.topics.toList()..sort(),
+        'terms': source.requiredTopicTerms.toList()..sort(),
+        'format': source.articleUrlFormat,
+        'requiresAuthor': source.requiresAttribution,
+        'imagePolicy': source.imagePolicy?.toJson(),
+        'preserveFeedText': source.preserveFeedText,
+        'displayMode': source.displayMode,
+        'feedCompatibility': source.feedCompatibility,
+        'retention': source.retentionSeconds,
+      }),
+    );
+
+    Map<String, String> validatorsFor(ApprovedLiveSource source) {
+      final prior = priorFor(source), validators = <String, String>{};
+      if (prior['configKey'] == configKeyFor(source) &&
+          oldFor(source).isNotEmpty) {
+        for (final key in ['etag', 'lastModified']) {
+          final value = prior[key];
+          if (value is String &&
+              value.length <= 512 &&
+              !RegExp(r'[\x00-\x1f\x7f]').hasMatch(value)) {
+            validators[key == 'etag' ? 'If-None-Match' : 'If-Modified-Since'] =
+                value;
+          }
+        }
+      }
+      return validators;
+    }
+
+    bool active(ApprovedLiveSource source) =>
+        source.enabled &&
+        source.feedUri != null &&
+        priorFor(source)['revoked'] != true &&
+        !revokedSources.contains(source.source.id);
+    bool due(ApprovedLiveSource source) {
+      final prior = priorFor(source),
+          next = date(priorFor(source)['nextRefreshAt']);
+      return active(source) &&
+          prior['paused'] != true &&
+          (next == null || !now.isBefore(next));
+    }
+
+    final groups = <String, List<ApprovedLiveSource>>{};
+    for (final source in approved) {
+      if (source.feedUri != null) {
+        (groups[source.feedUri.toString()] ??= []).add(source);
+      }
+    }
+    final endpointOrder = groups.keys.toList();
+    final scheduler = _state['scheduler'] is Map
+        ? feedMap(_state['scheduler'])
+        : <String, dynamic>{};
+    final previousCursor = scheduler['cursorAfter'] as String?;
+    final start = endpointOrder.isEmpty
+        ? 0
+        : (endpointOrder.indexOf(previousCursor ?? '') + 1) %
+              endpointOrder.length;
+    final orderedEndpoints = [
+      ...endpointOrder.skip(start),
+      ...endpointOrder.take(start),
+    ];
+    // Every active alias must be due: one alias cannot bypass another alias's
+    // Retry-After or HTTP freshness hold for the identical representation.
+    final dueEndpoints = orderedEndpoints.where((url) {
+      final members = groups[url]!.where(active).toList();
+      return members.isNotEmpty && members.every(due);
+    }).toList();
+    final selected = dueEndpoints.take(maximumEndpointAttempts).toSet();
+    final orderedSources = [
+      for (final url in orderedEndpoints) ...groups[url]!,
+      ...approved.where((source) => source.feedUri == null),
+    ];
+    final sharedResponses = <String, Future<RssFetchResponse>>{};
+    final sharedValidators = <String, Map<String, String>>{};
+    final attempted = <String>{}, deferredSources = <String>{};
+    String? cursorAfter = previousCursor;
+    var nextIndex = 0,
+        anyFailure = false,
+        rejected = 0,
+        deadlineReached = false;
     final end = DateTime.now().add(const Duration(seconds: 45));
-    final timer = Timer(const Duration(seconds: 45), _transport.cancel);
+    final timer = Timer(const Duration(seconds: 45), () {
+      deadlineReached = true;
+      _transport.cancel();
+    });
+    Future<RssFetchResponse> endpointWork(ApprovedLiveSource source) {
+      final url = source.feedUri.toString();
+      return sharedResponses.putIfAbsent(url, () {
+        final members = groups[url]!.where(active).toList();
+        var validators = validatorsFor(members.first);
+        if (members.any(
+          (member) => !mapEquals(validators, validatorsFor(member)),
+        )) {
+          validators = <String, String>{};
+        }
+        sharedValidators[url] = validators;
+        final hosts = members
+            .map((member) => member.feedRedirectHosts)
+            .reduce((a, b) => a.intersection(b));
+        // A shared network response may not widen another source's redirect
+        // authority. Normalization/rights/topic decisions still run per source.
+        final transportSource = ApprovedLiveSource(
+          source: source.source,
+          allowedArticleHosts: source.allowedArticleHosts,
+          articlePathPrefixes: source.articlePathPrefixes,
+          eligibilityScope: source.eligibilityScope,
+          enabled: source.enabled,
+          feedUri: source.feedUri,
+          feedRedirectHosts: hosts,
+        );
+        cursorAfter = url;
+        attempted.add(url);
+        return _transport
+            .fetch(transportSource, validators)
+            .timeout(end.difference(DateTime.now()));
+      });
+    }
+
     Future<void> sourceWork(ApprovedLiveSource source) async {
       valid();
       final id = source.source.id;
-      final raw = priorStates[id];
-      final prior = raw is Map ? feedMap(raw) : <String, dynamic>{};
+      final prior = priorFor(source);
       final state = Map<String, dynamic>.of(prior);
       states[id] = state;
-      final old = (_snapshot?.items ?? const <LiveContentItem>[])
-          .where(
-            (i) =>
-                i.sourceId == id &&
-                i.expiresAt.isAfter(now) &&
-                eligibility.accepts(i, now: now) &&
-                (i.publishedAt == null ||
-                    !i.publishedAt!.isBefore(
-                      now.subtract(const Duration(days: 30)),
-                    )),
-          )
-          .toList();
+      final old = oldFor(source);
       rows[id] = old;
-      DateTime? date(Object? value) {
-        try {
-          return value == null ? null : feedDate(value);
-        } catch (_) {
-          return null;
-        }
-      }
-
       final due = date(prior['nextRefreshAt']);
       var lastSuccess = date(prior['lastSuccessAt']);
       var status = old.isEmpty ? 'unavailable' : 'cached';
@@ -129,49 +269,18 @@ class RssFeedProvider implements FeedProvider, ResumableFeedProvider {
             : (lastSuccess != null && prior['error'] == null
                   ? 'fresh'
                   : 'cached');
-      } else if (!DateTime.now().isBefore(end)) {
-        anyFailure = true;
-        state['nextRefreshAt'] = now
-            .add(Duration(seconds: source.minRefreshSeconds))
-            .toIso8601String();
-        state['error'] = 'refresh-deadline';
+      } else if (!selected.contains(source.feedUri.toString()) ||
+          (!sharedResponses.containsKey(source.feedUri.toString()) &&
+              (deadlineReached || !DateTime.now().isBefore(end)))) {
+        // Deferred is not a failed attempt. Keep original pacing and cached
+        // content; next common refresh resumes after the last started endpoint.
+        deferredSources.add(id);
       } else {
-        final configKey = rssDigest(
-          jsonEncode({
-            'version': 2,
-            'url': source.feedUri.toString(),
-            'hosts': source.feedRedirectHosts.toList()..sort(),
-            'articleHosts': source.allowedArticleHosts.toList()..sort(),
-            'paths': source.articlePathPrefixes.toList()..sort(),
-            'rights': source.source.rights.toJson(),
-            'topics': source.source.topics.toList()..sort(),
-            'terms': source.requiredTopicTerms.toList()..sort(),
-            'format': source.articleUrlFormat,
-            'requiresAuthor': source.requiresAttribution,
-            'imagePolicy': source.imagePolicy?.toJson(),
-            'preserveFeedText': source.preserveFeedText,
-            'retention': source.retentionSeconds,
-          }),
-        );
+        final configKey = configKeyFor(source);
         final compatible = prior['configKey'] == configKey;
-        final validators = <String, String>{};
-        if (compatible && old.isNotEmpty) {
-          for (final key in ['etag', 'lastModified']) {
-            final value = prior[key];
-            if (value is String &&
-                value.length <= 512 &&
-                !RegExp(r'[\x00-\x1f\x7f]').hasMatch(value)) {
-              validators[key == 'etag'
-                      ? 'If-None-Match'
-                      : 'If-Modified-Since'] =
-                  value;
-            }
-          }
-        }
         try {
-          final response = await _transport
-              .fetch(source, validators)
-              .timeout(end.difference(DateTime.now()));
+          final response = await endpointWork(source);
+          final validators = sharedValidators[source.feedUri.toString()]!;
           valid();
           final cache =
               response.headers['cache-control'] ??
@@ -306,8 +415,8 @@ class RssFeedProvider implements FeedProvider, ResumableFeedProvider {
     }
 
     Future<void> lane() async {
-      while (nextIndex < approved.length) {
-        final source = approved[nextIndex++];
+      while (nextIndex < orderedSources.length) {
+        final source = orderedSources[nextIndex++];
         await sourceWork(source);
       }
     }
@@ -323,7 +432,15 @@ class RssFeedProvider implements FeedProvider, ResumableFeedProvider {
       for (final item in rows[source.source.id] ?? const <LiveContentItem>[]) {
         if (!revoked.contains(item.id) &&
             !revokedSources.contains(item.sourceId)) {
-          unique.putIfAbsent(item.id, () => item);
+          final existing = unique[item.id];
+          if (existing == null ||
+              (existing.canonicalUrl == item.canonicalUrl &&
+                  eligibility.imageFor(existing) == null &&
+                  eligibility.imageFor(item) != null)) {
+            // Keep the complete reviewed source record. A duplicate title-only
+            // feed must not hide an independently approved story photograph.
+            unique[item.id] = item;
+          }
         }
       }
     }
@@ -359,7 +476,20 @@ class RssFeedProvider implements FeedProvider, ResumableFeedProvider {
       items.removeLast();
       snapshot = build();
     }
-    final state = <String, dynamic>{'schemaVersion': 1, 'sources': states};
+    final state = <String, dynamic>{
+      'schemaVersion': 1,
+      'sources': states,
+      'scheduler': {
+        'schemaVersion': 1,
+        'cursorAfter': cursorAfter,
+        'lastBatchAt': now.toIso8601String(),
+        'configuredEndpoints': groups.length,
+        'dueEndpoints': dueEndpoints.length,
+        'attemptedEndpoints': attempted.length,
+        'deferredSources': deferredSources.length,
+        'maximumEndpointAttempts': maximumEndpointAttempts,
+      },
+    };
     if (utf8.encode(jsonEncode(state)).length > 450 * 1024) {
       throw const RssFailure('refresh-state-limit');
     }

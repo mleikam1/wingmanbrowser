@@ -17,6 +17,7 @@ ApprovedLiveSource source({
   String topic = 'science',
   String format = 'path-prefix',
   List<String> paths = const ['/news/'],
+  String feedPath = '/feed/',
 }) => ApprovedLiveSource.fromJson({
   'id': id,
   'name': 'Publisher',
@@ -28,7 +29,7 @@ ApprovedLiveSource source({
   'articleUrlFormat': format,
   'eligibilityScope': 'science-reporting',
   'enabled': true,
-  'feedUrl': 'https://publisher.example/feed/',
+  'feedUrl': 'https://publisher.example$feedPath',
   'feedRedirectHosts': ['publisher.example'],
   'requiresAttribution': author,
   'requiredTopicTerms': terms,
@@ -410,7 +411,8 @@ void main() {
     test(
       'partial failure retains every source and shows usable content',
       () async {
-        final a = source(id: 'a'), b = source(id: 'b');
+        final a = source(id: 'a', feedPath: '/feed/a'),
+            b = source(id: 'b', feedPath: '/feed/b');
         final t = FakeTransport([
           const RssFailure('http-429', headers: {'retry-after': '7200'}),
           response(rss()),
@@ -571,7 +573,10 @@ void main() {
       () async {
         final pending = List.generate(3, (_) => Completer<RssFetchResponse>());
         final transport = FakeTransport(List<Object>.of(pending));
-        final sources = List.generate(10, (i) => source(id: 'source-$i'));
+        final sources = List.generate(
+          10,
+          (i) => source(id: 'source-$i', feedPath: '/feed/$i'),
+        );
         final provider = RssFeedProvider(
           registry: LiveSourceRegistry(sources),
           eligibility: gate(sources),

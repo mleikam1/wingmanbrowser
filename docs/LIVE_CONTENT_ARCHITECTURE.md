@@ -1,5 +1,7 @@
 # Wingman live content architecture
 
+Current feed-candidate integration and shared-media rules: [FEED_CANDIDATE_INTEGRATION.md](FEED_CANDIDATE_INTEGRATION.md). Historical version notes below remain unchanged.
+
 ## Implemented boundary
 
 Version 0.13.0+14 connects ordinary native consumer builds directly to 12 reviewed
