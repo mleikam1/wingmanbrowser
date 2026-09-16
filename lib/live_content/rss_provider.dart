@@ -319,6 +319,7 @@ class RssFeedProvider implements FeedProvider, ResumableFeedProvider {
         final configKey = configKeyFor(source);
         final compatible = prior['configKey'] == configKey;
         var parsing = false;
+        var responseHeaders = <String, String>{};
         state['lastAttemptAt'] = now.toIso8601String();
         diagnostics.addAll({
           'due': true,
@@ -327,6 +328,7 @@ class RssFeedProvider implements FeedProvider, ResumableFeedProvider {
         });
         try {
           final response = await endpointWork(source);
+          responseHeaders = response.headers;
           final validators = sharedValidators[source.feedUri.toString()]!;
           valid();
           diagnostics.addAll({'fetched': true, 'httpStatus': response.status});
@@ -464,7 +466,7 @@ class RssFeedProvider implements FeedProvider, ResumableFeedProvider {
             ceiling,
           );
           final delay = rssRefreshDelay(
-            error is RssFailure ? error.headers : const {},
+            {...responseHeaders, if (error is RssFailure) ...error.headers},
             now,
             floor,
           );

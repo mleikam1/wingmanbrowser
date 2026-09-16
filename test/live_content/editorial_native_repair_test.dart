@@ -7,6 +7,30 @@ import 'package:wingman_browser/signature/storage/document_store.dart';
 import 'rss_provider_test.dart' as fixture;
 
 void main() {
+  test('publisher pacing survives a parser failure after HTTP 200', () async {
+    final source = fixture.source();
+    final transport = fixture.FakeTransport([
+      fixture.response('<rss><channel>', headers: {'retry-after': '7200'}),
+    ]);
+    final provider = RssFeedProvider(
+      registry: LiveSourceRegistry([source]),
+      eligibility: fixture.gate([source]),
+      allowsEditorialText: (_, _) => true,
+      transport: transport,
+      clock: () => fixture.now,
+    );
+    final result = await provider.fetch();
+    final state = ((result.providerState!['sources'] as Map)['news'] as Map);
+    expect(
+      state['nextRefreshAt'],
+      fixture.now.add(const Duration(hours: 2)).toIso8601String(),
+    );
+    final diagnostic = state['diagnostics'] as Map;
+    expect(diagnostic['outcome'], 'parse-failure');
+    expect(diagnostic['httpStatus'], 200);
+    expect(diagnostic['fetched'], true);
+  });
+
   test(
     'overlong optional byline is omitted; required attribution still holds',
     () {

@@ -315,18 +315,35 @@ class NativeRssFeedTransport
               .trim()
               .toLowerCase();
           if (!acceptedTypes.contains(type)) {
-            throw const RssFailure('invalid-content-type');
+            throw RssFailure(
+              'invalid-content-type',
+              headers: headers,
+              status: response.statusCode,
+            );
           }
           if (response.contentLength > maximumBytes) {
-            throw const RssFailure('body-too-large');
+            throw RssFailure(
+              'body-too-large',
+              headers: headers,
+              status: response.statusCode,
+            );
           }
-          final bytes = await readBoundedRssBody(
-            response,
-            encoding: headers['content-encoding'] ?? '',
-            maximumWireBytes: maximumBytes,
-            maximumDecodedBytes: maximumDecodedBytes ?? maximumBytes,
-            validateDeadline: valid,
-          );
+          Uint8List bytes;
+          try {
+            bytes = await readBoundedRssBody(
+              response,
+              encoding: headers['content-encoding'] ?? '',
+              maximumWireBytes: maximumBytes,
+              maximumDecodedBytes: maximumDecodedBytes ?? maximumBytes,
+              validateDeadline: valid,
+            );
+          } on RssFailure catch (error) {
+            throw RssFailure(
+              error.code,
+              headers: {...headers, ...error.headers},
+              status: response.statusCode,
+            );
+          }
           valid();
           return RssFetchResponse(200, bytes, headers);
         } finally {
