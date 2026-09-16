@@ -28,11 +28,11 @@
         "titles": true,
         "excerpts": false,
         "images": true,
-        "attribution": "NewsUSA · Sponsored feature. Supplied article and image; original links retained.",
+        "attribution": "NewsUSA \u00b7 Sponsored feature. Supplied article and image; original links retained.",
         "licenseUrl": "https://newsflow.newsusa.com/terms-of-syndication"
       },
       "enabled": true,
-      "verifiedAt": "2026-09-14T00:37:00Z",
+      "verifiedAt": "2026-09-16T01:14:34Z",
       "feedUrl": "https://feeds.newsusa.com/articles/RSS-firehose_2.aspx",
       "feedRedirectHosts": [
         "feeds.newsusa.com"
@@ -83,7 +83,7 @@
         "licenseUrl": "https://techxplore.com/feeds/"
       },
       "enabled": true,
-      "verifiedAt": "2026-09-14T00:37:00Z",
+      "verifiedAt": "2026-09-16T01:14:34Z",
       "feedUrl": "https://techxplore.com/rss-feed/",
       "feedRedirectHosts": [
         "techxplore.com"
@@ -105,7 +105,8 @@
         "maximumWidth": 90,
         "maximumHeight": 90
       },
-      "displayMode": "publisher-link"
+      "displayMode": "publisher-link",
+      "publisherId": "science-x"
     },
     {
       "id": "medical-xpress",
@@ -130,7 +131,7 @@
         "licenseUrl": "https://medicalxpress.com/feeds/"
       },
       "enabled": true,
-      "verifiedAt": "2026-09-14T00:37:00Z",
+      "verifiedAt": "2026-09-16T01:14:34Z",
       "feedUrl": "https://medicalxpress.com/rss-feed/",
       "feedRedirectHosts": [
         "medicalxpress.com"
@@ -152,7 +153,8 @@
         "maximumWidth": 90,
         "maximumHeight": 90
       },
-      "displayMode": "publisher-link"
+      "displayMode": "publisher-link",
+      "publisherId": "science-x"
     },
     {
       "id": "phys-org",
@@ -178,7 +180,7 @@
         "licenseUrl": "https://phys.org/feeds/"
       },
       "enabled": true,
-      "verifiedAt": "2026-09-14T00:37:00Z",
+      "verifiedAt": "2026-09-16T01:14:34Z",
       "feedUrl": "https://phys.org/rss-feed/",
       "feedRedirectHosts": [
         "phys.org"
@@ -200,7 +202,8 @@
         "maximumWidth": 90,
         "maximumHeight": 90
       },
-      "displayMode": "publisher-link"
+      "displayMode": "publisher-link",
+      "publisherId": "science-x"
     },
     {
       "id": "nasa-photojournal",
@@ -274,7 +277,7 @@
             "sourceId": "nasa-photojournal",
             "articleId": "c51edcda31dd31ee312bf10f02dbd56d",
             "credit": "NASA/JPL-Caltech",
-            "caption": "Panorama of the antennas at NASA’s Goldstone complex",
+            "caption": "Panorama of the antennas at NASA\u2019s Goldstone complex",
             "licenseUrl": "https://www.jpl.nasa.gov/jpl-image-use-policy/",
             "licenseLabel": "NASA/JPL media use",
             "basis": "reviewed-article-image",
@@ -285,7 +288,8 @@
       },
       "candidateRecordId": "WM-0145",
       "revokedItemIds": [],
-      "revokedUrls": []
+      "revokedUrls": [],
+      "publisherId": "nasa"
     },
     {
       "id": "nasa-technology",
@@ -321,7 +325,8 @@
       "retentionSeconds": 604800,
       "revokedUrls": [],
       "revokedItemIds": [],
-      "displayMode": "publisher-link"
+      "displayMode": "publisher-link",
+      "publisherId": "nasa"
     },
     {
       "id": "noaa-news",
@@ -403,7 +408,7 @@
     },
     {
       "id": "globalvoices-sports",
-      "name": "Global Voices · Sports",
+      "name": "Global Voices \u00b7 Sports",
       "homepageUrl": "https://globalvoices.org/-/topics/sport/",
       "feedUrl": "https://globalvoices.org/-/topics/sport/feed/",
       "feedRedirectHosts": [
@@ -426,21 +431,22 @@
         "titles": true,
         "excerpts": true,
         "images": false,
-        "attribution": "Global Voices · CC BY 3.0. Publisher excerpt; formatting and length adjusted. No endorsement implied.",
+        "attribution": "Global Voices \u00b7 CC BY 3.0. Publisher excerpt; formatting and length adjusted. No endorsement implied.",
         "licenseUrl": "https://creativecommons.org/licenses/by/3.0/"
       },
       "rightsReviewUrl": "https://globalvoices.org/about/global-voices-attribution-policy/",
       "enabled": true,
-      "verifiedAt": "2026-09-13T00:00:00Z",
+      "verifiedAt": "2026-09-16T01:14:34Z",
       "minRefreshSeconds": 1800,
       "retentionSeconds": 604800,
       "revokedUrls": [],
       "revokedItemIds": [],
-      "displayMode": "publisher-link"
+      "displayMode": "publisher-link",
+      "publisherId": "global-voices"
     },
     {
       "id": "globalvoices-fashion",
-      "name": "Global Voices · Fashion",
+      "name": "Global Voices \u00b7 Fashion",
       "homepageUrl": "https://globalvoices.org/?s=fashion",
       "feedUrl": "https://globalvoices.org/feed/?s=fashion",
       "feedRedirectHosts": [
@@ -463,12 +469,12 @@
         "titles": true,
         "excerpts": true,
         "images": false,
-        "attribution": "Global Voices · CC BY 3.0. Publisher excerpt; formatting and length adjusted. No endorsement implied.",
+        "attribution": "Global Voices \u00b7 CC BY 3.0. Publisher excerpt; formatting and length adjusted. No endorsement implied.",
         "licenseUrl": "https://creativecommons.org/licenses/by/3.0/"
       },
       "rightsReviewUrl": "https://globalvoices.org/about/global-voices-attribution-policy/",
       "enabled": true,
-      "verifiedAt": "2026-09-13T00:00:00Z",
+      "verifiedAt": "2026-09-16T01:14:34Z",
       "minRefreshSeconds": 1800,
       "retentionSeconds": 604800,
       "revokedUrls": [],
@@ -486,11 +492,12 @@
         "tailoring",
         "dressmaking"
       ],
-      "displayMode": "publisher-link"
+      "displayMode": "publisher-link",
+      "publisherId": "global-voices"
     },
     {
       "id": "globalvoices-food",
-      "name": "Global Voices · Food",
+      "name": "Global Voices \u00b7 Food",
       "homepageUrl": "https://globalvoices.org/-/topics/food/",
       "feedUrl": "https://globalvoices.org/-/topics/food/feed/",
       "feedRedirectHosts": [
@@ -513,21 +520,22 @@
         "titles": true,
         "excerpts": true,
         "images": false,
-        "attribution": "Global Voices · CC BY 3.0. Publisher excerpt; formatting and length adjusted. No endorsement implied.",
+        "attribution": "Global Voices \u00b7 CC BY 3.0. Publisher excerpt; formatting and length adjusted. No endorsement implied.",
         "licenseUrl": "https://creativecommons.org/licenses/by/3.0/"
       },
       "rightsReviewUrl": "https://globalvoices.org/about/global-voices-attribution-policy/",
       "enabled": true,
-      "verifiedAt": "2026-09-13T00:00:00Z",
+      "verifiedAt": "2026-09-16T01:14:34Z",
       "minRefreshSeconds": 1800,
       "retentionSeconds": 604800,
       "revokedUrls": [],
       "revokedItemIds": [],
-      "displayMode": "publisher-link"
+      "displayMode": "publisher-link",
+      "publisherId": "global-voices"
     },
     {
       "id": "globalvoices-health",
-      "name": "Global Voices · Health",
+      "name": "Global Voices \u00b7 Health",
       "homepageUrl": "https://globalvoices.org/-/topics/health/",
       "feedUrl": "https://globalvoices.org/-/topics/health/feed/",
       "feedRedirectHosts": [
@@ -550,21 +558,22 @@
         "titles": true,
         "excerpts": true,
         "images": false,
-        "attribution": "Global Voices · CC BY 3.0. Publisher excerpt; formatting and length adjusted. No endorsement implied.",
+        "attribution": "Global Voices \u00b7 CC BY 3.0. Publisher excerpt; formatting and length adjusted. No endorsement implied.",
         "licenseUrl": "https://creativecommons.org/licenses/by/3.0/"
       },
       "rightsReviewUrl": "https://globalvoices.org/about/global-voices-attribution-policy/",
       "enabled": true,
-      "verifiedAt": "2026-09-13T00:00:00Z",
+      "verifiedAt": "2026-09-16T01:14:34Z",
       "minRefreshSeconds": 1800,
       "retentionSeconds": 604800,
       "revokedUrls": [],
       "revokedItemIds": [],
-      "displayMode": "publisher-link"
+      "displayMode": "publisher-link",
+      "publisherId": "global-voices"
     },
     {
       "id": "globalvoices-science",
-      "name": "Global Voices · Science",
+      "name": "Global Voices \u00b7 Science",
       "homepageUrl": "https://globalvoices.org/-/topics/science/",
       "feedUrl": "https://globalvoices.org/-/topics/science/feed/",
       "feedRedirectHosts": [
@@ -587,21 +596,22 @@
         "titles": true,
         "excerpts": true,
         "images": false,
-        "attribution": "Global Voices · CC BY 3.0. Publisher excerpt; formatting and length adjusted. No endorsement implied.",
+        "attribution": "Global Voices \u00b7 CC BY 3.0. Publisher excerpt; formatting and length adjusted. No endorsement implied.",
         "licenseUrl": "https://creativecommons.org/licenses/by/3.0/"
       },
       "rightsReviewUrl": "https://globalvoices.org/about/global-voices-attribution-policy/",
       "enabled": true,
-      "verifiedAt": "2026-09-13T00:00:00Z",
+      "verifiedAt": "2026-09-16T01:14:34Z",
       "minRefreshSeconds": 1800,
       "retentionSeconds": 604800,
       "revokedUrls": [],
       "revokedItemIds": [],
-      "displayMode": "publisher-link"
+      "displayMode": "publisher-link",
+      "publisherId": "global-voices"
     },
     {
       "id": "globalvoices-technology",
-      "name": "Global Voices · Technology",
+      "name": "Global Voices \u00b7 Technology",
       "homepageUrl": "https://globalvoices.org/-/topics/technology/",
       "feedUrl": "https://globalvoices.org/-/topics/technology/feed/",
       "feedRedirectHosts": [
@@ -624,21 +634,22 @@
         "titles": true,
         "excerpts": true,
         "images": false,
-        "attribution": "Global Voices · CC BY 3.0. Publisher excerpt; formatting and length adjusted. No endorsement implied.",
+        "attribution": "Global Voices \u00b7 CC BY 3.0. Publisher excerpt; formatting and length adjusted. No endorsement implied.",
         "licenseUrl": "https://creativecommons.org/licenses/by/3.0/"
       },
       "rightsReviewUrl": "https://globalvoices.org/about/global-voices-attribution-policy/",
       "enabled": true,
-      "verifiedAt": "2026-09-13T00:00:00Z",
+      "verifiedAt": "2026-09-16T01:14:34Z",
       "minRefreshSeconds": 1800,
       "retentionSeconds": 604800,
       "revokedUrls": [],
       "revokedItemIds": [],
-      "displayMode": "publisher-link"
+      "displayMode": "publisher-link",
+      "publisherId": "global-voices"
     },
     {
       "id": "globalvoices-business",
-      "name": "Global Voices · Business",
+      "name": "Global Voices \u00b7 Business",
       "homepageUrl": "https://globalvoices.org/-/topics/economics-business/",
       "feedUrl": "https://globalvoices.org/-/topics/economics-business/feed/",
       "feedRedirectHosts": [
@@ -661,21 +672,22 @@
         "titles": true,
         "excerpts": true,
         "images": false,
-        "attribution": "Global Voices · CC BY 3.0. Publisher excerpt; formatting and length adjusted. No endorsement implied.",
+        "attribution": "Global Voices \u00b7 CC BY 3.0. Publisher excerpt; formatting and length adjusted. No endorsement implied.",
         "licenseUrl": "https://creativecommons.org/licenses/by/3.0/"
       },
       "rightsReviewUrl": "https://globalvoices.org/about/global-voices-attribution-policy/",
       "enabled": true,
-      "verifiedAt": "2026-09-13T00:00:00Z",
+      "verifiedAt": "2026-09-16T01:14:34Z",
       "minRefreshSeconds": 1800,
       "retentionSeconds": 604800,
       "revokedUrls": [],
       "revokedItemIds": [],
-      "displayMode": "publisher-link"
+      "displayMode": "publisher-link",
+      "publisherId": "global-voices"
     },
     {
       "id": "globalvoices-entertainment",
-      "name": "Global Voices · Entertainment",
+      "name": "Global Voices \u00b7 Entertainment",
       "homepageUrl": "https://globalvoices.org/-/topics/arts-culture/",
       "feedUrl": "https://globalvoices.org/-/topics/arts-culture/feed/",
       "feedRedirectHosts": [
@@ -698,21 +710,54 @@
         "titles": true,
         "excerpts": true,
         "images": false,
-        "attribution": "Global Voices · CC BY 3.0. Publisher excerpt; formatting and length adjusted. No endorsement implied.",
+        "attribution": "Global Voices \u00b7 CC BY 3.0. Publisher excerpt; formatting and length adjusted. No endorsement implied.",
         "licenseUrl": "https://creativecommons.org/licenses/by/3.0/"
       },
       "rightsReviewUrl": "https://globalvoices.org/about/global-voices-attribution-policy/",
       "enabled": true,
-      "verifiedAt": "2026-09-13T00:00:00Z",
+      "verifiedAt": "2026-09-16T01:14:34Z",
       "minRefreshSeconds": 1800,
       "retentionSeconds": 604800,
       "revokedUrls": [],
       "revokedItemIds": [],
-      "displayMode": "publisher-link"
+      "displayMode": "publisher-link",
+      "publisherId": "global-voices",
+      "requiredTopicTerms": [
+        "music",
+        "musician",
+        "musicians",
+        "film",
+        "films",
+        "cinema",
+        "movie",
+        "movies",
+        "television",
+        "tv",
+        "actor",
+        "actors",
+        "actress",
+        "actresses",
+        "theater",
+        "theatre",
+        "concert",
+        "concerts",
+        "album",
+        "albums",
+        "singer",
+        "singers",
+        "dance",
+        "dancer",
+        "dancers",
+        "performing arts",
+        "festival",
+        "festivals",
+        "comedy",
+        "comedian"
+      ]
     },
     {
       "id": "globalvoices-headlines",
-      "name": "Global Voices · Headlines",
+      "name": "Global Voices \u00b7 Headlines",
       "homepageUrl": "https://globalvoices.org/",
       "feedUrl": "https://globalvoices.org/feed/",
       "feedRedirectHosts": [
@@ -735,18 +780,70 @@
         "titles": true,
         "excerpts": true,
         "images": false,
-        "attribution": "Global Voices · CC BY 3.0. Publisher excerpt; formatting and length adjusted. No endorsement implied.",
+        "attribution": "Global Voices \u00b7 CC BY 3.0. Publisher excerpt; formatting and length adjusted. No endorsement implied.",
         "licenseUrl": "https://creativecommons.org/licenses/by/3.0/"
       },
       "rightsReviewUrl": "https://globalvoices.org/about/global-voices-attribution-policy/",
       "enabled": true,
-      "verifiedAt": "2026-09-13T00:00:00Z",
+      "verifiedAt": "2026-09-16T01:14:34Z",
       "minRefreshSeconds": 1800,
       "retentionSeconds": 604800,
       "revokedUrls": [],
       "revokedItemIds": [],
-      "displayMode": "publisher-link"
+      "displayMode": "publisher-link",
+      "publisherId": "global-voices"
     }
   ],
-  "requireStoryImages": true
+  "requireStoryImages": false,
+  "reviewStatusByTopic": {
+    "sports": {
+      "reviewedAt": "2026-09-16T01:14:34Z",
+      "reviewedPublishers": 2,
+      "permissionRequired": 2,
+      "unreviewed": 0,
+      "reasons": [
+        "FanSided requires prior written permission for commercial reuse.",
+        "Yahoo Sports requires commercial aggregation permission; public RSS does not clear app redistribution or photographs."
+      ],
+      "evidenceUrls": [
+        "https://fansided.com/terms",
+        "https://legal.yahoo.com/us/en/yahoo/terms/otos/index.html"
+      ]
+    },
+    "entertainment": {
+      "reviewedAt": "2026-09-16T01:14:34Z",
+      "reviewedPublishers": 2,
+      "permissionRequired": 2,
+      "unreviewed": 0,
+      "reasons": [
+        "Deadline and Variety share PMC terms requiring permission for commercial reuse.",
+        "Their RSS linking provisions do not explicitly override the commercial restriction or clear third-party photographs."
+      ],
+      "evidenceUrls": [
+        "https://www.pmc.com/terms-of-use"
+      ]
+    },
+    "headlines": {
+      "reviewedAt": "2026-09-16T01:14:34Z",
+      "reviewedPublishers": 1,
+      "permissionRequired": 1,
+      "unreviewed": 0,
+      "reasons": [
+        "The Conversation permits attributed extracts, but online republication requires a tracking counter and commercial non-journalism use needs clarification."
+      ],
+      "evidenceUrls": [
+        "https://theconversation.com/us/republishing-guidelines"
+      ]
+    },
+    "travel": {
+      "reviewedAt": "2026-09-16T01:14:34Z",
+      "reviewedPublishers": 0,
+      "permissionRequired": 0,
+      "unreviewed": 0,
+      "reasons": [
+        "No editorial publisher is currently approved for this category. Sponsored NewsUSA features are separate."
+      ],
+      "evidenceUrls": []
+    }
+  }
 }

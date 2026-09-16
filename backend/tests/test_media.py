@@ -206,7 +206,8 @@ class MediaTests(unittest.TestCase):
     def test_registry_preserves_reviewed_image_and_syndication_contracts(self):
         c=load_config(ROOT/'backend/sources.json'); generated=registry(c)
         self.assertEqual(generated,json.loads((ROOT/'assets/live_content/sources.json').read_text()))
-        self.assertTrue(generated['requireStoryImages'])
+        # Ordinary title/link eligibility is now independent of photo delivery.
+        self.assertFalse(generated['requireStoryImages'])
         byid={s['id']:s for s in generated['sources']}
         self.assertEqual(byid['newsusa-features']['displayMode'],'sponsored-syndication')
         self.assertFalse(byid['newsusa-features']['rights']['excerpts'])

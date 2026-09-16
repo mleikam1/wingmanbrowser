@@ -90,6 +90,7 @@ def load_config(path):
 
 
 def registry(config):
-    return {"schemaVersion": 1, "requireStoryImages": config.get("requireStoryImages", False), "sources": [
+    return {"schemaVersion": 1, "requireStoryImages": config.get("requireStoryImages", False),
+            **({'reviewStatusByTopic': config['reviewStatusByTopic']} if config.get('reviewStatusByTopic') else {}), "sources": [
         {key: source[key] for key in REGISTRY_KEYS if key in source}
         for source in config["sources"]]}

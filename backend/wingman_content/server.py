@@ -6,7 +6,7 @@ import time
 from datetime import datetime, timezone
 from email.utils import format_datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from .normalize import date_value
+from .normalize import date_value, iso
 from .provider import is_unexpired, item_current
 from .store import encode
 from .media import media_response
@@ -74,8 +74,22 @@ def handler_for(store):
                 self.rfile = original
 
         def do_GET(self):
-            if self.path == "/healthz":
-                self.reply(200, b'{"status":"ok"}')
+            if self.path in ("/healthz", "/readyz"):
+                now = datetime.now(timezone.utc)
+                try:
+                    snapshot = reader.read()
+                except Exception:
+                    snapshot = None
+                expiry = date_value((snapshot or {}).get('expiresAt'))
+                fresh = bool(expiry and expiry > now)
+                body = {'status': 'ok', 'service': 'read-only', 'checkedAt': iso(now),
+                        'snapshot': 'fresh' if fresh else 'cached' if snapshot else 'unavailable',
+                        'snapshotGeneratedAt': (snapshot or {}).get('generatedAt'),
+                        'snapshotExpiresAt': (snapshot or {}).get('expiresAt')}
+                # Liveness is separate from supply readiness. A running process
+                # cannot report a missing/stale snapshot as fresh ingestion.
+                self.reply(200 if self.path == '/healthz' or fresh else 503,
+                           encode(body), {'Cache-Control': 'no-store'})
                 return
             if self.path.startswith('/v1/media/'):
                 try:

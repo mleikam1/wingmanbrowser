@@ -20,10 +20,11 @@ XML_TYPES = {"application/rss+xml", "application/atom+xml", "application/xml", "
 
 
 class FetchError(Exception):
-    def __init__(self, reason, retry_after=None):
+    def __init__(self, reason, retry_after=None, http_status=None):
         super().__init__(reason)
         self.reason = reason
         self.retry_after = retry_after
+        self.http_status = http_status
 
 
 @dataclass
@@ -222,9 +223,9 @@ class SecureFeedFetcher:
                 if response.status == 304:
                     return FetchResult(304, received, b"")
                 if response.status != 200:
-                    raise FetchError("http-%d" % response.status, received.get("retry-after"))
+                    raise FetchError("http-%d" % response.status, received.get("retry-after"), response.status)
                 if received.get("content-type", "").split(";")[0].strip().lower() not in self.accepted_types:
-                    raise FetchError("unexpected-content-type")
+                    raise FetchError("unexpected-content-type", http_status=response.status)
                 length = received.get("content-length")
                 if length and (not length.isdigit() or int(length) > MAX_WIRE_BYTES):
                     raise FetchError("compressed-size-limit")

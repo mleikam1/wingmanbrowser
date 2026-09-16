@@ -357,6 +357,7 @@ class LiveSource {
     this.fetchedAt,
     this.lastSuccessAt,
     this.nextRefreshAt,
+    this.diagnostics = const {},
   });
   factory LiveSource.fromJson(Map<String, dynamic> json) => LiveSource(
     id: feedId(json['id']),
@@ -373,12 +374,18 @@ class LiveSource {
     nextRefreshAt: json['nextRefreshAt'] == null
         ? null
         : feedDate(json['nextRefreshAt']),
+    diagnostics:
+        json['diagnostics'] is Map &&
+            jsonEncode(json['diagnostics']).length <= 8192
+        ? Map<String, dynamic>.unmodifiable(feedMap(json['diagnostics']))
+        : const {},
   );
   final String id, name, language, status;
   final Uri homepageUrl;
   final Set<String> topics;
   final LiveContentRights rights;
   final DateTime? fetchedAt, lastSuccessAt, nextRefreshAt;
+  final Map<String, dynamic> diagnostics;
   Map<String, Object?> toJson() => {
     'id': id,
     'name': name,
@@ -390,6 +397,7 @@ class LiveSource {
     'fetchedAt': fetchedAt?.toIso8601String(),
     'lastSuccessAt': lastSuccessAt?.toIso8601String(),
     'nextRefreshAt': nextRefreshAt?.toIso8601String(),
+    if (diagnostics.isNotEmpty) 'diagnostics': diagnostics,
   };
 }
 
@@ -412,6 +420,7 @@ class ApprovedLiveSource {
     this.preserveFeedText = false,
     this.branding,
     this.feedCompatibility,
+    this.publisherId,
     String? displayMode,
   }) : displayMode =
            displayMode ??
@@ -512,6 +521,9 @@ class ApprovedLiveSource {
       branding: PublisherBranding.tryFromJson(json['branding']),
       displayMode: displayMode as String,
       feedCompatibility: compatibility as String?,
+      publisherId: json['publisherId'] == null
+          ? null
+          : feedId(json['publisherId']),
       preserveFeedText: json['preserveFeedText'] == true,
       articleUrlFormat: format as String,
       feedUri: feed,
@@ -538,6 +550,7 @@ class ApprovedLiveSource {
   final bool preserveFeedText;
   final PublisherBranding? branding;
   final String? feedCompatibility;
+  final String? publisherId;
   final String displayMode;
   bool get isSponsoredSyndication => displayMode == 'sponsored-syndication';
 }
@@ -546,10 +559,15 @@ class LiveSourceRegistry {
   LiveSourceRegistry(
     Iterable<ApprovedLiveSource> sources, {
     this.requireStoryImages = false,
+    this.digest,
+    this.reviewStatusByTopic = const {},
   }) : sources = Map.unmodifiable({
          for (final source in sources) source.source.id: source,
        });
-  factory LiveSourceRegistry.fromJson(Map<String, dynamic> json) {
+  factory LiveSourceRegistry.fromJson(
+    Map<String, dynamic> json, {
+    String? digest,
+  }) {
     if (json['schemaVersion'] != 1 ||
         json['sources'] is! List ||
         (json['sources'] as List).length > 256) {
@@ -564,18 +582,35 @@ class LiveSourceRegistry {
     return LiveSourceRegistry(
       rows,
       requireStoryImages: json['requireStoryImages'] == true,
+      digest:
+          digest ?? sha256.convert(utf8.encode(jsonEncode(json))).toString(),
+      reviewStatusByTopic: _reviewStatus(json['reviewStatusByTopic']),
     );
   }
-  static Future<LiveSourceRegistry> loadBundled() async =>
-      LiveSourceRegistry.fromJson(
-        feedMap(
-          jsonDecode(
-            await rootBundle.loadString('assets/live_content/sources.json'),
-          ),
-        ),
-      );
+  static Future<LiveSourceRegistry> loadBundled() async {
+    final raw = await rootBundle.loadString('assets/live_content/sources.json');
+    return LiveSourceRegistry.fromJson(
+      feedMap(jsonDecode(raw)),
+      digest: sha256.convert(utf8.encode(raw)).toString(),
+    );
+  }
+
   final Map<String, ApprovedLiveSource> sources;
   final bool requireStoryImages;
+  final String? digest;
+  final Map<String, Map<String, dynamic>> reviewStatusByTopic;
+  static Map<String, Map<String, dynamic>> _reviewStatus(Object? raw) {
+    if (raw is! Map || raw.length > 20) return const {};
+    return Map.unmodifiable({
+      for (final entry in raw.entries)
+        if (entry.key is String &&
+            entry.value is Map &&
+            jsonEncode(entry.value).length < 4096)
+          feedId(entry.key): Map<String, dynamic>.unmodifiable(
+            feedMap(entry.value),
+          ),
+    });
+  }
 }
 
 class LiveExcerptProvenance {
@@ -636,16 +671,30 @@ class LiveContentItem {
     } catch (_) {
       /* An invalid image never removes a readable headline. */
     }
+    String? optionalText(Object? value, int max) {
+      try {
+        return value == null ? null : feedText(value, max: max, empty: true);
+      } on FormatException {
+        return null;
+      }
+    }
+
+    LiveExcerptProvenance? provenance;
+    try {
+      if (json['excerptProvenance'] != null) {
+        provenance = LiveExcerptProvenance.fromJson(
+          feedMap(json['excerptProvenance']),
+        );
+      }
+    } on FormatException {
+      /* Optional provenance cannot suppress the title. */
+    }
     return LiveContentItem(
       id: feedId(json['id']),
       sourceId: feedId(json['sourceId']),
       title: feedText(json['title'], max: 500),
-      excerpt: json['excerpt'] == null
-          ? null
-          : feedText(json['excerpt'], max: 1600, empty: true),
-      attribution: json['attribution'] == null
-          ? null
-          : feedText(json['attribution'], max: 200, empty: true),
+      excerpt: optionalText(json['excerpt'], 1600),
+      attribution: optionalText(json['attribution'], 200),
       canonicalUrl: feedArticleUri(json['canonicalUrl']),
       originalUrl: json['originalUrl'] == null
           ? null
@@ -654,9 +703,7 @@ class LiveContentItem {
           ? null
           : feedArticleUri(json['outboundUrl']),
       updatedAt: json['updatedAt'] == null ? null : feedDate(json['updatedAt']),
-      excerptProvenance: json['excerptProvenance'] == null
-          ? null
-          : LiveExcerptProvenance.fromJson(feedMap(json['excerptProvenance'])),
+      excerptProvenance: provenance,
       publishedAt: json['publishedAt'] == null
           ? null
           : feedDate(json['publishedAt']),

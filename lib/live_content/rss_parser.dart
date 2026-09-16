@@ -50,7 +50,9 @@ String rssPlain(String text, {int limit = 100000}) {
   if (text.length > 100000) throw const RssFailure('text-too-large');
   final fragment = html.parseFragment(text);
   fragment
-      .querySelectorAll('script,style,iframe,svg,noscript,object,embed')
+      .querySelectorAll(
+        'script,style,iframe,svg,noscript,object,embed,nav,footer',
+      )
       .forEach((n) => n.remove());
   final value = (fragment.text ?? '')
       .replaceAll(
@@ -195,12 +197,25 @@ class RssParsedFeed {
     this.guidToItem,
     this.revokedIds,
     this.deletedRefs,
-    this.rejected,
-  );
+    this.rejected, {
+    this.parsedEntries = 0,
+    this.textEligible = 0,
+    this.topicMatched = 0,
+    this.imagePermitted = 0,
+    this.rejectionReasons = const {},
+    this.optionalFieldReasons = const {},
+    this.newestPublicationAt,
+  });
   final List<LiveContentItem> items;
   final Map<String, String> guidToItem;
   final Set<String> revokedIds, deletedRefs;
   final int rejected;
+  final int parsedEntries, textEligible, topicMatched, imagePermitted;
+
+  /// Fixed reason keys and counts only: no article text or reader information.
+  final Map<String, int> rejectionReasons;
+  final Map<String, int> optionalFieldReasons;
+  final DateTime? newestPublicationAt;
 }
 
 Set<String> _featureTopics(String title) {
@@ -369,7 +384,7 @@ LiveArticleImage? rssThumbnail(
     final fragment = html.parseFragment(description);
     fragment
         .querySelectorAll(
-          'script,style,iframe,svg,noscript,object,embed,template',
+          'script,style,iframe,svg,noscript,object,embed,template,nav,footer',
         )
         .forEach((node) => node.remove());
     for (final node in fragment.querySelectorAll('img')) {
@@ -476,6 +491,9 @@ RssParsedFeed parseRssFeed(
   if (!atom && root.name.local != 'rss') {
     throw const RssFailure('unknown-feed-format');
   }
+  if (!atom && root.getElement('channel') == null) {
+    throw const RssFailure('missing-rss-channel');
+  }
   final entries =
       (atom
               ? root.childElements.where((n) => n.name.local == 'entry')
@@ -496,7 +514,19 @@ RssParsedFeed parseRssFeed(
       guids = <String, String>{},
       revoked = <String>{},
       deleted = <String>{};
-  var rejected = 0;
+  var rejected = 0, textEligible = 0, topicMatched = 0, imagePermitted = 0;
+  DateTime? newestPublicationAt;
+  final reasons = <String, int>{};
+  final optionalReasons = <String, int>{};
+  void reason(String code, {bool reject = true}) {
+    if (reject) rejected++;
+    (reject ? reasons : optionalReasons).update(
+      code,
+      (count) => count + 1,
+      ifAbsent: () => 1,
+    );
+  }
+
   for (final node in root.descendantElements) {
     if (node.name.local == 'deleted-entry' &&
         node.namespaceUri == 'http://purl.org/atompub/tombstones/1.0') {
@@ -512,12 +542,17 @@ RssParsedFeed parseRssFeed(
               .where(
                 (n) =>
                     n.name.local == 'link' &&
+                    n.namespaceUri == 'http://www.w3.org/2005/Atom' &&
                     (n.getAttribute('rel') ?? 'alternate') == 'alternate',
               )
               .map((n) => n.getAttribute('href') ?? '')
-        : <String>[
-            field(entry, {'link'}),
-          ];
+        : entry.childElements
+              .where(
+                (n) =>
+                    n.name.local == 'link' &&
+                    (n.namespaceUri == null || n.namespaceUri == ''),
+              )
+              .map((n) => n.innerText);
     for (final link in links) {
       url = rssCanonical(link, source);
       if (url != null) {
@@ -526,13 +561,17 @@ RssParsedFeed parseRssFeed(
       }
     }
     if (url == null) {
-      rejected++;
+      reason('missing-or-unapproved-link');
       continue;
     }
     final id = rssDigest(url.toString()),
         guid = field(entry, atom ? {'id'} : {'guid'});
     try {
       final title = rssPlain(field(entry, {'title'}));
+      if (title.isEmpty || title.length > 500) {
+        reason(title.isEmpty ? 'missing-title' : 'oversized-title');
+        continue;
+      }
       final isSyndicated = source.isSponsoredSyndication;
       final body = isSyndicated
           ? SyndicatedArticle.fromHtml(
@@ -543,9 +582,14 @@ RssParsedFeed parseRssFeed(
             )
           : null;
       // Only publisher description/summary, never content:encoded or Atom content.
-      final excerpt = isSyndicated
-          ? ''
-          : rssPlain(field(entry, atom ? {'summary'} : {'description'}));
+      final rawExcerpt = field(entry, atom ? {'summary'} : {'description'});
+      // Do not sidestep full-metadata policy by truncating prior to inspection.
+      // Only this entry is held if its metadata exceeds the parser work bound.
+      if (!isSyndicated && rawExcerpt.length > 100000) {
+        reason('oversized-entry-metadata');
+        continue;
+      }
+      final excerpt = isSyndicated ? '' : rssPlain(rawExcerpt);
       final rights = rssPlain(field(entry, {'rights', 'copyright'}));
       var author = field(entry, {'creator', 'author'});
       if (atom) {
@@ -555,23 +599,37 @@ RssParsedFeed parseRssFeed(
             .where((s) => s.isNotEmpty)
             .join(', ');
       }
-      author = rssPlain(author, limit: 200);
+      author = author.length > 100000 ? '' : rssPlain(author);
+      if (author.length > 200) {
+        author = '';
+        reason('optional-byline-omitted', reject: false);
+      }
       if (isSyndicated && author.isEmpty) author = source.source.name;
       final combined = '$title $excerpt'.toLowerCase();
-      if (title.isEmpty ||
-          title.length > 500 ||
-          (source.requiresAttribution && author.isEmpty) ||
-          (isSyndicated
-              ? !acceptsSyndicatedPromotion(title)
-              : !allowsEditorialText(title, excerpt)) ||
-          RegExp(
-            r'\b(?:all rights reserved|third.party copyright|used (?:by|with) permission|courtesy of|getty images|associated press)\b',
-            caseSensitive: false,
-          ).hasMatch('$rights $excerpt')) {
-        revoked.add(id);
-        rejected++;
+      if (source.requiresAttribution && author.isEmpty) {
+        reason('required-attribution-missing');
         continue;
       }
+      if (isSyndicated
+          ? !acceptsSyndicatedPromotion(title)
+          : !allowsEditorialText(title, excerpt)) {
+        revoked.add(id);
+        reason('policy-held');
+        continue;
+      }
+      if (RegExp(
+        r'\b(?:all rights reserved|third.party copyright|used (?:by|with) permission|courtesy of|getty images|associated press)\b',
+        caseSensitive: false,
+      ).hasMatch('$rights $excerpt')) {
+        revoked.add(id);
+        reason('rights-held');
+        continue;
+      }
+      if (!source.enabled || !source.source.rights.titles) {
+        reason('text-permission-missing');
+        continue;
+      }
+      textEligible++;
       // Rights and safety withdrawals above apply to the story everywhere.
       // A section's topic mismatch only omits this source's candidate.
       if (source.requiredTopicTerms.isNotEmpty &&
@@ -581,21 +639,29 @@ RssParsedFeed parseRssFeed(
               caseSensitive: false,
             ).hasMatch(combined),
           )) {
-        rejected++;
+        reason('topic-mismatch');
         continue;
       }
       final published = rssDate(
         field(entry, atom ? {'published'} : {'pubDate', 'date'}),
-        isSyndicated ? now.add(const Duration(days: 366)) : now,
+        now.add(const Duration(days: 366)),
       );
       final updated = atom ? rssDate(field(entry, {'updated'}), now) : null;
-      if (isSyndicated && published != null && published.isAfter(now)) {
-        rejected++;
+      if (published != null &&
+          (newestPublicationAt == null ||
+              published.isAfter(newestPublicationAt))) {
+        newestPublicationAt = published;
+      }
+      if (published != null &&
+          published.isAfter(
+            isSyndicated ? now : now.add(const Duration(hours: 24)),
+          )) {
+        reason('future-publication');
         continue;
       }
       if (published != null &&
           published.isBefore(now.subtract(const Duration(days: 30)))) {
-        rejected++;
+        reason('publication-too-old');
         continue;
       }
       final topics = isSyndicated
@@ -614,6 +680,14 @@ RssParsedFeed parseRssFeed(
                     url.path.startsWith('/technology/'))
           ? <String>{'science'}
           : source.source.topics;
+      // Contracts requiring unchanged excerpts allow omitting an optional
+      // excerpt; they do not authorize truncating it or changing the headline.
+      final displayExcerpt = source.preserveFeedText && excerpt.length > 1600
+          ? ''
+          : excerpt;
+      if (displayExcerpt.isEmpty && excerpt.isNotEmpty) {
+        reason('optional-excerpt-omitted', reject: false);
+      }
       final item = LiveContentItem(
         id: id,
         sourceId: source.source.id,
@@ -621,12 +695,13 @@ RssParsedFeed parseRssFeed(
         canonicalUrl: url,
         originalUrl: original,
         outboundUrl: original,
-        excerpt: source.source.rights.excerpts && excerpt.isNotEmpty
+        excerpt: source.source.rights.excerpts && displayExcerpt.isNotEmpty
             ? (source.preserveFeedText
-                  ? feedText(excerpt, max: 1600)
-                  : rssPlain(excerpt, limit: 1600))
+                  ? feedText(displayExcerpt, max: 1600)
+                  : rssPlain(displayExcerpt, limit: 1600))
             : null,
-        excerptProvenance: source.source.rights.excerpts && excerpt.isNotEmpty
+        excerptProvenance:
+            source.source.rights.excerpts && displayExcerpt.isNotEmpty
             ? LiveExcerptProvenance(
                 field: atom ? 'atom-summary' : 'rss-description',
                 shortened: !source.preserveFeedText && excerpt.length > 1600,
@@ -653,20 +728,35 @@ RssParsedFeed parseRssFeed(
         item.excerpt ?? '',
         source.requiredTopicTerms,
       )) {
-        rejected++;
+        reason('topic-mismatch');
         continue;
       }
       if (!eligibility.accepts(item, now: now)) {
-        revoked.add(id);
-        rejected++;
+        // Normalization/configuration/date failures are holds for this
+        // representation, not publisher tombstones or permanent withdrawals.
+        reason('eligibility-held');
         continue;
       }
+      topicMatched++;
+      if (eligibility.imageFor(item) != null) imagePermitted++;
       if (guid.isNotEmpty && guid.length <= 4096) guids[rssDigest(guid)] = id;
       if (!items.any((prior) => prior.id == id)) items.add(item);
     } catch (_) {
-      revoked.add(id);
-      rejected++;
+      reason('malformed-entry');
     }
   }
-  return RssParsedFeed(items, guids, revoked, deleted, rejected);
+  return RssParsedFeed(
+    items,
+    guids,
+    revoked,
+    deleted,
+    rejected,
+    parsedEntries: entries.length,
+    textEligible: textEligible,
+    topicMatched: topicMatched,
+    imagePermitted: imagePermitted,
+    rejectionReasons: reasons,
+    optionalFieldReasons: optionalReasons,
+    newestPublicationAt: newestPublicationAt,
+  );
 }

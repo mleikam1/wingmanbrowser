@@ -137,11 +137,11 @@ void main() {
           'newsusa-features',
         ]).map((i) => i.sourceId),
         [
-          'newsusa-features',
           'tech-xplore',
           'medical-xpress',
           'phys-org',
           'tech-xplore',
+          'newsusa-features',
         ],
       );
       final fewer = balancedLiveItems(
@@ -150,10 +150,14 @@ void main() {
         fewerTopics: {'technology'},
       );
       expect(
-        fewer.take(3).any((i) => i.topics.contains('technology')),
+        fewer.take(2).any((i) => i.topics.contains('technology')),
         isFalse,
       );
-      expect(fewer.last.id, 'item-2');
+      expect(
+        fewer.where((row) => row.sourceId != 'newsusa-features').last.id,
+        'item-2',
+      );
+      expect(fewer.last.sourceId, 'newsusa-features');
     },
   );
   test(
@@ -405,6 +409,7 @@ void main() {
       await loader.load([item(1)], onChanged: () => changes++);
       expect(transport.calls.length, count);
       expect(changes, 0);
+      expect(loader.statusFor(item(1))['outcome'], 'failed');
     },
   );
   test('upstream Age shortens the remaining image cache lifetime', () async {
@@ -567,7 +572,7 @@ void main() {
       )..setContext(LiveContentContext.owner);
       await controller.refresh();
       await settle();
-      expect(controller.items, isEmpty);
+      expect(controller.items.single.id, 'item-1');
       expect(controller.imageFor(item(1)), isNull);
       expect(transport.calls, isEmpty);
       controller.dispose();
@@ -617,7 +622,7 @@ void main() {
       await controller.refresh();
       await settle();
       expect(controller.imageFor(item(1)), isNull);
-      expect(controller.items, isEmpty);
+      expect(controller.items.single.id, 'item-1');
       expect(transport.calls.length, requests);
       expect(controller.storageError, isNotNull);
       controller.dispose();
@@ -665,60 +670,60 @@ void main() {
       controller.dispose();
     },
   );
-  test(
-    'photo-only pagination waits for decoded bytes and excludes rejected images',
-    () async {
-      final eligibility = gate(),
-          transport = Images()..pending = Completer(),
-          provider = fixtures.FakeProvider()
-            ..response = FeedResponse(
-              snapshot: snapshot([item(1), item(2), item(3, image: false)]),
-              publisherImagesVerified: true,
-            );
-      final controller = LiveContentController(
-        store: MemorySignatureDocumentStore(),
+  test('article pagination is stable while photos load or fail', () async {
+    final eligibility = gate(),
+        transport = Images()..pending = Completer(),
+        provider = fixtures.FakeProvider()
+          ..response = FeedResponse(
+            snapshot: snapshot([item(1), item(2), item(3, image: false)]),
+            publisherImagesVerified: true,
+          );
+    final controller = LiveContentController(
+      store: MemorySignatureDocumentStore(),
+      eligibility: eligibility,
+      provider: provider,
+      imageLoader: ArticleImageLoader(
         eligibility: eligibility,
-        provider: provider,
-        imageLoader: ArticleImageLoader(
-          eligibility: eligibility,
-          transport: transport,
-          clock: () => now,
-          validator: (_, image, _) async {
-            if (image.url.path.endsWith('/1.png')) {
-              throw const RssFailure('body-too-large');
-            }
-          },
-        ),
+        transport: transport,
         clock: () => now,
-        pageSize: 1,
-      )..setContext(LiveContentContext.owner);
-      addTearDown(controller.dispose);
-      final loadingNotifications = <bool>[];
-      controller.addListener(() {
-        loadingNotifications.add(controller.imagesLoading);
-      });
-      await controller.refresh();
-      await settle();
-      expect(controller.imagesLoading, isTrue);
-      expect(controller.items, isEmpty);
-      expect(controller.hasMore, isFalse);
-      expect(controller.imageFor(item(1)), isNotNull);
-      await controller.save(item(3, image: false));
-      expect(controller.savedItems.single.item!.id, 'item-3');
+        validator: (_, image, _) async {
+          if (image.url.path.endsWith('/1.png')) {
+            throw const RssFailure('body-too-large');
+          }
+        },
+      ),
+      clock: () => now,
+      pageSize: 1,
+    )..setContext(LiveContentContext.owner);
+    addTearDown(controller.dispose);
+    final loadingNotifications = <bool>[];
+    controller.addListener(() {
+      loadingNotifications.add(controller.imagesLoading);
+    });
+    await controller.refresh();
+    await settle();
+    expect(controller.imagesLoading, isTrue);
+    expect(controller.items.single.id, 'item-1');
+    expect(controller.hasMore, isTrue);
+    expect(controller.imageFor(item(1)), isNotNull);
+    await controller.save(item(3, image: false));
+    expect(controller.savedItems.single.item!.id, 'item-3');
 
-      transport.pending!.complete(
-        RssFetchResponse(200, png, {'content-type': 'image/png'}),
-      );
-      await settle();
-      expect(controller.imagesLoading, isFalse);
-      expect(controller.items.single.id, 'item-2');
-      expect(controller.hasMore, isFalse);
-      expect(controller.imageBytesFor(item(1)), isNull);
-      expect(controller.savedItems.single.item!.id, 'item-3');
-      expect(loadingNotifications, contains(true));
-      expect(loadingNotifications.last, isFalse);
-    },
-  );
+    transport.pending!.complete(
+      RssFetchResponse(200, png, {'content-type': 'image/png'}),
+    );
+    await settle();
+    expect(controller.imagesLoading, isFalse);
+    expect(controller.items.single.id, 'item-1');
+    expect(controller.hasMore, isTrue);
+    expect(controller.imageBytesFor(item(1)), isNull);
+    expect(controller.imageBytesFor(item(2)), isNotNull);
+    controller.loadMore();
+    expect(controller.items.map((row) => row.id), ['item-1', 'item-2']);
+    expect(controller.savedItems.single.item!.id, 'item-3');
+    expect(loadingNotifications, contains(true));
+    expect(loadingNotifications.last, isFalse);
+  });
   test(
     'retired image completion cannot clear a replacement owner batch loading state',
     () async {
@@ -752,6 +757,7 @@ void main() {
       expect(controller.imagesLoading, isTrue);
       controller.setContext(LiveContentContext.private);
       expect(controller.imagesLoading, isFalse);
+      expect(controller.items, isEmpty);
       transport.pending = newResponse;
       controller.setContext(LiveContentContext.owner);
       await settle();
@@ -763,17 +769,17 @@ void main() {
       await settle();
       expect(changes, beforeRetiredCompletion);
       expect(controller.imagesLoading, isTrue);
-      expect(controller.items, isEmpty);
+      expect(controller.items.single.id, 'item-1');
       newResponse.completeError(const RssFailure('offline'));
       await settle();
       expect(controller.imagesLoading, isFalse);
-      expect(controller.items, isEmpty);
+      expect(controller.items.single.id, 'item-1');
       expect(changes, greaterThan(beforeRetiredCompletion));
       expect(controller.fetchedAt, isNotNull);
     },
   );
   test(
-    'image requirement precedes pagination; private and revoked items expose no metadata or bytes; saved text remains',
+    'text fallback participates in pagination; private and revoked items expose no image bytes; saved text remains',
     () async {
       var clock = now;
       final eligibility = gate(),
@@ -803,7 +809,7 @@ void main() {
       )..setContext(LiveContentContext.owner);
       await controller.refresh();
       await settle();
-      expect(controller.items.single.id, 'item-25');
+      expect(controller.items.single.id, 'item-0');
       expect(controller.hasMore, isTrue);
       await controller.save(rows.first);
       expect(controller.savedItems.single.item, rows.first);
@@ -820,7 +826,8 @@ void main() {
       );
       await controller.refresh();
       expect(controller.imageBytesFor(rows[20]), isNull);
-      expect(controller.items.single.id, 'item-26');
+      expect(controller.items.single.id, 'item-0');
+      expect(controller.items.any((row) => row.id == 'item-25'), isFalse);
       controller.dispose();
     },
   );

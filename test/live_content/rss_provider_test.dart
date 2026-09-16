@@ -257,7 +257,7 @@ void main() {
   });
   group('configured transport policy', () {
     test(
-      'safety rights and attribution withdrawals precede section omission',
+      'safety and rights withdrawals precede section omission; attribution holds',
       () {
         final narrow = source(terms: ['fashion designer'], author: true);
         for (final body in [
@@ -273,7 +273,9 @@ void main() {
           expect(result.items, isEmpty);
           expect(
             result.revokedIds,
-            contains(rssDigest('https://publisher.example/news/one')),
+            body.contains('<dc:creator></dc:creator>')
+                ? isEmpty
+                : contains(rssDigest('https://publisher.example/news/one')),
           );
         }
       },
@@ -380,7 +382,8 @@ void main() {
         time = time.add(const Duration(minutes: 1));
         final next = await p.fetch();
         expect(t.calls, hasLength(1));
-        expect(next.snapshot!.sources.single.status, 'unavailable');
+        expect(next.snapshot!.sources.single.status, 'fresh');
+        expect(next.warning, isNull);
       },
     );
     test('304 uses source validators and retains publication', () async {
@@ -427,37 +430,37 @@ void main() {
         final r = await p.fetch();
         expect(r.snapshot!.sources, hasLength(2));
         expect(r.snapshot!.items, hasLength(1));
-        expect(r.warning, isNotNull);
+        expect(r.warning, isNull);
         expect(
           r.snapshot!.sources.first.nextRefreshAt,
           now.add(const Duration(hours: 2)),
         );
       },
     );
-    test('no-store removes prior cached text and revokes item', () async {
-      var time = now;
-      final s = source(),
-          t = FakeTransport([
-            response(rss()),
-            response(rss(), headers: {'cache-control': 'no-store'}),
-          ]);
-      final p = RssFeedProvider(
-        registry: LiveSourceRegistry([s]),
-        eligibility: gate([s]),
-        allowsEditorialText: (_, _) => true,
-        transport: t,
-        clock: () => time,
-      );
-      final first = await p.fetch();
-      p.restore(snapshot: first.snapshot, state: first.providerState);
-      time = time.add(const Duration(minutes: 31));
-      final r = await p.fetch();
-      expect(r.snapshot!.items, isEmpty);
-      expect(
-        r.snapshot!.revokedItemIds,
-        contains(first.snapshot!.items.single.id),
-      );
-    });
+    test(
+      'no-store removes prior cached text without legal revocation',
+      () async {
+        var time = now;
+        final s = source(),
+            t = FakeTransport([
+              response(rss()),
+              response(rss(), headers: {'cache-control': 'no-store'}),
+            ]);
+        final p = RssFeedProvider(
+          registry: LiveSourceRegistry([s]),
+          eligibility: gate([s]),
+          allowsEditorialText: (_, _) => true,
+          transport: t,
+          clock: () => time,
+        );
+        final first = await p.fetch();
+        p.restore(snapshot: first.snapshot, state: first.providerState);
+        time = time.add(const Duration(minutes: 31));
+        final r = await p.fetch();
+        expect(r.snapshot!.items, isEmpty);
+        expect(r.snapshot!.revokedItemIds, isEmpty);
+      },
+    );
     test('cancelled response cannot produce candidate state', () async {
       final pending = Completer<RssFetchResponse>(),
           s = source(),

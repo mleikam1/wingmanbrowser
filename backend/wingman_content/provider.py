@@ -5,13 +5,13 @@ from abc import ABC, abstractmethod
 from datetime import datetime, timedelta, timezone
 from .config import registry
 from .fetch import FetchError, SecureFeedFetcher
-from .normalize import date_value, iso, parse_feed, canonical_url, item_id
+from .normalize import date_value, iso, parse_feed, canonical_url, item_id, matches_topic_scope
 from .store import encode
 
 MAX_SHARED_ITEMS = 300
 MAX_SNAPSHOT_BYTES = 512 * 1024
 MAX_FAILURES = 12
-NORMALIZATION_VERSION = 6
+NORMALIZATION_VERSION = 7
 MAX_REVOCATIONS = 5000  # Matches the client envelope limit.
 
 
@@ -59,7 +59,9 @@ class RssAtomProvider(NewsProvider):
         response = self.fetcher.fetch(source, validators)
         cache_control = response.headers.get("cache-control", prior.get("cacheControl", "") if response.status == 304 else "")
         if re.search(r"(?:^|,)\s*(?:no-store|private)(?:\s*(?:,|=|$))", cache_control, re.I):
-            raise FetchError("source-cache-prohibited")
+            delay = delay_seconds(dict(response.headers, **{'cache-control': cache_control}), now, source['minRefreshSeconds'])
+            raise FetchError("source-cache-prohibited", str(delay) if delay is not None else '9999999999',
+                             http_status=response.status)
         if response.status == 304:
             if not prior.get("lastSuccessAt") or not compatible:
                 raise FetchError("unconditional-304")
@@ -68,8 +70,12 @@ class RssAtomProvider(NewsProvider):
             # Successful revalidation updates freshness, never publication date.
             items = [dict(item, fetchedAt=iso(now),
                           expiresAt=iso(now + timedelta(seconds=source["retentionSeconds"]))) for item in items]
+            held.update(prior.get('parseDiagnostics', {}))
         else:
-            items, held, deleted = parse_feed(response.body, source, now, self.destination_policy)
+            try:
+                items, held, deleted = parse_feed(response.body, source, now, self.destination_policy)
+            except Exception as exc:
+                raise FetchError('invalid-feed', http_status=response.status) from exc
         # A rolling feed's ordinary omission is not called publisher revocation.
         # Omitted items leave this finite snapshot; explicit tombstones persist.
         revoked = set(prior.get("revokedItemIds", []))
@@ -88,10 +94,14 @@ class RssAtomProvider(NewsProvider):
                 "etag": response.headers.get("etag", prior.get("etag") if response.status == 304 else None),
                 "lastModified": response.headers.get("last-modified", prior.get("lastModified") if response.status == 304 else None),
                 "lastSuccessAt": iso(now), "fetchedAt": iso(now),
+                'lastParsedAt': (prior.get('lastParsedAt') or prior.get('lastSuccessAt')) if response.status == 304 else iso(now),
                 "nextRefreshAt": iso(now + timedelta(seconds=delay)) if delay is not None else None,
                 "refreshSuspended": delay is None,
                 "failures": 0, "error": None, "heldCount": held["count"],
                 "heldReasons": held["reasons"], "heldExamples": held["examples"], "lastHttpStatus": response.status,
+                "parseDiagnostics": {key: held.get(key, 0) for key in
+                    ('parsedEntries', 'textEligible', 'topicMatched', 'imagePermitted')},
+                "optionalFieldReasons": held.get('optionalFieldReasons', prior.get('optionalFieldReasons', {})),
                 "revokedItemIds": sorted(revoked), "status": "fresh"}
 
 
@@ -122,7 +132,7 @@ def public_snapshot(config, states, now, prior_snapshot=None):
             if canonical:
                 revoked.add(item_id(canonical))
         status = state.get("status", "unavailable")
-        if not source["enabled"] or state.get("sourceRevoked"):
+        if not source["enabled"] or not source['rights'].get('titles') or state.get("sourceRevoked"):
             status = "revoked"
             revoked_sources.append(source["id"])
         elif not state.get("lastSuccessAt"):
@@ -134,6 +144,8 @@ def public_snapshot(config, states, now, prior_snapshot=None):
         metadata = {key: source[key] for key in ("id", "name", "homepageUrl", "language", "topics", "rights")}
         metadata.update(status=status, fetchedAt=state.get("fetchedAt"),
                         lastSuccessAt=state.get("lastSuccessAt"), nextRefreshAt=state.get("nextRefreshAt"))
+        if state.get('diagnostics'):
+            metadata['diagnostics'] = state['diagnostics']
         sources.append(metadata)
         if status in ("revoked", "unavailable"):
             continue
@@ -142,6 +154,9 @@ def public_snapshot(config, states, now, prior_snapshot=None):
                 continue
             # Config changes cannot be bypassed by cached normalization.
             if not canonical_url(item["canonicalUrl"], source):
+                continue
+            if (not matches_topic_scope(item.get('title', ''), item.get('excerpt', ''), source)
+                    or (source.get('requiresAttribution') and not item.get('attribution'))):
                 continue
             candidate = {key: value for key, value in item.items() if not key.startswith("_")}
             candidate["rights"] = {"title": True, "excerpt": source["rights"]["excerpts"],
@@ -196,9 +211,11 @@ def ingest(config, store, provider, now=None, media_fetcher=None):
         previous = prior.get("states", {}).get(source["id"], {})
         state = dict(previous)
         due = date_value(state.get("nextRefreshAt"))
+        requested = False
         action = ("disabled" if not source["enabled"] else "source-revoked" if state.get("sourceRevoked")
                   else "suspended" if state.get("refreshSuspended") else "not-due")
         if source["enabled"] and not state.get("sourceRevoked") and not state.get("refreshSuspended") and (due is None or source_now >= due):
+            requested = True
             try:
                 state = provider.refresh(source, previous, source_now)
                 action = "http-%d" % state["lastHttpStatus"]
@@ -213,18 +230,25 @@ def ingest(config, store, provider, now=None, media_fetcher=None):
                 state.update(failures=failures, nextRefreshAt=iso(source_now + timedelta(seconds=delay)) if delay is not None else None,
                              refreshSuspended=delay is None,
                              error=reason, status="cached" if previous.get("lastSuccessAt") else "unavailable")
+                state['lastHttpStatus'] = getattr(exc, 'http_status', None)
                 if reason == "source-cache-prohibited":
-                    # A newly prohibited shared cache cannot keep serving old text.
-                    state["revokedItemIds"] = sorted(set(state.get("revokedItemIds", [])) |
-                                                     {item["id"] for item in state.get("items", [])})
+                    # Evict this representation. Cache instructions are temporary
+                    # storage rules, not a legal withdrawal of the article ID.
                     state["items"] = []
+                    state.pop('etag', None)
+                    state.pop('lastModified', None)
+                    state.pop('normalizationKey', None)
                 action = reason
         # Do not retain bodies, HTML, image URLs or expired normalized records.
         state["items"] = [item for item in state.get("items", []) if is_unexpired(item, source_now)]
+        from .diagnostics import source_diagnostics
+        state['diagnostics'] = source_diagnostics(source, state, source_now, action, requested,
+                                                  was_due=due is None or source_now >= due)
         states[source["id"]] = state
         report.append({"sourceId": source["id"], "action": action, "items": len(state.get("items", [])),
                        "held": state.get("heldCount", 0), "heldReasons": state.get("heldReasons", {}),
-                       "heldExamples": state.get("heldExamples", []), "nextRefreshAt": state.get("nextRefreshAt")})
+                       "heldExamples": state.get("heldExamples", []), "nextRefreshAt": state.get("nextRefreshAt"),
+                       'diagnostics': state['diagnostics']})
     snapshot = public_snapshot(config, states, datetime.now(timezone.utc) if live_clock else now, prior.get("snapshot"))
     if snapshot.get('recoveryRequired'):
         for state in states.values():

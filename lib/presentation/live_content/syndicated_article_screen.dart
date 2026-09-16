@@ -39,18 +39,44 @@ class SyndicatedArticleScreen extends StatelessWidget {
     listenable: controller,
     builder: (context, _) {
       final article = item.syndicatedArticle;
-      final visible = article != null && _current;
+      final permitted = article != null && _current;
+      final visible =
+          permitted &&
+          controller.imageFor(item) != null &&
+          controller.imageBytesFor(item) != null;
       return Scaffold(
         appBar: AppBar(title: const Text('Article')),
         body: SafeArea(
           top: false,
-          child: !visible
+          child: !permitted
               ? const Padding(
                   padding: EdgeInsets.all(24),
                   child: WingmanStatus(
                     title: 'Feature unavailable',
                     message:
                         'This feature is not available in the current session.',
+                  ),
+                )
+              : !visible
+              ? Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const WingmanStatus(
+                        title: 'Feature photo unavailable',
+                        message:
+                            'This sponsored feature requires its complete article and associated photo. Wingman retries permitted photos on a limited schedule. You can read the original at the publisher.',
+                      ),
+                      const SizedBox(height: 16),
+                      OutlinedButton.icon(
+                        key: const ValueKey('syndicated-original'),
+                        onPressed: () => _open(article.articleUrl),
+                        icon: const Icon(Icons.open_in_browser),
+                        label: const Text('Open original at publisher'),
+                      ),
+                    ],
                   ),
                 )
               : SelectionArea(

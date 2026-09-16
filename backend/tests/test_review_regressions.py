@@ -85,12 +85,14 @@ class ReviewRegressions(unittest.TestCase):
         self.assertEqual(cache_ttl(response.headers), 400)
         self.assertTrue(response.body)
 
-    def test_preserved_summary_is_held_instead_of_edited_to_fit(self):
+    def test_optional_preserved_summary_is_omitted_instead_of_editing_or_holding_title(self):
         source = dict(SOURCE, preserveFeedText=True)
         complete = 'Research results and explanations. ' * 70
         items, held, _ = parse_feed(story(complete), source, NOW, Allow())
-        self.assertEqual(items, [])
-        self.assertEqual(held['reasons'], {'excerpt-size-limit': 1})
+        self.assertEqual(len(items), 1)
+        self.assertNotIn('excerpt', items[0])
+        self.assertEqual(held['reasons'], {})
+        self.assertEqual(held['optionalFieldReasons'], {'excerpt-omitted-size-limit': 1})
         short = 'Publisher summary with its original words.'
         items, held, _ = parse_feed(story(short), source, NOW, Allow())
         self.assertEqual(held['count'], 0)

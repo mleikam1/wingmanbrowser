@@ -117,8 +117,25 @@ class ArticleImageLoader {
   // refresh boundary. The UI must also evict its decoded MemoryImage on detach.
   final Map<String, _ImageEntry> _transient = {};
   final Map<String, DateTime> _retry = {};
+  final Map<String, int> _attempts = {};
+  final Map<String, Map<String, Object?>> _outcomes = {};
   int _epoch = 0;
   static const maximumBatch = 96, maximumCacheBytes = 8 * 1024 * 1024;
+  DateTime? get nextRetryAt => _retry.values.fold<DateTime?>(
+    null,
+    (a, b) => a == null || b.isBefore(a) ? b : a,
+  );
+
+  /// Rebuild at the exact permitted expiry even when the user stays still.
+  /// The controller separately paces retries; expiry never extends retention.
+  DateTime? get nextExpiryAt => [..._cache.values, ..._transient.values]
+      .map((entry) => entry.expires)
+      .where((expiry) => expiry.isAfter(_clock().toUtc()))
+      .fold<DateTime?>(null, (a, b) => a == null || b.isBefore(a) ? b : a);
+
+  Map<String, Object?> statusFor(LiveContentItem item) => Map.unmodifiable(
+    _outcomes[item.image?.cacheKey] ?? const {'outcome': 'not-requested'},
+  );
 
   Uint8List? bytesFor(LiveContentItem item) {
     final image = eligibility.imageFor(item);
@@ -139,6 +156,8 @@ class ArticleImageLoader {
     if (clear) {
       _cache.clear();
       _retry.clear();
+      _attempts.clear();
+      _outcomes.clear();
     }
   }
 
@@ -182,20 +201,28 @@ class ArticleImageLoader {
       (key, value) => !keys.contains(key) || !now.isBefore(value.expires),
     );
     _retry.removeWhere((key, _) => !keys.contains(key));
+    _attempts.removeWhere((key, _) => !keys.contains(key));
+    _outcomes.removeWhere((key, _) => !keys.contains(key));
     var index = 0;
     final deadline = DateTime.now().add(const Duration(seconds: 30));
     final timer = Timer(const Duration(seconds: 30), () {
-      if (_epoch == epoch) cancel();
+      if (_epoch == epoch) _transport.cancel();
     });
     bool valid() => epoch == _epoch && DateTime.now().isBefore(deadline);
     Future<void> lane() async {
       while (valid() && index < queue.length) {
         final item = queue[index++], image = queue[index - 1].image!;
         if (bytesFor(item) != null ||
-            now.isBefore(_retry[image.cacheKey] ?? now)) {
+            now.isBefore(_retry[image.cacheKey] ?? now) ||
+            (_attempts[image.cacheKey] ?? 0) >= 3) {
           continue;
         }
         try {
+          _attempts[image.cacheKey] = (_attempts[image.cacheKey] ?? 0) + 1;
+          _outcomes[image.cacheKey] = {
+            'outcome': 'loading',
+            'checkedAt': now.toIso8601String(),
+          };
           final response = await _transport
               .fetchImage(
                 image,
@@ -204,7 +231,13 @@ class ArticleImageLoader {
               )
               .timeout(deadline.difference(DateTime.now()));
           if (!valid()) return;
-          if (response.status != 200) throw const RssFailure('image-status');
+          if (response.status != 200) {
+            throw RssFailure(
+              'image-status',
+              status: response.status,
+              headers: response.headers,
+            );
+          }
           final cache = response.headers['cache-control'] ?? '';
           var transient =
               RegExp(
@@ -264,15 +297,42 @@ class ArticleImageLoader {
             expires,
           );
           _retry.remove(image.cacheKey);
+          _attempts.remove(image.cacheKey);
+          _outcomes[image.cacheKey] = {
+            'outcome': 'loaded',
+            'checkedAt': now.toIso8601String(),
+            'httpStatus': response.status,
+            'transient': transient,
+          };
           onChanged();
         } catch (error) {
           if (!valid()) return;
-          if (error is RssFailure) {
-            final delay = rssRefreshDelay(error.headers, now, 1800);
-            _retry[image.cacheKey] = now.add(
-              delay ?? const Duration(days: 366),
-            );
+          var exhausted = (_attempts[image.cacheKey] ?? 0) >= 3;
+          final delay = error is RssFailure
+              ? rssRefreshDelay(error.headers, now, 1800)
+              : const Duration(minutes: 30);
+          if (delay == null) {
+            _attempts[image.cacheKey] = 3;
+            exhausted = true;
           }
+          if (!exhausted && delay != null) {
+            _retry[image.cacheKey] = now.add(delay);
+          } else {
+            _retry.remove(image.cacheKey);
+          }
+          _outcomes[image.cacheKey] = {
+            'outcome': delay == null
+                ? 'publisher-hold'
+                : exhausted
+                ? 'retry-exhausted'
+                : 'failed',
+            'checkedAt': now.toIso8601String(),
+            'reason': error is RssFailure
+                ? error.code
+                : 'image-timeout-or-decode',
+            if (error is RssFailure) 'httpStatus': error.status,
+            'nextDueAt': _retry[image.cacheKey]?.toIso8601String(),
+          };
         }
       }
     }
@@ -281,6 +341,25 @@ class ArticleImageLoader {
       await Future.wait([lane(), lane()]);
     } finally {
       timer.cancel();
+      // A batch deadline and queue budget are availability outcomes too. Do
+      // not strand a card in 'loading' or retry an exhausted image indefinitely.
+      if (_epoch == epoch) {
+        for (final item in queue) {
+          final key = item.image!.cacheKey;
+          if (bytesFor(item) != null || _retry.containsKey(key)) continue;
+          final outcome = _outcomes[key]?['outcome'];
+          if (outcome != null && outcome != 'loading') continue;
+          final exhausted = (_attempts[key] ?? 0) >= 3;
+          if (!exhausted) {
+            _retry[key] = _clock().toUtc().add(const Duration(minutes: 30));
+          }
+          _outcomes[key] = {
+            'outcome': exhausted ? 'retry-exhausted' : 'batch-deferred',
+            'checkedAt': _clock().toUtc().toIso8601String(),
+            'nextDueAt': _retry[key]?.toIso8601String(),
+          };
+        }
+      }
     }
   }
 }

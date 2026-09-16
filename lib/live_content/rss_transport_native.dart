@@ -112,6 +112,7 @@ class NativeRssFeedTransport
     accept:
         'application/rss+xml, application/atom+xml, application/xml, text/xml',
     maximumBytes: rssMaximumWireBytes,
+    maximumDecodedBytes: rssMaximumXmlBytes,
   );
 
   @override
@@ -140,6 +141,7 @@ class NativeRssFeedTransport
     required Set<String> acceptedTypes,
     required String accept,
     required int maximumBytes,
+    int? maximumDecodedBytes,
   }) async {
     final generation = _epoch;
     final deadline = DateTime.now().add(rssDeadline);
@@ -164,7 +166,16 @@ class NativeRssFeedTransport
         if (!DateTime.now().isBefore(deadline)) {
           throw const RssFailure('timeout');
         }
-        final addresses = await _resolve(uri.host);
+        List<InternetAddress> addresses;
+        try {
+          addresses = await _resolve(uri.host);
+        } on SocketException {
+          valid();
+          throw const RssFailure('dns-failed');
+        } on TimeoutException {
+          valid();
+          throw const RssFailure('dns-timeout');
+        }
         valid();
         if (addresses.isEmpty || addresses.any((a) => !isPublicRssAddress(a))) {
           throw const RssFailure('non-public-dns');
@@ -239,7 +250,7 @@ class NativeRssFeedTransport
           request.followRedirects = false;
           request.persistentConnection = false;
           request.headers.set('Accept', accept);
-          request.headers.set('Accept-Encoding', 'identity');
+          request.headers.set('Accept-Encoding', 'gzip, deflate, identity');
           request.headers.set(
             'User-Agent',
             'Wingman/0.13 (public editorial feed reader)',
@@ -292,7 +303,11 @@ class NativeRssFeedTransport
             return RssFetchResponse(304, Uint8List(0), headers);
           }
           if (response.statusCode != 200) {
-            throw RssFailure('http-${response.statusCode}', headers: headers);
+            throw RssFailure(
+              'http-${response.statusCode}',
+              headers: headers,
+              status: response.statusCode,
+            );
           }
           final type = (headers['content-type'] ?? '')
               .split(';')
@@ -302,27 +317,18 @@ class NativeRssFeedTransport
           if (!acceptedTypes.contains(type)) {
             throw const RssFailure('invalid-content-type');
           }
-          // Identity is requested deliberately. Encoded bodies are rejected,
-          // so an untrusted inflater cannot consume memory before a size check.
-          if (!{
-            '',
-            'identity',
-          }.contains((headers['content-encoding'] ?? '').toLowerCase())) {
-            throw const RssFailure('unsupported-encoding');
-          }
           if (response.contentLength > maximumBytes) {
             throw const RssFailure('body-too-large');
           }
-          final bytes = BytesBuilder(copy: false);
-          await for (final chunk in response) {
-            valid();
-            if (bytes.length + chunk.length > maximumBytes) {
-              throw const RssFailure('body-too-large');
-            }
-            bytes.add(chunk);
-          }
+          final bytes = await readBoundedRssBody(
+            response,
+            encoding: headers['content-encoding'] ?? '',
+            maximumWireBytes: maximumBytes,
+            maximumDecodedBytes: maximumDecodedBytes ?? maximumBytes,
+            validateDeadline: valid,
+          );
           valid();
-          return RssFetchResponse(200, bytes.takeBytes(), headers);
+          return RssFetchResponse(200, bytes, headers);
         } finally {
           client.close(force: true);
           _clients.remove(client);
@@ -332,7 +338,10 @@ class NativeRssFeedTransport
       throw const RssFailure('redirect-limit');
     } on RssFailure {
       rethrow;
-    } catch (_) {
+    } catch (error) {
+      valid();
+      if (error is TimeoutException) throw const RssFailure('timeout');
+      if (error is HandshakeException) throw const RssFailure('tls-failed');
       throw const RssFailure('connection-failed');
     } finally {
       timer.cancel();
@@ -350,5 +359,57 @@ class NativeRssFeedTransport
       client.close(force: true);
     }
     _clients.clear();
+  }
+}
+
+/// Standard HTTP compression is decoded in a streaming pipeline with separate
+/// wire/output limits. Splitting compressed input bounds work before every
+/// deadline/cancellation check; no full compressed or expanded copy is kept.
+Future<Uint8List> readBoundedRssBody(
+  Stream<List<int>> input, {
+  required String encoding,
+  required int maximumWireBytes,
+  required int maximumDecodedBytes,
+  required void Function() validateDeadline,
+}) async {
+  final normalized = encoding.trim().toLowerCase();
+  if (!{'', 'identity', 'gzip', 'deflate'}.contains(normalized)) {
+    throw const RssFailure('unsupported-encoding');
+  }
+  var wireBytes = 0;
+  Stream<List<int>> boundedWire() async* {
+    await for (final chunk in input) {
+      validateDeadline();
+      wireBytes += chunk.length;
+      if (wireBytes > maximumWireBytes) {
+        throw const RssFailure('body-too-large');
+      }
+      for (var start = 0; start < chunk.length; start += 1024) {
+        validateDeadline();
+        final end = start + 1024 < chunk.length ? start + 1024 : chunk.length;
+        yield chunk.sublist(start, end);
+      }
+    }
+  }
+
+  Stream<List<int>> decoded = boundedWire();
+  if (normalized == 'gzip' || normalized == 'deflate') {
+    decoded = decoded.transform(ZLibDecoder(gzip: normalized == 'gzip'));
+  }
+  final output = BytesBuilder(copy: false);
+  try {
+    await for (final chunk in decoded) {
+      validateDeadline();
+      if (output.length + chunk.length > maximumDecodedBytes) {
+        throw const RssFailure('decoded-body-too-large');
+      }
+      output.add(chunk);
+    }
+    validateDeadline();
+    return output.takeBytes();
+  } on RssFailure {
+    rethrow;
+  } on FormatException {
+    throw const RssFailure('invalid-compression');
   }
 }

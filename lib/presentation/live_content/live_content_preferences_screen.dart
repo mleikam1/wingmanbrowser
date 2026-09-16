@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../live_content/live_content.dart';
 import '../components/wingman_components.dart';
@@ -48,40 +49,52 @@ class _LiveContentPreferencesScreenState
   void _diagnostics() {
     if (!widget.canContinue()) return;
     final controller = widget.controller;
-    final preview = const JsonEncoder.withIndent('  ').convert({
-      'feedConfigured': controller.configured,
-      'initialized': controller.initialized,
-      'refreshing': controller.refreshing,
-      'cachedOrStale': controller.stale,
-      'snapshotGeneratedAt': controller.fetchedAt?.toUtc().toIso8601String(),
-      'availableSources': controller.sources.length,
-      'visibleItems': controller.items.length,
-      'savedItems': controller.savedItems.length,
-      'refreshError': controller.error != null,
-      'storageError': controller.storageError != null,
-    });
     showDialog<void>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Feed diagnostics preview'),
-        scrollable: true,
-        content: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'This preview stays on this device. It contains counts and feed status, without article addresses, interests or browsing history.',
+      builder: (context) => ListenableBuilder(
+        listenable: controller,
+        builder: (context, _) {
+          final active =
+              widget.canContinue() &&
+              controller.context == LiveContentContext.owner &&
+              controller.preferences.enabled;
+          final preview = const JsonEncoder.withIndent('  ').convert(
+            active
+                ? controller.diagnostics()
+                : {'schemaVersion': 1, 'status': 'inactive'},
+          );
+          return AlertDialog(
+            title: const Text('Feed diagnostics preview'),
+            scrollable: true,
+            content: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Common publisher health and category counts before your personal filters. This stays on your device unless you copy and share it. It includes no browsing history, interests, reading-list activity or reader identity.',
+                ),
+                const SizedBox(height: 16),
+                SelectableText(preview),
+              ],
             ),
-            const SizedBox(height: 16),
-            SelectableText(preview),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Close'),
-          ),
-        ],
+            actions: [
+              TextButton(
+                onPressed: () async {
+                  if (widget.canContinue() &&
+                      controller.context == LiveContentContext.owner &&
+                      controller.preferences.enabled) {
+                    await Clipboard.setData(ClipboardData(text: preview));
+                  }
+                },
+                child: const Text('Copy report'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Close'),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

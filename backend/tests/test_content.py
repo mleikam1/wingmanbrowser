@@ -357,12 +357,12 @@ class PipelineTests(unittest.TestCase):
         (_, report), _ = self.run_ingest([response(status=304, headers={'etag': '"v1"'})], NOW + timedelta(hours=1))
         self.assertEqual(report[0]['nextRefreshAt'], iso(NOW + timedelta(hours=2)))
 
-    def test_no_store_revokes_prior_shared_cached_text(self):
+    def test_no_store_evicts_prior_shared_cached_text_without_revocation(self):
         self.run_ingest([response()])
         (snapshot, report), _ = self.run_ingest([response(headers={'cache-control': 'no-store'})], NOW + timedelta(minutes=30))
         self.assertFalse(snapshot['items'])
         self.assertEqual(report[0]['action'], 'source-cache-prohibited')
-        self.assertEqual(snapshot['revokedItemIds'], [item_id('https://public.example/news/a')])
+        self.assertEqual(snapshot['revokedItemIds'], [])
 
     def test_dedup_url_and_keep_distinct_same_title(self):
         body = rss('<item><title>Same</title><link>https://public.example/news/a?utm_source=x</link></item><item><title>Same</title><link>https://public.example/news/a</link></item><item><title>Same</title><link>https://public.example/news/b</link></item>')
@@ -494,6 +494,18 @@ class ServiceTests(unittest.TestCase):
     def test_request_headers_bounded_before_full_parse(self):
         status, _, _ = self.request('/v1/snapshot.json', headers={'X-Large': 'x' * 33000})
         self.assertEqual(status, 431)
+
+    def test_liveness_is_separate_from_snapshot_readiness(self):
+        status, headers, body = self.request('/healthz')
+        self.assertEqual(status, 200)
+        data = json.loads(body)
+        self.assertEqual(data['service'], 'read-only')
+        self.assertIn(data['snapshot'], ('fresh', 'cached'))
+        self.assertEqual(headers['Cache-Control'], 'no-store')
+        status, _, body = self.request('/readyz')
+        from datetime import timezone
+        expiry = date_value(json.loads(body)['snapshotExpiresAt'])
+        self.assertEqual(status, 200 if expiry > datetime.now(timezone.utc) else 503)
 
 
 class ConfigurationTests(unittest.TestCase):

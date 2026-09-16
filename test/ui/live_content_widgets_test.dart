@@ -234,7 +234,11 @@ void main() {
       expect(find.text('Fixture article 2'), findsNothing);
       await _tap(tester, _key('live-topic-fashion'));
       expect(controller.preferences.selectedTopics, {'fashion'});
-      expect(find.text('No updates match your choices'), findsOneWidget);
+      expect(
+        find.text('No publishers connected for this category'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('connection'), findsNothing);
       await _tap(tester, _key('live-topic-headlines'));
       expect(controller.preferences.selectedTopics, isEmpty);
       await _tap(tester, _key('live-feed-load-more'));
@@ -429,7 +433,19 @@ void main() {
           .widget<SelectableText>(find.byType(SelectableText))
           .data!;
       expect(preview, contains('snapshotGeneratedAt'));
-      expect(preview, isNot(contains('fixture.example')));
+      // Publisher identity is operational provenance, not browsing history.
+      expect(preview, contains('Fixture Science Publisher'));
+      expect(preview, isNot(contains('https://fixture.example/articles/')));
+      for (final privateField in [
+        'selectedTopics',
+        'hiddenSourceIds',
+        'fewerTopics',
+        'savedAt',
+        'region-a',
+        'region-b',
+      ]) {
+        expect(preview, isNot(contains(privateField)));
+      }
       expect(preview, isNot(contains('Fixture article')));
       expect(find.text('Upload'), findsNothing);
       expect(find.text('Send'), findsNothing);

@@ -19,6 +19,7 @@ TOMBSTONE = "{http://purl.org/atompub/tombstones/1.0}"
 MAX_ENTRIES = 500
 MAX_TITLE = 500
 MAX_EXCERPT = 1600
+HIDDEN_TAGS = {"script", "style", "noscript", "iframe", "svg", "object", "embed", "template", "nav", "footer"}
 
 
 def iso(value):
@@ -50,13 +51,13 @@ class PlainText(HTMLParser):
         self.hidden = 0
 
     def handle_starttag(self, tag, attrs):
-        if tag in ("script", "style", "noscript", "iframe", "svg", "object", "embed", "template"):
+        if tag in HIDDEN_TAGS:
             self.hidden += 1
         if tag in ("p", "br", "div", "li") and not self.hidden:
             self.parts.append(" ")
 
     def handle_endtag(self, tag):
-        if tag in ("script", "style", "noscript", "iframe", "svg", "object", "embed", "template") and self.hidden:
+        if tag in HIDDEN_TAGS and self.hidden:
             self.hidden -= 1
         if tag in ("p", "div", "li") and not self.hidden:
             self.parts.append(" ")
@@ -281,7 +282,9 @@ def parse_feed(data, source, now, destination_policy):
         raise ValueError("Not an RSS 2 or Atom feed")
     if len(entries) > MAX_ENTRIES or sum(1 for _ in root.iter()) > 20000:
         raise ValueError("XML entry/node limit")
-    items, held, deleted = [], {"count": 0, "reasons": {}, "examples": []}, []
+    items, held, deleted = [], {"count": 0, "reasons": {}, "examples": [],
+        "parsedEntries": len(entries), "textEligible": 0, "topicMatched": 0,
+        "imagePermitted": 0, "optionalFieldReasons": {}}, []
     for tombstone in root.findall(TOMBSTONE + "deleted-entry"):
         if tombstone.get("ref"):
             deleted.append(tombstone.get("ref")[:4096])
@@ -307,14 +310,15 @@ def parse_feed(data, source, now, destination_policy):
                            entry.findtext("{http://purl.org/dc/elements/1.1/}creator") or entry.findtext("author")) or ""
         rights_raw = entry.findtext(ATOM + "rights" if atom else "{http://purl.org/dc/elements/1.1/}rights") or ""
         guid = entry.findtext(prefix + ("id" if atom else "guid")) or url
-        reason = ("metadata-size-limit" if any(len(value) > 100000 for value in
+        reason = ("source-text-not-permitted" if not source.get('enabled') or not source['rights'].get('titles')
+                  else "missing-title" if not title
+                  else "missing-link" if not any(links)
+                  else "metadata-size-limit" if any(len(value) > 100000 for value in
                                               (title_raw, excerpt_raw, attribution_raw, rights_raw))
                   else "unreviewed-destination" if not url else "destination-policy" if not destination_policy.allows(url)
                   else "missing-author" if source.get('requiresAttribution') and not plain(attribution_raw, 200)
                   else "promotion-or-rights-ambiguity" if not syndicated and not text_eligible(full_title, review_text + " " + plain(rights_raw, 100000), categories)
                   else "headline-size-limit" if len(title) > MAX_TITLE
-                  else "excerpt-size-limit" if not syndicated and source.get('preserveFeedText') and len(excerpt_full) > MAX_EXCERPT
-                  else "outside-topic-scope" if not matches_topic_scope(full_title, review_text, source)
                   else None)
         article = None
         if not reason and syndicated:
@@ -326,26 +330,37 @@ def parse_feed(data, source, now, destination_policy):
                 attribution_raw = attribution_raw or source['name']
             except (ValueError, TypeError):
                 reason = 'syndication-review-failed'
+        published = date_value(entry.findtext(prefix + ("published" if atom else "pubDate")), None if syndicated else now)
+        if not reason and published and (published < now - timedelta(days=30) or (syndicated and published > now)):
+            reason = 'outside-publication-window'
+        if not reason:
+            held['textEligible'] += 1
+            if not matches_topic_scope(full_title, review_text, source):
+                reason = 'outside-topic-scope'
         if reason:
             held["count"] += 1
             held["reasons"][reason] = held["reasons"].get(reason, 0) + 1
             if len(held["examples"]) < 10:
-                held["examples"].append({"title": title, "reason": reason,
+                held["examples"].append({"title": title[:MAX_TITLE], "reason": reason,
+                                         "titleTruncated": len(title) > MAX_TITLE,
                                          "url": (links[0] or "")[:4096] if links else ""})
             # A topic mismatch is local to this feed. It must not withdraw the
             # same article from a different approved section (e.g. Sports).
             # Rights/safety failures still revoke previously cached records.
-            if reason != "outside-topic-scope":
+            if reason in {"source-text-not-permitted", "destination-policy", "missing-author",
+                           "promotion-or-rights-ambiguity", "syndication-review-failed"}:
                 if guid:
                     deleted.append(guid[:4096])
                 if url:
                     deleted.append(url)
             continue
-        published = date_value(entry.findtext(prefix + ("published" if atom else "pubDate")), None if syndicated else now)
-        if published and (published < now - timedelta(days=30) or (syndicated and published > now)):
-            held['count'] += 1
-            held['reasons']['outside-publication-window'] = held['reasons'].get('outside-publication-window', 0) + 1
-            continue
+        held['topicMatched'] += 1
+        # Optional summary omission preserves the headline and title/link grant.
+        # Never silently shorten a summary whose source forbids transformations.
+        if not syndicated and source.get('preserveFeedText') and len(excerpt_full) > MAX_EXCERPT:
+            excerpt = ''
+            reason_key = 'excerpt-omitted-size-limit'
+            held['optionalFieldReasons'][reason_key] = held['optionalFieldReasons'].get(reason_key, 0) + 1
         # Atom updated is an edit timestamp, not proof of first publication.
         original = next((html.unescape(link.strip()) for link in links if link and canonical_url(link, source) == url), url)
         item = {"id": item_id(url), "sourceId": source["id"], "title": title,
@@ -369,5 +384,7 @@ def parse_feed(data, source, now, destination_policy):
         attribution = plain("; ".join(part for part in (attribution_raw, rights_raw) if part), 200)
         if attribution:
             item["attribution"] = attribution
+        if item.get('image'):
+            held['imagePermitted'] += 1
         items.append(item)
     return items, held, deleted

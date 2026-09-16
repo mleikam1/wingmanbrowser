@@ -101,7 +101,7 @@ class LiveContentEligibility {
             (item.attribution?.trim().isEmpty ?? true)) ||
         item.language != approved.source.language ||
         item.topics.isEmpty ||
-        !item.topics.every(approved.source.topics.contains) ||
+        !item.topics.any(approved.source.topics.contains) ||
         item.eligibilityState != 'eligible' ||
         item.eligibilityBasis != 'curated-source-scope' ||
         item.eligibilityScope != approved.eligibilityScope ||
@@ -129,11 +129,8 @@ class LiveContentEligibility {
         return false;
       }
     }
-    if (item.excerpt != null &&
-        item.excerpt!.isNotEmpty &&
-        (!approved.source.rights.excerpts || !item.rights.excerpts)) {
-      return false;
-    }
+    // Optional excerpt permission controls that field, not the independently
+    // permitted title/link. All supplied story text still receives policy checks.
     if (item.rights.licenseUrl != null &&
         item.rights.licenseUrl != approved.source.rights.licenseUrl) {
       return false;
@@ -151,6 +148,30 @@ class LiveContentEligibility {
     try {
       return canOpenDestination(item.canonicalUrl) &&
           canOpenDestination(item.openingUrl);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Only explicit rights/eligibility withdrawal or actual story policy failure
+  /// creates a durable tombstone. Bad optional metadata, dates or category aliases
+  /// are held for this response and may recover at the next permitted refresh.
+  bool explicitlyWithdraws(LiveContentItem item) {
+    if (!item.rights.titles || item.eligibilityState != 'eligible') return true;
+    final approved = registry.sources[item.sourceId];
+    if (approved == null) return false;
+    if (!approved.isSponsoredSyndication &&
+        !acceptsFeedText(item.title, item.excerpt ?? '')) {
+      return true;
+    }
+    if (item.syndicatedArticle != null &&
+        (!acceptsSyndicatedPromotion(item.title) ||
+            !acceptsSyndicatedPromotion(item.syndicatedArticle!.plainText))) {
+      return true;
+    }
+    try {
+      return !canOpenDestination(item.canonicalUrl) ||
+          !canOpenDestination(item.openingUrl);
     } catch (_) {
       return false;
     }

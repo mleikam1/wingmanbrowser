@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -130,6 +131,36 @@ void main() {
     );
     expect(mock.clients.every((c) => c.closed), isTrue);
   }
+
+  test(
+    'native transport decodes gzip XML with separate wire and output bounds',
+    () async {
+      final original = utf8.encode(fixtures.rss());
+      final compressed = gzip.encode(original);
+      await fixture(
+        [
+          _Response(
+            200,
+            headers: {
+              'content-type': ['application/rss+xml; charset=UTF-8'],
+              'content-encoding': ['gzip'],
+            },
+            chunks: [compressed],
+            contentLength: compressed.length,
+          ),
+        ],
+        (transport, mock) async {
+          final response = await transport.fetch(fixtures.source(), {});
+          expect(response.body, original);
+          expect(mock.clients.single.autoUncompress, isFalse);
+          expect(
+            mock.clients.single.request!.headers.values['accept-encoding'],
+            ['gzip, deflate, identity'],
+          );
+        },
+      );
+    },
+  );
 
   test('redirects enforce exact approved host and clear validators', () async {
     await fixture(
@@ -381,7 +412,7 @@ void main() {
     },
   );
   test(
-    'headers, declared and streamed bytes are bounded; compressed and HTML responses rejected',
+    'headers and bytes bounded; invalid compression and HTML rejected',
     () async {
       for (final response in [
         _Response(

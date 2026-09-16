@@ -17,7 +17,7 @@ def main():
         candidates_main(sys.argv[1:])
         return
     parser = argparse.ArgumentParser(description="Wingman shared content ingestion / read-only service")
-    parser.add_argument("command", choices=("ingest", "serve", "registry"))
+    parser.add_argument("command", choices=("ingest", "serve", "registry", "diagnostics"))
     parser.add_argument("--config", default=os.environ.get("SOURCE_CONFIG", "backend/sources.json"))
     parser.add_argument("--store", default=os.environ.get("CONTENT_STORE", "work/live-content/store"))
     parser.add_argument("--baseline", default=os.environ.get("CONSUMER_BASELINE", "assets/policy/consumer_protection.json"))
@@ -25,14 +25,24 @@ def main():
     parser.add_argument("--project", default=os.environ.get("CONTENT_PROJECT"))
     parser.add_argument("--host", default=os.environ.get("HOST", "127.0.0.1"))
     parser.add_argument("--port", type=int, default=int(os.environ.get("PORT", "8891")))
-    parser.add_argument("--output", default="assets/live_content/sources.json")
+    parser.add_argument("--output")
     args = parser.parse_args()
     if args.command == "registry":
-        target = Path(args.output)
+        target = Path(args.output or "assets/live_content/sources.json")
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(json.dumps(registry(load_config(args.config)), indent=2) + "\n")
         return
     store = GCSStore(args.bucket, project=args.project) if args.bucket else LocalStore(args.store)
+    if args.command == 'diagnostics':
+        from .diagnostics import export_diagnostics
+        data = json.dumps(export_diagnostics(load_config(args.config), store.read()), indent=2) + '\n'
+        if args.output:
+            target = Path(args.output)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(data)
+        else:
+            print(data, end='')
+        return
     if args.command == "serve":
         serve(store, args.host, args.port)
         return

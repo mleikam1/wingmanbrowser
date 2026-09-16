@@ -76,15 +76,7 @@ String? liveContentPermittedExcerpt(
   LiveContentController controller,
   LiveContentItem item,
 ) {
-  final approved = controller.eligibility.registry.sources[item.sourceId];
-  final excerpt = item.excerpt;
-  return controller.canOpen(item) &&
-          approved?.source.rights.excerpts == true &&
-          item.rights.excerpts &&
-          excerpt != null &&
-          excerpt.trim().isNotEmpty
-      ? excerpt
-      : null;
+  return controller.excerptFor(item);
 }
 
 /// A finite section. Home uses a three-item preview; the full feed expands only
@@ -233,11 +225,11 @@ class _LiveContentSectionState extends State<LiveContentSection> {
               if (!widget.showActions) _refresh(controller),
             ],
           ),
-        if (controller.error != null) ...[
+        if (controller.categoryHealth.showNotice && items.isNotEmpty) ...[
           const SizedBox(height: 12),
           WingmanStatus(
-            title: 'Refresh unavailable',
-            message: controller.error!,
+            title: controller.categoryHealth.title,
+            message: controller.categoryHealth.message,
             tone: WingmanTone.caution,
           ),
         ],
@@ -269,20 +261,16 @@ class _LiveContentSectionState extends State<LiveContentSection> {
             ),
           ],
           const SizedBox(height: 12),
-          if (items.isEmpty && controller.imagesLoading)
+          if (items.isEmpty && !controller.initialized)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 24),
-              child: Text('Loading story images…'),
+              child: Text('Loading publisher updates…'),
             )
           else if (items.isEmpty && controller.initialized)
             WingmanEmptyState(
               icon: Icons.article_outlined,
-              title: controller.configured
-                  ? 'No updates match your choices'
-                  : 'Live updates are not configured',
-              message: controller.configured
-                  ? 'No stories with available images match this selection right now. Check your connection, try another topic or review your sources. Saved articles remain in your reading list.'
-                  : 'A live feed service has not been connected. Search, shortcuts and your saved articles are still available.',
+              title: controller.categoryHealth.title,
+              message: controller.categoryHealth.message,
               action: TextButton(
                 onPressed: _action(widget.onPreferences),
                 child: const Text('Review topics & sources'),
@@ -328,10 +316,16 @@ class _LiveContentSectionState extends State<LiveContentSection> {
 
   String _freshness(LiveContentController controller) {
     if (!controller.initialized) return 'Loading saved updates…';
-    if (controller.fetchedAt == null) {
-      return 'Updates haven’t loaded yet.';
-    }
-    return '${controller.stale || !controller.configured ? 'Saved updates' : 'Updated'} ${liveContentShortDate(controller.fetchedAt!)}';
+    final success = controller.lastSuccessAt,
+        attempt = controller.lastAttemptAt;
+    return [
+      success == null
+          ? 'No successful content update yet.'
+          : 'Content checked ${liveContentShortDate(success)}',
+      if (attempt != null && (success == null || attempt.isAfter(success)))
+        'Last attempt ${liveContentShortDate(attempt)}',
+      'Story dates appear on each card.',
+    ].join(' · ');
   }
 
   Widget _card(
@@ -460,7 +454,7 @@ class _LiveContentSectionState extends State<LiveContentSection> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (remoteImage != null)
+                if (remoteImage != null && remoteBytes != null)
                   LivePublisherImageHeader(
                     image: remoteImage,
                     bytes: remoteBytes,

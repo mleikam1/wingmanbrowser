@@ -56,6 +56,11 @@ class _Controller extends LiveContentController {
     setContext(LiveContentContext.owner);
   }
   bool readable = true, showImage = false;
+  void photoAvailable(bool available) {
+    showImage = available;
+    notifyListeners();
+  }
+
   @override
   bool canOpen(LiveContentItem item) => readable;
   void revoke() {
@@ -101,7 +106,7 @@ void main() {
   testWidgets(
     'complete reader labels source and routes every link through callback',
     (tester) async {
-      final controller = _Controller();
+      final controller = _Controller()..showImage = true;
       addTearDown(controller.dispose);
       final opened = <Uri>[];
       await tester.pumpWidget(_app(controller, opened, () => true));
@@ -114,6 +119,10 @@ void main() {
         find.textContaining('Final disclosure retained.', findRichText: true),
         findsWidgets,
       );
+      await tester.ensureVisible(
+        find.text('Source link', findRichText: true).last,
+      );
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Source link', findRichText: true).last);
       expect(opened.single, Uri.parse('https://reference.example/details'));
       for (final key in ['syndicated-original', 'syndicated-license']) {
@@ -179,4 +188,57 @@ void main() {
     );
     expect(find.text('Feature unavailable'), findsOneWidget);
   });
+
+  testWidgets(
+    'saved complete article without its photo offers only protected original link',
+    (tester) async {
+      final controller = _Controller();
+      addTearDown(controller.dispose);
+      final opened = <Uri>[];
+      await tester.pumpWidget(_app(controller, opened, () => true));
+      expect(find.text('Feature photo unavailable'), findsOneWidget);
+      expect(
+        find.textContaining('Final disclosure retained.', findRichText: true),
+        findsNothing,
+      );
+      expect(find.text('Complete fixture feature'), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('syndicated-original')));
+      expect(opened, [_uri]);
+      controller.photoAvailable(true);
+      await tester.pumpAndSettle();
+      expect(find.text('Feature photo unavailable'), findsNothing);
+      expect(
+        find.byKey(const ValueKey('syndicated-approved-image')),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('Final disclosure retained.', findRichText: true),
+        findsWidgets,
+      );
+    },
+  );
+
+  testWidgets(
+    'expired or cancelled photo removes already open syndicated body',
+    (tester) async {
+      final controller = _Controller()..showImage = true;
+      addTearDown(controller.dispose);
+      await tester.pumpWidget(_app(controller, [], () => true));
+      expect(
+        find.byKey(const ValueKey('syndicated-approved-image')),
+        findsOneWidget,
+      );
+      controller.photoAvailable(false);
+      await tester.pump();
+      expect(find.text('Feature photo unavailable'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('syndicated-approved-image')),
+        findsNothing,
+      );
+      expect(
+        find.textContaining('Final disclosure retained.', findRichText: true),
+        findsNothing,
+      );
+    },
+  );
 }

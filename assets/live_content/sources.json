@@ -1,6 +1,57 @@
 {
   "schemaVersion": 1,
-  "requireStoryImages": true,
+  "requireStoryImages": false,
+  "reviewStatusByTopic": {
+    "sports": {
+      "reviewedAt": "2026-09-16T01:14:34Z",
+      "reviewedPublishers": 2,
+      "permissionRequired": 2,
+      "unreviewed": 0,
+      "reasons": [
+        "FanSided requires prior written permission for commercial reuse.",
+        "Yahoo Sports requires commercial aggregation permission; public RSS does not clear app redistribution or photographs."
+      ],
+      "evidenceUrls": [
+        "https://fansided.com/terms",
+        "https://legal.yahoo.com/us/en/yahoo/terms/otos/index.html"
+      ]
+    },
+    "entertainment": {
+      "reviewedAt": "2026-09-16T01:14:34Z",
+      "reviewedPublishers": 2,
+      "permissionRequired": 2,
+      "unreviewed": 0,
+      "reasons": [
+        "Deadline and Variety share PMC terms requiring permission for commercial reuse.",
+        "Their RSS linking provisions do not explicitly override the commercial restriction or clear third-party photographs."
+      ],
+      "evidenceUrls": [
+        "https://www.pmc.com/terms-of-use"
+      ]
+    },
+    "headlines": {
+      "reviewedAt": "2026-09-16T01:14:34Z",
+      "reviewedPublishers": 1,
+      "permissionRequired": 1,
+      "unreviewed": 0,
+      "reasons": [
+        "The Conversation permits attributed extracts, but online republication requires a tracking counter and commercial non-journalism use needs clarification."
+      ],
+      "evidenceUrls": [
+        "https://theconversation.com/us/republishing-guidelines"
+      ]
+    },
+    "travel": {
+      "reviewedAt": "2026-09-16T01:14:34Z",
+      "reviewedPublishers": 0,
+      "permissionRequired": 0,
+      "unreviewed": 0,
+      "reasons": [
+        "No editorial publisher is currently approved for this category. Sponsored NewsUSA features are separate."
+      ],
+      "evidenceUrls": []
+    }
+  },
   "sources": [
     {
       "id": "newsusa-features",
@@ -33,7 +84,7 @@
         "licenseUrl": "https://newsflow.newsusa.com/terms-of-syndication"
       },
       "enabled": true,
-      "verifiedAt": "2026-09-14T00:37:00Z",
+      "verifiedAt": "2026-09-16T01:14:34Z",
       "feedUrl": "https://feeds.newsusa.com/articles/RSS-firehose_2.aspx",
       "feedRedirectHosts": [
         "feeds.newsusa.com"
@@ -84,7 +135,7 @@
         "licenseUrl": "https://techxplore.com/feeds/"
       },
       "enabled": true,
-      "verifiedAt": "2026-09-14T00:37:00Z",
+      "verifiedAt": "2026-09-16T01:14:34Z",
       "feedUrl": "https://techxplore.com/rss-feed/",
       "feedRedirectHosts": [
         "techxplore.com"
@@ -106,7 +157,8 @@
         "maximumHeight": 90
       },
       "preserveFeedText": true,
-      "displayMode": "publisher-link"
+      "displayMode": "publisher-link",
+      "publisherId": "science-x"
     },
     {
       "id": "medical-xpress",
@@ -131,7 +183,7 @@
         "licenseUrl": "https://medicalxpress.com/feeds/"
       },
       "enabled": true,
-      "verifiedAt": "2026-09-14T00:37:00Z",
+      "verifiedAt": "2026-09-16T01:14:34Z",
       "feedUrl": "https://medicalxpress.com/rss-feed/",
       "feedRedirectHosts": [
         "medicalxpress.com"
@@ -153,7 +205,8 @@
         "maximumHeight": 90
       },
       "preserveFeedText": true,
-      "displayMode": "publisher-link"
+      "displayMode": "publisher-link",
+      "publisherId": "science-x"
     },
     {
       "id": "phys-org",
@@ -179,7 +232,7 @@
         "licenseUrl": "https://phys.org/feeds/"
       },
       "enabled": true,
-      "verifiedAt": "2026-09-14T00:37:00Z",
+      "verifiedAt": "2026-09-16T01:14:34Z",
       "feedUrl": "https://phys.org/rss-feed/",
       "feedRedirectHosts": [
         "phys.org"
@@ -201,7 +254,8 @@
         "maximumHeight": 90
       },
       "preserveFeedText": true,
-      "displayMode": "publisher-link"
+      "displayMode": "publisher-link",
+      "publisherId": "science-x"
     },
     {
       "id": "nasa-photojournal",
@@ -283,6 +337,7 @@
       },
       "preserveFeedText": true,
       "displayMode": "publisher-link",
+      "publisherId": "nasa",
       "feedCompatibility": "nasa-photojournal-self-link-v1"
     },
     {
@@ -317,7 +372,8 @@
       ],
       "minRefreshSeconds": 1800,
       "retentionSeconds": 604800,
-      "displayMode": "publisher-link"
+      "displayMode": "publisher-link",
+      "publisherId": "nasa"
     },
     {
       "id": "noaa-news",
@@ -416,7 +472,7 @@
         "licenseUrl": "https://creativecommons.org/licenses/by/3.0/"
       },
       "enabled": true,
-      "verifiedAt": "2026-09-13T00:00:00Z",
+      "verifiedAt": "2026-09-16T01:14:34Z",
       "feedUrl": "https://globalvoices.org/-/topics/sport/feed/",
       "feedRedirectHosts": [
         "globalvoices.org"
@@ -425,7 +481,8 @@
       "retentionSeconds": 604800,
       "articleUrlFormat": "dated-story",
       "requiresAttribution": true,
-      "displayMode": "publisher-link"
+      "displayMode": "publisher-link",
+      "publisherId": "global-voices"
     },
     {
       "id": "globalvoices-fashion",
@@ -450,7 +507,7 @@
         "licenseUrl": "https://creativecommons.org/licenses/by/3.0/"
       },
       "enabled": true,
-      "verifiedAt": "2026-09-13T00:00:00Z",
+      "verifiedAt": "2026-09-16T01:14:34Z",
       "feedUrl": "https://globalvoices.org/feed/?s=fashion",
       "feedRedirectHosts": [
         "globalvoices.org"
@@ -472,7 +529,8 @@
         "dressmaking"
       ],
       "requiresAttribution": true,
-      "displayMode": "publisher-link"
+      "displayMode": "publisher-link",
+      "publisherId": "global-voices"
     },
     {
       "id": "globalvoices-food",
@@ -497,7 +555,7 @@
         "licenseUrl": "https://creativecommons.org/licenses/by/3.0/"
       },
       "enabled": true,
-      "verifiedAt": "2026-09-13T00:00:00Z",
+      "verifiedAt": "2026-09-16T01:14:34Z",
       "feedUrl": "https://globalvoices.org/-/topics/food/feed/",
       "feedRedirectHosts": [
         "globalvoices.org"
@@ -506,7 +564,8 @@
       "retentionSeconds": 604800,
       "articleUrlFormat": "dated-story",
       "requiresAttribution": true,
-      "displayMode": "publisher-link"
+      "displayMode": "publisher-link",
+      "publisherId": "global-voices"
     },
     {
       "id": "globalvoices-health",
@@ -531,7 +590,7 @@
         "licenseUrl": "https://creativecommons.org/licenses/by/3.0/"
       },
       "enabled": true,
-      "verifiedAt": "2026-09-13T00:00:00Z",
+      "verifiedAt": "2026-09-16T01:14:34Z",
       "feedUrl": "https://globalvoices.org/-/topics/health/feed/",
       "feedRedirectHosts": [
         "globalvoices.org"
@@ -540,7 +599,8 @@
       "retentionSeconds": 604800,
       "articleUrlFormat": "dated-story",
       "requiresAttribution": true,
-      "displayMode": "publisher-link"
+      "displayMode": "publisher-link",
+      "publisherId": "global-voices"
     },
     {
       "id": "globalvoices-science",
@@ -565,7 +625,7 @@
         "licenseUrl": "https://creativecommons.org/licenses/by/3.0/"
       },
       "enabled": true,
-      "verifiedAt": "2026-09-13T00:00:00Z",
+      "verifiedAt": "2026-09-16T01:14:34Z",
       "feedUrl": "https://globalvoices.org/-/topics/science/feed/",
       "feedRedirectHosts": [
         "globalvoices.org"
@@ -574,7 +634,8 @@
       "retentionSeconds": 604800,
       "articleUrlFormat": "dated-story",
       "requiresAttribution": true,
-      "displayMode": "publisher-link"
+      "displayMode": "publisher-link",
+      "publisherId": "global-voices"
     },
     {
       "id": "globalvoices-technology",
@@ -599,7 +660,7 @@
         "licenseUrl": "https://creativecommons.org/licenses/by/3.0/"
       },
       "enabled": true,
-      "verifiedAt": "2026-09-13T00:00:00Z",
+      "verifiedAt": "2026-09-16T01:14:34Z",
       "feedUrl": "https://globalvoices.org/-/topics/technology/feed/",
       "feedRedirectHosts": [
         "globalvoices.org"
@@ -608,7 +669,8 @@
       "retentionSeconds": 604800,
       "articleUrlFormat": "dated-story",
       "requiresAttribution": true,
-      "displayMode": "publisher-link"
+      "displayMode": "publisher-link",
+      "publisherId": "global-voices"
     },
     {
       "id": "globalvoices-business",
@@ -633,7 +695,7 @@
         "licenseUrl": "https://creativecommons.org/licenses/by/3.0/"
       },
       "enabled": true,
-      "verifiedAt": "2026-09-13T00:00:00Z",
+      "verifiedAt": "2026-09-16T01:14:34Z",
       "feedUrl": "https://globalvoices.org/-/topics/economics-business/feed/",
       "feedRedirectHosts": [
         "globalvoices.org"
@@ -642,7 +704,8 @@
       "retentionSeconds": 604800,
       "articleUrlFormat": "dated-story",
       "requiresAttribution": true,
-      "displayMode": "publisher-link"
+      "displayMode": "publisher-link",
+      "publisherId": "global-voices"
     },
     {
       "id": "globalvoices-entertainment",
@@ -667,7 +730,7 @@
         "licenseUrl": "https://creativecommons.org/licenses/by/3.0/"
       },
       "enabled": true,
-      "verifiedAt": "2026-09-13T00:00:00Z",
+      "verifiedAt": "2026-09-16T01:14:34Z",
       "feedUrl": "https://globalvoices.org/-/topics/arts-culture/feed/",
       "feedRedirectHosts": [
         "globalvoices.org"
@@ -675,8 +738,41 @@
       "minRefreshSeconds": 1800,
       "retentionSeconds": 604800,
       "articleUrlFormat": "dated-story",
+      "requiredTopicTerms": [
+        "music",
+        "musician",
+        "musicians",
+        "film",
+        "films",
+        "cinema",
+        "movie",
+        "movies",
+        "television",
+        "tv",
+        "actor",
+        "actors",
+        "actress",
+        "actresses",
+        "theater",
+        "theatre",
+        "concert",
+        "concerts",
+        "album",
+        "albums",
+        "singer",
+        "singers",
+        "dance",
+        "dancer",
+        "dancers",
+        "performing arts",
+        "festival",
+        "festivals",
+        "comedy",
+        "comedian"
+      ],
       "requiresAttribution": true,
-      "displayMode": "publisher-link"
+      "displayMode": "publisher-link",
+      "publisherId": "global-voices"
     },
     {
       "id": "globalvoices-headlines",
@@ -701,7 +797,7 @@
         "licenseUrl": "https://creativecommons.org/licenses/by/3.0/"
       },
       "enabled": true,
-      "verifiedAt": "2026-09-13T00:00:00Z",
+      "verifiedAt": "2026-09-16T01:14:34Z",
       "feedUrl": "https://globalvoices.org/feed/",
       "feedRedirectHosts": [
         "globalvoices.org"
@@ -710,7 +806,8 @@
       "retentionSeconds": 604800,
       "articleUrlFormat": "dated-story",
       "requiresAttribution": true,
-      "displayMode": "publisher-link"
+      "displayMode": "publisher-link",
+      "publisherId": "global-voices"
     }
   ]
 }

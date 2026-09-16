@@ -14,10 +14,11 @@ class RssFetchResponse {
 }
 
 class RssFailure extends FeedFailure {
-  const RssFailure(this.code, {this.headers = const {}})
+  const RssFailure(this.code, {this.headers = const {}, this.status})
     : super('A publisher could not be refreshed.');
   final String code;
   final Map<String, String> headers;
+  final int? status;
 }
 
 abstract interface class RssFeedTransport {

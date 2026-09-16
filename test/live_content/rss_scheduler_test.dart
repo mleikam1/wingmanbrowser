@@ -114,6 +114,15 @@ void main() {
       expect((states['publisher-20'] as Map)['failures'], isNull);
       expect((states['publisher-20'] as Map)['error'], isNull);
       expect((first.providerState!['scheduler'] as Map)['deferredSources'], 18);
+      expect(first.warning, isNull);
+      expect(
+        (first.providerState!['scheduler'] as Map)['nextRefreshAt'],
+        fixture.now.add(const Duration(seconds: 30)).toIso8601String(),
+      );
+      expect(
+        (states['publisher-20'] as Map)['diagnostics'],
+        containsPair('outcome', 'deferred'),
+      );
       final secondProvider = create()
         ..restore(snapshot: first.snapshot, state: first.providerState);
       final second = await secondProvider.fetch();
@@ -122,6 +131,10 @@ void main() {
         ..restore(snapshot: second.snapshot, state: second.providerState);
       final third = await thirdProvider.fetch();
       expect(transport.urls, hasLength(30));
+      expect(
+        (third.providerState!['scheduler'] as Map)['nextRefreshAt'],
+        fixture.now.add(const Duration(minutes: 30)).toIso8601String(),
+      );
       expect(transport.urls.toSet(), hasLength(30));
       expect(
         (third.providerState!['scheduler'] as Map)['attemptedEndpoints'],

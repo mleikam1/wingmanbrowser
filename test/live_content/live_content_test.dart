@@ -213,7 +213,7 @@ void main() {
     },
   );
   test(
-    'unapproved source, host siblings, false scope and unlicensed excerpts cannot enter feed',
+    'unapproved sources, host siblings and false scopes cannot enter feed',
     () {
       final gate = LiveContentEligibility(
         registry: registry(),
@@ -230,9 +230,6 @@ void main() {
             'basis': 'keywords',
             'scope': 'science-reporting',
           },
-        },
-        {
-          'rights': {'title': true, 'excerpt': false},
         },
         {
           'topics': ['gambling'],
@@ -542,7 +539,8 @@ void main() {
       );
       await c.refresh();
       expect(c.items, isNotEmpty);
-      expect(c.stale, isTrue);
+      // A source label alone does not establish a failed request.
+      expect(c.categoryHealth.hasFailure, isFalse);
       expect(c.savedItems.single.available, isTrue);
       clock = now.add(const Duration(minutes: 4));
       provider.response = FeedResponse(
@@ -576,9 +574,12 @@ void main() {
         ),
       );
       await c.refresh();
-      expect(c.items, isEmpty);
-      expect(c.savedItems.single.item, isNull);
-      expect(c.canOpen(item), isFalse);
+      expect(c.items, isNotEmpty);
+      expect(c.excerptFor(c.items.first), isNull);
+      expect(c.savedItems.single.item, isNotNull);
+      expect(c.savedItems.single.item!.excerpt, isNull);
+      expect(c.canOpen(item), isTrue);
+      expect(c.excerptFor(item), isNull);
       expect(c.storageError, isNotNull);
       expect(c.storageError, isNot(contains('private details')));
     },
@@ -605,7 +606,9 @@ void main() {
       await c.clearCache();
       final next = makeController(store: store);
       await next.initialize();
-      expect(next.savedItems.single.item, isNull);
+      expect(next.savedItems.single.item, isNotNull);
+      expect(next.savedItems.single.item!.excerpt, isNull);
+      expect(next.excerptFor(next.savedItems.single.item!), isNull);
     },
   );
   test(

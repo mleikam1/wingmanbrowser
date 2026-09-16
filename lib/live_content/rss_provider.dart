@@ -106,7 +106,7 @@ class RssFeedProvider implements FeedProvider, ResumableFeedProvider {
 
     String configKeyFor(ApprovedLiveSource source) => rssDigest(
       jsonEncode({
-        'version': 3,
+        'version': 4,
         'url': source.feedUri.toString(),
         'hosts': source.feedRedirectHosts.toList()..sort(),
         'articleHosts': source.allowedArticleHosts.toList()..sort(),
@@ -143,6 +143,7 @@ class RssFeedProvider implements FeedProvider, ResumableFeedProvider {
 
     bool active(ApprovedLiveSource source) =>
         source.enabled &&
+        source.source.rights.titles &&
         source.feedUri != null &&
         priorFor(source)['revoked'] != true &&
         !revokedSources.contains(source.source.id);
@@ -189,7 +190,7 @@ class RssFeedProvider implements FeedProvider, ResumableFeedProvider {
     final attempted = <String>{}, deferredSources = <String>{};
     String? cursorAfter = previousCursor;
     var nextIndex = 0,
-        anyFailure = false,
+        attemptedFailures = 0,
         rejected = 0,
         deadlineReached = false;
     final end = DateTime.now().add(const Duration(seconds: 45));
@@ -241,6 +242,37 @@ class RssFeedProvider implements FeedProvider, ResumableFeedProvider {
       final due = date(prior['nextRefreshAt']);
       var lastSuccess = date(prior['lastSuccessAt']);
       var status = old.isEmpty ? 'unavailable' : 'cached';
+      final priorDiagnostics = prior['diagnostics'] is Map
+          ? feedMap(prior['diagnostics'])
+          : <String, dynamic>{};
+      final diagnostics = <String, dynamic>{
+        'schemaVersion': 1,
+        'checkedAt': now.toIso8601String(),
+        'attemptedAt': prior['lastAttemptAt'],
+        'configured': source.feedUri != null,
+        'enabled': source.enabled,
+        'due': false,
+        'deferred': false,
+        'requested': false,
+        'fetched': false,
+        'outcome': 'not-due',
+        'httpStatus': priorDiagnostics['httpStatus'],
+        'transportError': null,
+        'parserError': null,
+        'parsedEntries': priorDiagnostics['parsedEntries'] ?? 0,
+        'textEligible': priorDiagnostics['textEligible'] ?? old.length,
+        'topicMatched': priorDiagnostics['topicMatched'] ?? old.length,
+        'imagePermitted':
+            priorDiagnostics['imagePermitted'] ??
+            old.where((item) => eligibility.imageFor(item) != null).length,
+        'rejectedEntries': priorDiagnostics['rejectedEntries'] ?? 0,
+        'rejectionReasons':
+            priorDiagnostics['rejectionReasons'] ?? <String, int>{},
+        'newestPublicationAt': priorDiagnostics['newestPublicationAt'],
+        'countedAt': priorDiagnostics['countedAt'],
+        'optionalFieldReasons':
+            priorDiagnostics['optionalFieldReasons'] ?? <String, int>{},
+      };
       final priorRevoked = prior['revokedIds'];
       if (priorRevoked is List && priorRevoked.length <= 5000) {
         revoked.addAll(
@@ -249,39 +281,55 @@ class RssFeedProvider implements FeedProvider, ResumableFeedProvider {
           ),
         );
       }
-      if (!source.enabled ||
+      if (!source.source.rights.titles ||
           prior['revoked'] == true ||
           revokedSources.contains(id)) {
         status = 'revoked';
+        state['revoked'] = true;
         revokedSources.add(id);
         rows[id] = [];
+        diagnostics['outcome'] = 'revoked';
+      } else if (!source.enabled) {
+        status = 'unavailable';
+        rows[id] = [];
+        diagnostics['outcome'] = 'disabled';
       } else if (source.feedUri == null) {
-        anyFailure = true;
+        diagnostics['outcome'] = 'not-configured';
       } else if (prior['paused'] == true ||
           (due != null && now.isBefore(due))) {
-        anyFailure =
-            anyFailure ||
-            prior['paused'] == true ||
-            prior['error'] != null ||
-            old.isEmpty;
-        status = old.isEmpty
-            ? 'unavailable'
-            : (lastSuccess != null && prior['error'] == null
-                  ? 'fresh'
-                  : 'cached');
+        diagnostics['outcome'] = prior['paused'] == true
+            ? 'publisher-hold'
+            : 'not-due';
+        // Successful empty feeds remain healthy while they are not due.
+        status = lastSuccess != null && prior['error'] == null
+            ? 'fresh'
+            : (old.isEmpty ? 'unavailable' : 'cached');
       } else if (!selected.contains(source.feedUri.toString()) ||
           (!sharedResponses.containsKey(source.feedUri.toString()) &&
               (deadlineReached || !DateTime.now().isBefore(end)))) {
         // Deferred is not a failed attempt. Keep original pacing and cached
         // content; next common refresh resumes after the last started endpoint.
         deferredSources.add(id);
+        diagnostics.addAll({
+          'due': true,
+          'deferred': true,
+          'outcome': 'deferred',
+        });
       } else {
         final configKey = configKeyFor(source);
         final compatible = prior['configKey'] == configKey;
+        var parsing = false;
+        state['lastAttemptAt'] = now.toIso8601String();
+        diagnostics.addAll({
+          'due': true,
+          'requested': true,
+          'attemptedAt': now.toIso8601String(),
+        });
         try {
           final response = await endpointWork(source);
           final validators = sharedValidators[source.feedUri.toString()]!;
           valid();
+          diagnostics.addAll({'fetched': true, 'httpStatus': response.status});
           final cache =
               response.headers['cache-control'] ??
               (response.status == 304
@@ -291,10 +339,13 @@ class RssFeedProvider implements FeedProvider, ResumableFeedProvider {
             r'(?:^|,)\s*(?:no-store|private)(?:\s*(?:,|=|$))',
             caseSensitive: false,
           ).hasMatch(cache)) {
-            for (final item in old) {
-              revoked.add(item.id);
-            }
+            // HTTP storage instructions withdraw this cached representation,
+            // not the article's legal permission forever. Never tombstone it.
             rows[id] = [];
+            state.remove('guids');
+            state.remove('etag');
+            state.remove('lastModified');
+            diagnostics['outcome'] = 'cache-prohibited';
             throw const RssFailure('cache-prohibited');
           }
           if (response.status == 304) {
@@ -312,7 +363,9 @@ class RssFeedProvider implements FeedProvider, ResumableFeedProvider {
                   }),
                 )
                 .toList();
+            diagnostics['outcome'] = 'not-modified';
           } else if (response.status == 200) {
+            parsing = true;
             final parsed = parseRssFeed(
               response.body,
               source,
@@ -320,7 +373,23 @@ class RssFeedProvider implements FeedProvider, ResumableFeedProvider {
               eligibility,
               allowsEditorialText,
             );
+            parsing = false;
             rows[id] = parsed.items;
+            diagnostics.addAll({
+              'parsedEntries': parsed.parsedEntries,
+              'textEligible': parsed.textEligible,
+              'topicMatched': parsed.topicMatched,
+              'imagePermitted': parsed.imagePermitted,
+              'rejectedEntries': parsed.rejected,
+              'rejectionReasons': parsed.rejectionReasons,
+              'optionalFieldReasons': parsed.optionalFieldReasons,
+              'countedAt': now.toIso8601String(),
+              'newestPublicationAt': parsed.newestPublicationAt
+                  ?.toIso8601String(),
+              'outcome': parsed.items.isNotEmpty
+                  ? 'fresh'
+                  : (parsed.parsedEntries == 0 ? 'empty' : 'content-held'),
+            });
             rejected += parsed.rejected;
             revoked.addAll(parsed.revokedIds);
             final oldGuids = prior['guids'] is Map
@@ -337,6 +406,7 @@ class RssFeedProvider implements FeedProvider, ResumableFeedProvider {
             throw RssFailure(
               'http-${response.status}',
               headers: response.headers,
+              status: response.status,
             );
           }
           final delay = rssRefreshDelay(
@@ -365,7 +435,24 @@ class RssFeedProvider implements FeedProvider, ResumableFeedProvider {
           if (status != 'revoked') status = 'fresh';
         } catch (error) {
           valid();
-          anyFailure = true;
+          attemptedFailures++;
+          final code = error is RssFailure
+              ? error.code
+              : (parsing
+                    ? 'invalid-feed'
+                    : error is TimeoutException
+                    ? 'timeout'
+                    : 'transport-failure');
+          diagnostics[parsing ? 'parserError' : 'transportError'] = code;
+          if (diagnostics['outcome'] != 'cache-prohibited') {
+            diagnostics['outcome'] = parsing
+                ? 'parse-failure'
+                : 'transport-failure';
+          }
+          final httpMatch = RegExp(r'^http-(\d{3})$').firstMatch(code);
+          if (httpMatch != null) {
+            diagnostics['httpStatus'] = int.parse(httpMatch[1]!);
+          }
           final count =
               ((prior['failures'] is int ? prior['failures'] as int : 0) + 1)
                   .clamp(1, 12);
@@ -387,11 +474,21 @@ class RssFeedProvider implements FeedProvider, ResumableFeedProvider {
                 : now.add(delay).toIso8601String(),
             'paused': delay == null,
             'failures': count,
-            'error': error is RssFailure ? error.code : 'invalid-feed',
+            'error': code,
           });
           status = rows[id]!.isEmpty ? 'unavailable' : 'cached';
         }
       }
+      diagnostics.addAll({
+        'lastSuccessAt': lastSuccess?.toIso8601String(),
+        'nextDueAt': state['nextRefreshAt'],
+        'availableItems': rows[id]!.length,
+        'lastAttemptOutcome': diagnostics['requested'] == true
+            ? diagnostics['outcome']
+            : priorDiagnostics['lastAttemptOutcome'],
+        'lastError': state['error'],
+      });
+      state['diagnostics'] = diagnostics;
       state['revokedIds'] = revoked
           .where(
             (v) =>
@@ -488,6 +585,14 @@ class RssFeedProvider implements FeedProvider, ResumableFeedProvider {
         'attemptedEndpoints': attempted.length,
         'deferredSources': deferredSources.length,
         'maximumEndpointAttempts': maximumEndpointAttempts,
+        // The controller owns the timer. This hint reuses this cursor and the
+        // same persisted per-endpoint holds; it never authorizes another crawl
+        // before an alias's Retry-After expires.
+        'nextRefreshAt': _nextScheduledRefresh(
+          groups,
+          states,
+          now,
+        )?.toIso8601String(),
       },
     };
     if (utf8.encode(jsonEncode(state)).length > 450 * 1024) {
@@ -497,11 +602,43 @@ class RssFeedProvider implements FeedProvider, ResumableFeedProvider {
       snapshot: snapshot,
       publisherImagesVerified: true,
       providerState: state,
-      warning: anyFailure
+      warning:
+          attemptedFailures > 0 &&
+              !health.values.any((source) => source.status == 'fresh')
           ? 'Some publishers could not be refreshed. Available and cached articles are shown.'
           : null,
     );
   }
+}
+
+DateTime? _nextScheduledRefresh(
+  Map<String, List<ApprovedLiveSource>> groups,
+  Map<String, dynamic> states,
+  DateTime now,
+) {
+  DateTime? next;
+  for (final sources in groups.values) {
+    DateTime endpointDue = now.add(const Duration(seconds: 30));
+    var eligible = false, paused = false;
+    for (final source in sources) {
+      final state = feedMap(states[source.source.id]);
+      if (!source.enabled ||
+          !source.source.rights.titles ||
+          state['revoked'] == true) {
+        continue;
+      }
+      eligible = true;
+      if (state['paused'] == true) paused = true;
+      final date = DateTime.tryParse(
+        state['nextRefreshAt'] as String? ?? '',
+      )?.toUtc();
+      if (date != null && date.isAfter(endpointDue)) endpointDue = date;
+    }
+    if (eligible && !paused && (next == null || endpointDue.isBefore(next))) {
+      next = endpointDue;
+    }
+  }
+  return next;
 }
 
 Duration? rssRefreshDelay(
