@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wingman_browser/live_content/live_content.dart';
 import 'package:wingman_browser/live_content/rss_parser.dart';
+import 'package:wingman_browser/signature/storage/document_store.dart';
 
 import 'branding_test.dart' show reviewedBranding;
 import 'rss_provider_test.dart' as fixture;
@@ -79,7 +80,7 @@ void main() {
 
   test(
     'sponsored travel feature keeps its complete reader contract without an excerpt',
-    () {
+    () async {
       final source = ApprovedLiveSource.fromJson({
         ..._reviewedSourceJson(),
         'topics': ['travel', 'headlines'],
@@ -120,12 +121,21 @@ void main() {
         endsWith('Final disclosure stays here.'),
       );
       final gate = fixture.gate([source]);
-      final sanitized = LiveContentItem.fromJson({
+      final unapprovedSummary = LiveContentItem.fromJson({
         ...item.toJson(),
         'excerpt': 'Unauthorized summary',
       });
-      expect(sanitized.excerpt, isNull);
-      expect(gate.accepts(sanitized, now: fixture.now), isTrue);
+      expect(gate.accepts(unapprovedSummary, now: fixture.now), isTrue);
+      final controller = LiveContentController(
+        store: MemorySignatureDocumentStore(),
+        eligibility: gate,
+        clock: () => fixture.now,
+      )..setContext(LiveContentContext.owner);
+      await controller.initialize();
+      expect(controller.excerptFor(unapprovedSummary), isNull);
+      expect(controller.requiresAssociatedPhoto(item), isTrue);
+      expect(controller.hasUsableImage(item), isFalse);
+      controller.dispose();
       expect(
         gate.accepts(
           LiveContentItem.fromJson({

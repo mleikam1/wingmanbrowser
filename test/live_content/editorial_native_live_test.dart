@@ -160,7 +160,16 @@ void main() {
         ..createSync(recursive: true);
       final report = {
         'checkedAt': snapshot.generatedAt.toIso8601String(),
+        'checkoutCommit': (await Process.run('git', [
+          'rev-parse',
+          'HEAD',
+        ])).stdout.toString().trim(),
+        'appVersion': RegExp(
+          r'^version:\s*(.+)$',
+          multiLine: true,
+        ).firstMatch(await File('pubspec.yaml').readAsString())?.group(1),
         'providerMode': 'native-direct-rss',
+        'configuredSharedEndpoint': null,
         'platform': Platform.operatingSystem,
         'registrySha256': sha256.convert(registryBytes).toString(),
         'networkRequests': transport.responses.length,
