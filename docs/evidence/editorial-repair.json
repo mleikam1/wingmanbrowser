@@ -1,0 +1,463 @@
+{
+  "checkedAt": "2026-09-16T01:49:31.126698+00:00",
+  "runtimeCommit": "7170b960b40e6a541ee9973c37e268a2fe335bd9",
+  "version": "0.15.1+18",
+  "registryDigest": "c8c346c8ddf9357203fba7971f6ac008b815da9648b4eb3f577f1d7408f34806",
+  "branch": "codex/editorial-delivery-repair",
+  "nativeInstalled": "Android emulator-5554 and iPhone Air simulator; data retained",
+  "postRepairUi": "blocked: Mac locked; manual unlock requested",
+  "physicalIosDevices": 0,
+  "nativeProviderMode": "native-rss",
+  "nativeConfiguredEndpoint": null,
+  "productionWebEndpoint": null,
+  "localWebMode": "shared snapshot; debug localhost only",
+  "flutterTests": {
+    "passed": 979,
+    "skippedOptIn": 6
+  },
+  "pythonTestsPassed": 126,
+  "additionalHealthTestsPassed": 4,
+  "snapshotRecoveryTestsPassed": 7,
+  "imageExpiryRetryTestsPassed": 4,
+  "analysis": "no issues",
+  "builds": [
+    "Android debug APK",
+    "iOS simulator debug app",
+    "web debug bundle"
+  ],
+  "nativeHostPasses": [
+    {
+      "checkedAt": "2026-09-16T01:45:45.821538Z",
+      "checkoutCommit": "0c5105d7310b7234e2355f2b123e587102f67f78",
+      "appVersion": "0.15.1+18",
+      "providerMode": "native-direct-rss",
+      "platform": "macos",
+      "registrySha256": "c8c346c8ddf9357203fba7971f6ac008b815da9648b4eb3f577f1d7408f34806",
+      "networkRequests": 12,
+      "scheduler": {
+        "schemaVersion": 1,
+        "cursorAfter": "https://globalvoices.org/-/topics/health/feed/",
+        "lastBatchAt": "2026-09-16T01:45:45.821538Z",
+        "configuredEndpoints": 17,
+        "dueEndpoints": 17,
+        "attemptedEndpoints": 12,
+        "deferredSources": 5,
+        "maximumEndpointAttempts": 12,
+        "nextRefreshAt": "2026-09-16T01:46:15.821538Z"
+      },
+      "transports": {
+        "tech-xplore": {
+          "checkedAt": "2026-09-16T01:45:45.870458Z",
+          "completedAt": "2026-09-16T01:45:46.146970Z",
+          "status": 200,
+          "decodedBytes": 30954,
+          "conditionalRequest": false,
+          "headers": {
+            "content-type": "text/xml;charset=UTF-8",
+            "content-encoding": "gzip",
+            "date": "Wed, 16 Sep 2026 01:45:46 GMT"
+          }
+        },
+        "medical-xpress": {
+          "checkedAt": "2026-09-16T01:45:45.877520Z",
+          "completedAt": "2026-09-16T01:45:46.270861Z",
+          "status": 200,
+          "decodedBytes": 30236,
+          "conditionalRequest": false,
+          "headers": {
+            "content-type": "text/xml;charset=UTF-8",
+            "content-encoding": "gzip",
+            "date": "Wed, 16 Sep 2026 01:45:46 GMT"
+          }
+        },
+        "phys-org": {
+          "checkedAt": "2026-09-16T01:45:46.266066Z",
+          "completedAt": "2026-09-16T01:45:46.573670Z",
+          "status": 200,
+          "decodedBytes": 32171,
+          "conditionalRequest": false,
+          "headers": {
+            "content-type": "text/xml;charset=UTF-8",
+            "content-encoding": "gzip",
+            "date": "Wed, 16 Sep 2026 01:45:46 GMT"
+          }
+        },
+        "nasa-technology": {
+          "checkedAt": "2026-09-16T01:45:46.620600Z",
+          "completedAt": "2026-09-16T01:45:46.990455Z",
+          "status": 200,
+          "decodedBytes": 284014,
+          "conditionalRequest": false,
+          "headers": {
+            "content-type": "application/rss+xml; charset=UTF-8",
+            "content-encoding": "gzip",
+            "cache-control": "max-age=300, must-revalidate",
+            "date": "Wed, 16 Sep 2026 01:45:46 GMT"
+          }
+        },
+        "nasa-photojournal": {
+          "checkedAt": "2026-09-16T01:45:46.307871Z",
+          "completedAt": "2026-09-16T01:45:47.146992Z",
+          "status": 200,
+          "decodedBytes": 323003,
+          "conditionalRequest": false,
+          "headers": {
+            "content-type": "application/rss+xml; charset=UTF-8",
+            "content-encoding": "gzip",
+            "cache-control": "max-age=300, must-revalidate",
+            "date": "Wed, 16 Sep 2026 01:45:47 GMT"
+          }
+        },
+        "noaa-news": {
+          "checkedAt": "2026-09-16T01:45:47.054286Z",
+          "completedAt": "2026-09-16T01:45:47.335295Z",
+          "status": 200,
+          "decodedBytes": 69646,
+          "conditionalRequest": false,
+          "headers": {
+            "content-type": "application/rss+xml; charset=utf-8",
+            "content-length": "69646",
+            "cache-control": "max-age=900, public",
+            "age": "47",
+            "date": "Wed, 16 Sep 2026 01:45:47 GMT"
+          }
+        },
+        "usgs-news": {
+          "checkedAt": "2026-09-16T01:45:47.235906Z",
+          "completedAt": "2026-09-16T01:45:47.481480Z",
+          "status": 200,
+          "decodedBytes": 26488,
+          "conditionalRequest": false,
+          "headers": {
+            "content-type": "application/rss+xml; charset=utf-8",
+            "content-encoding": "gzip",
+            "cache-control": "max-age=600, public",
+            "age": "574",
+            "date": "Wed, 16 Sep 2026 01:36:13 GMT"
+          }
+        },
+        "globalvoices-fashion": {
+          "checkedAt": "2026-09-16T01:45:47.505621Z",
+          "completedAt": "2026-09-16T01:45:48.243314Z",
+          "status": 200,
+          "decodedBytes": 268628,
+          "conditionalRequest": false,
+          "headers": {
+            "content-type": "application/rss+xml; charset=UTF-8",
+            "content-encoding": "gzip",
+            "content-length": "80069",
+            "age": "1846",
+            "date": "Wed, 16 Sep 2026 01:45:48 GMT"
+          }
+        },
+        "globalvoices-sports": {
+          "checkedAt": "2026-09-16T01:45:47.389575Z",
+          "completedAt": "2026-09-16T01:45:48.304284Z",
+          "status": 200,
+          "decodedBytes": 246699,
+          "conditionalRequest": false,
+          "headers": {
+            "content-type": "application/rss+xml; charset=UTF-8",
+            "content-encoding": "gzip",
+            "content-length": "76375",
+            "age": "1766",
+            "date": "Wed, 16 Sep 2026 01:45:48 GMT"
+          }
+        },
+        "globalvoices-food": {
+          "checkedAt": "2026-09-16T01:45:48.298860Z",
+          "completedAt": "2026-09-16T01:45:49.140828Z",
+          "status": 200,
+          "decodedBytes": 234527,
+          "conditionalRequest": false,
+          "headers": {
+            "content-type": "application/rss+xml; charset=UTF-8",
+            "content-encoding": "gzip",
+            "content-length": "67585",
+            "age": "1102",
+            "date": "Wed, 16 Sep 2026 01:45:48 GMT"
+          }
+        },
+        "globalvoices-health": {
+          "checkedAt": "2026-09-16T01:45:48.351286Z",
+          "completedAt": "2026-09-16T01:45:49.216518Z",
+          "status": 200,
+          "decodedBytes": 252733,
+          "conditionalRequest": false,
+          "headers": {
+            "content-type": "application/rss+xml; charset=UTF-8",
+            "content-encoding": "gzip",
+            "content-length": "73813",
+            "age": "2240",
+            "date": "Wed, 16 Sep 2026 01:45:48 GMT"
+          }
+        },
+        "newsusa-features": {
+          "checkedAt": "2026-09-16T01:45:45.859798Z",
+          "completedAt": "2026-09-16T01:45:53.756211Z",
+          "status": 200,
+          "decodedBytes": 111737,
+          "conditionalRequest": false,
+          "headers": {
+            "content-type": "text/xml; charset=utf-8",
+            "content-encoding": "gzip",
+            "cache-control": "max-age=60, public",
+            "date": "Wed, 16 Sep 2026 01:45:53 GMT"
+          }
+        }
+      },
+      "eligibleItems": 181,
+      "warning": null,
+      "imageRequests": 0,
+      "scope": "Actual production native DNS-pinned/TLS-verified transport on host; no image downloads, no user data, no claim of iPhone execution. Publisher checkpoints preserved and extended by coordinated probe holds."
+    },
+    {
+      "checkedAt": "2026-09-16T01:46:30.153454Z",
+      "checkoutCommit": "0c5105d7310b7234e2355f2b123e587102f67f78",
+      "appVersion": "0.15.1+18",
+      "providerMode": "native-direct-rss",
+      "platform": "macos",
+      "registrySha256": "c8c346c8ddf9357203fba7971f6ac008b815da9648b4eb3f577f1d7408f34806",
+      "networkRequests": 5,
+      "scheduler": {
+        "schemaVersion": 1,
+        "cursorAfter": "https://globalvoices.org/feed/",
+        "lastBatchAt": "2026-09-16T01:46:30.153454Z",
+        "configuredEndpoints": 17,
+        "dueEndpoints": 5,
+        "attemptedEndpoints": 5,
+        "deferredSources": 0,
+        "maximumEndpointAttempts": 12,
+        "nextRefreshAt": "2026-09-16T02:15:45.821538Z"
+      },
+      "transports": {
+        "globalvoices-technology": {
+          "checkedAt": "2026-09-16T01:46:30.180753Z",
+          "completedAt": "2026-09-16T01:46:31.055908Z",
+          "status": 200,
+          "decodedBytes": 219055,
+          "conditionalRequest": false,
+          "headers": {
+            "content-type": "application/rss+xml; charset=UTF-8",
+            "content-encoding": "gzip",
+            "content-length": "68219",
+            "age": "421",
+            "date": "Wed, 16 Sep 2026 01:46:30 GMT"
+          }
+        },
+        "globalvoices-business": {
+          "checkedAt": "2026-09-16T01:46:30.184097Z",
+          "completedAt": "2026-09-16T01:46:31.203915Z",
+          "status": 200,
+          "decodedBytes": 221360,
+          "conditionalRequest": false,
+          "headers": {
+            "content-type": "application/rss+xml; charset=UTF-8",
+            "content-encoding": "gzip",
+            "content-length": "68692",
+            "age": "1017",
+            "date": "Wed, 16 Sep 2026 01:46:30 GMT"
+          }
+        },
+        "globalvoices-science": {
+          "checkedAt": "2026-09-16T01:46:30.175026Z",
+          "completedAt": "2026-09-16T01:46:31.266755Z",
+          "status": 200,
+          "decodedBytes": 234887,
+          "conditionalRequest": false,
+          "headers": {
+            "content-type": "application/rss+xml; charset=UTF-8",
+            "content-encoding": "gzip",
+            "content-length": "67803",
+            "age": "1574",
+            "date": "Wed, 16 Sep 2026 01:46:30 GMT"
+          }
+        },
+        "globalvoices-entertainment": {
+          "checkedAt": "2026-09-16T01:46:31.196378Z",
+          "completedAt": "2026-09-16T01:46:32.186236Z",
+          "status": 200,
+          "decodedBytes": 250357,
+          "conditionalRequest": false,
+          "headers": {
+            "content-type": "application/rss+xml; charset=UTF-8",
+            "content-encoding": "gzip",
+            "content-length": "72892",
+            "age": "2028",
+            "date": "Wed, 16 Sep 2026 01:46:31 GMT"
+          }
+        },
+        "globalvoices-headlines": {
+          "checkedAt": "2026-09-16T01:46:31.265842Z",
+          "completedAt": "2026-09-16T01:46:32.350140Z",
+          "status": 200,
+          "decodedBytes": 259004,
+          "conditionalRequest": false,
+          "headers": {
+            "content-type": "application/rss+xml; charset=UTF-8",
+            "content-encoding": "gzip",
+            "content-length": "76349",
+            "age": "48",
+            "date": "Wed, 16 Sep 2026 01:46:32 GMT"
+          }
+        }
+      },
+      "eligibleItems": 186,
+      "warning": null,
+      "imageRequests": 0,
+      "scope": "Actual production native DNS-pinned/TLS-verified transport on host; no image downloads, no user data, no claim of iPhone execution. Publisher checkpoints preserved and extended by coordinated probe holds."
+    }
+  ],
+  "nativeFinalEditorialItems": 171,
+  "nativeFinalSponsoredItems": 15,
+  "nativeFinalImagesDecoded": 0,
+  "supplyObservationAt": "2026-09-16T01:18:24Z",
+  "controlledCommonDeliveryCategories": [
+    {
+      "category": "headlines",
+      "enabledEditorialPublishers": 5,
+      "enabledEndpoints": 16,
+      "fetchedOrRevalidatedRawItems": 285,
+      "eligibleWithin30Days": 172,
+      "imageCards": 24,
+      "textFallbacks": 148,
+      "newestStory": "2026-09-16T00:40:01Z",
+      "within72Hours": 105,
+      "editorialPublishersWithin72Hours": 4,
+      "permittedImagesWithin72Hours": 24
+    },
+    {
+      "category": "sports",
+      "enabledEditorialPublishers": 1,
+      "enabledEndpoints": 1,
+      "fetchedOrRevalidatedRawItems": 15,
+      "eligibleWithin30Days": 3,
+      "imageCards": 0,
+      "textFallbacks": 3,
+      "newestStory": "2026-09-05T05:00:38Z",
+      "within72Hours": 0,
+      "editorialPublishersWithin72Hours": 0,
+      "permittedImagesWithin72Hours": 0
+    },
+    {
+      "category": "entertainment",
+      "enabledEditorialPublishers": 1,
+      "enabledEndpoints": 1,
+      "fetchedOrRevalidatedRawItems": 15,
+      "eligibleWithin30Days": 1,
+      "imageCards": 0,
+      "textFallbacks": 1,
+      "newestStory": "2026-09-13T12:00:57Z",
+      "within72Hours": 1,
+      "editorialPublishersWithin72Hours": 1,
+      "permittedImagesWithin72Hours": 0
+    },
+    {
+      "category": "business",
+      "enabledEditorialPublishers": 2,
+      "enabledEndpoints": 2,
+      "fetchedOrRevalidatedRawItems": 45,
+      "eligibleWithin30Days": 5,
+      "imageCards": 0,
+      "textFallbacks": 5,
+      "newestStory": "2026-09-14T09:19:57Z",
+      "within72Hours": 1,
+      "editorialPublishersWithin72Hours": 1,
+      "permittedImagesWithin72Hours": 0
+    },
+    {
+      "category": "technology",
+      "enabledEditorialPublishers": 3,
+      "enabledEndpoints": 4,
+      "fetchedOrRevalidatedRawItems": 65,
+      "eligibleWithin30Days": 45,
+      "imageCards": 8,
+      "textFallbacks": 37,
+      "newestStory": "2026-09-15T23:00:01Z",
+      "within72Hours": 30,
+      "editorialPublishersWithin72Hours": 1,
+      "permittedImagesWithin72Hours": 8
+    },
+    {
+      "category": "science",
+      "enabledEditorialPublishers": 5,
+      "enabledEndpoints": 6,
+      "fetchedOrRevalidatedRawItems": 105,
+      "eligibleWithin30Days": 81,
+      "imageCards": 8,
+      "textFallbacks": 73,
+      "newestStory": "2026-09-16T00:13:24Z",
+      "within72Hours": 41,
+      "editorialPublishersWithin72Hours": 4,
+      "permittedImagesWithin72Hours": 8
+    },
+    {
+      "category": "food",
+      "enabledEditorialPublishers": 1,
+      "enabledEndpoints": 1,
+      "fetchedOrRevalidatedRawItems": 15,
+      "eligibleWithin30Days": 1,
+      "imageCards": 0,
+      "textFallbacks": 1,
+      "newestStory": "2026-08-21T07:16:12Z",
+      "within72Hours": 0,
+      "editorialPublishersWithin72Hours": 0,
+      "permittedImagesWithin72Hours": 0
+    },
+    {
+      "category": "health",
+      "enabledEditorialPublishers": 2,
+      "enabledEndpoints": 2,
+      "fetchedOrRevalidatedRawItems": 45,
+      "eligibleWithin30Days": 33,
+      "imageCards": 8,
+      "textFallbacks": 25,
+      "newestStory": "2026-09-16T00:40:01Z",
+      "within72Hours": 30,
+      "editorialPublishersWithin72Hours": 1,
+      "permittedImagesWithin72Hours": 8
+    },
+    {
+      "category": "fashion",
+      "enabledEditorialPublishers": 1,
+      "enabledEndpoints": 1,
+      "fetchedOrRevalidatedRawItems": 15,
+      "eligibleWithin30Days": 2,
+      "imageCards": 0,
+      "textFallbacks": 2,
+      "newestStory": "2026-09-04T20:56:44Z",
+      "within72Hours": 0,
+      "editorialPublishersWithin72Hours": 0,
+      "permittedImagesWithin72Hours": 0
+    },
+    {
+      "category": "travel",
+      "enabledEditorialPublishers": 0,
+      "enabledEndpoints": 0,
+      "fetchedOrRevalidatedRawItems": 0,
+      "eligibleWithin30Days": 0,
+      "imageCards": 0,
+      "textFallbacks": 0,
+      "newestStory": null,
+      "within72Hours": 0,
+      "editorialPublishersWithin72Hours": 0,
+      "permittedImagesWithin72Hours": 0
+    },
+    {
+      "category": "environment",
+      "enabledEditorialPublishers": 2,
+      "enabledEndpoints": 2,
+      "fetchedOrRevalidatedRawItems": 40,
+      "eligibleWithin30Days": 37,
+      "imageCards": 0,
+      "textFallbacks": 37,
+      "newestStory": "2026-09-16T00:13:24Z",
+      "within72Hours": 11,
+      "editorialPublishersWithin72Hours": 2,
+      "permittedImagesWithin72Hours": 0
+    }
+  ],
+  "coverageTargetsMet": false,
+  "screenAcceptanceComplete": false,
+  "noReleaseUploaded": true
+}
