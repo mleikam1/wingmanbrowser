@@ -251,6 +251,13 @@ void main() {
       final second = await provider.fetch();
       expect(second.snapshot!.items, isEmpty);
       expect(second.snapshot!.revokedItemIds, isEmpty);
+      expect(second.warning, isNull);
+      final diagnostic =
+          ((second.providerState!['sources'] as Map)['news']
+                  as Map)['diagnostics']
+              as Map;
+      expect(diagnostic['outcome'], 'cache-prohibited');
+      expect(diagnostic['transportError'], isNull);
       provider.restore(snapshot: second.snapshot, state: second.providerState);
       time = time.add(const Duration(hours: 1));
       final third = await provider.fetch();

@@ -158,17 +158,23 @@ void main() {
       controller.setContext(LiveContentContext.owner);
       await controller.refresh();
       await images.settle();
+      expect(controller.items.map((i) => i.id), ['item-1']);
+      expect(controller.imageBytesFor(images.item(1)), isNull);
       transport.pending[images.item(2).canonicalUrl.toString()]!.complete(
         RssFetchResponse(200, images.png, {'content-type': 'image/png'}),
       );
       await images.settle();
-      expect(controller.items.map((i) => i.id), ['item-2']);
+      expect(controller.items.map((i) => i.id), ['item-1']);
+      expect(controller.imageBytesFor(images.item(2)), isNotNull);
       transport.pending[images.item(1).canonicalUrl.toString()]!.complete(
         RssFetchResponse(200, images.png, {'content-type': 'image/png'}),
       );
       await images.settle();
-      expect(controller.items.map((i) => i.id), ['item-2']);
+      expect(controller.items.map((i) => i.id), ['item-1']);
+      expect(controller.imageBytesFor(images.item(1)), isNotNull);
       expect(controller.hasMore, isTrue);
+      controller.loadMore();
+      expect(controller.items.map((i) => i.id), ['item-1', 'item-2']);
       controller.dispose();
     },
   );

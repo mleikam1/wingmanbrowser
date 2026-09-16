@@ -437,7 +437,6 @@ class RssFeedProvider implements FeedProvider, ResumableFeedProvider {
           if (status != 'revoked') status = 'fresh';
         } catch (error) {
           valid();
-          attemptedFailures++;
           final code = error is RssFailure
               ? error.code
               : (parsing
@@ -445,7 +444,9 @@ class RssFeedProvider implements FeedProvider, ResumableFeedProvider {
                     : error is TimeoutException
                     ? 'timeout'
                     : 'transport-failure');
-          diagnostics[parsing ? 'parserError' : 'transportError'] = code;
+          if (code != 'cache-prohibited') attemptedFailures++;
+          diagnostics[parsing ? 'parserError' : 'transportError'] =
+              code == 'cache-prohibited' ? null : code;
           if (diagnostics['outcome'] != 'cache-prohibited') {
             diagnostics['outcome'] = parsing
                 ? 'parse-failure'

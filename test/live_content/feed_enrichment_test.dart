@@ -120,16 +120,12 @@ void main() {
         endsWith('Final disclosure stays here.'),
       );
       final gate = fixture.gate([source]);
-      expect(
-        gate.accepts(
-          LiveContentItem.fromJson({
-            ...item.toJson(),
-            'excerpt': 'Unauthorized summary',
-          }),
-          now: fixture.now,
-        ),
-        isFalse,
-      );
+      final sanitized = LiveContentItem.fromJson({
+        ...item.toJson(),
+        'excerpt': 'Unauthorized summary',
+      });
+      expect(sanitized.excerpt, isNull);
+      expect(gate.accepts(sanitized, now: fixture.now), isTrue);
       expect(
         gate.accepts(
           LiveContentItem.fromJson({

@@ -37,6 +37,9 @@ extension LiveContentDiagnostics on LiveContentController {
   bool _failedSource(String id) {
     final state = _sourceState(id), health = _sourceHealth(id);
     final outcome = health['outcome'];
+    if ({'cache-prohibited', 'source-cache-prohibited'}.contains(outcome)) {
+      return false;
+    }
     if (outcome != null) {
       return {'transport-failure', 'parse-failure'}.contains(outcome) ||
           health['transportError'] != null ||
@@ -102,6 +105,14 @@ extension LiveContentDiagnostics on LiveContentController {
               'Wingman has no active editorial source for this category yet. Other categories remain available.',
             );
     }
+    if (!active.any((source) => !source.isSponsoredSyndication)) {
+      return LiveCategoryHealth(
+        'no-production-editorial-source',
+        'No editorial publishers connected for this category',
+        'This category has no connected editorial publisher yet. Any available sponsored features are labeled separately.',
+        showNotice: items.isNotEmpty,
+      );
+    }
     final followed = active
         .where((s) => _preferences.follows(s.source.id))
         .toList();
@@ -155,6 +166,13 @@ extension LiveContentDiagnostics on LiveContentController {
         'required-image-unavailable',
         'Story photos are unavailable',
         'These sponsored features require their complete article and associated photo. They will appear when their permitted photos are available.',
+      );
+    }
+    if (followed.any((source) => _cacheProhibited(source.source.id))) {
+      return const LiveCategoryHealth(
+        'cache-prohibited',
+        'Publisher storage is restricted',
+        'A publisher currently disallows storing its feed, and no other eligible stories are available in this category. Other categories remain available.',
       );
     }
     final outcomes = followed
