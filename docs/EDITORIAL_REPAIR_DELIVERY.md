@@ -7,10 +7,10 @@
 ## Delivered code and build
 
 - Branch: `codex/editorial-delivery-repair`, based on `712cfd5fdf94b6b7620fb6b3b7978f40310b8a78`.
-- Exact compiled runtime: `7170b960b40e6a541ee9973c37e268a2fe335bd9`. Subsequent commits contain tests and delivery evidence only. Embedded commit strings were checked inside the Android/iOS kernel artifacts and the web bundle.
+- Exact compiled runtime: `0460434ec537d099e72bdff8192902a3da8c447a`. Subsequent commits contain tests and delivery evidence only. Embedded commit strings were checked inside the Android/iOS kernel artifacts and the web bundle.
 - Version: **0.15.1 (18)**. Corrected the pre-existing UI display-version mismatch along with the build bump.
 - Generated registry SHA-256: `c8c346c8ddf9357203fba7971f6ac008b815da9648b4eb3f577f1d7408f34806`.
-- Native mode: existing direct RSS provider, no shared endpoint. Installed on Android `emulator-5554` and iPhone Air / iOS 26.3 simulator. These are simulated devices, not hardware tests.
+- Native mode: existing direct RSS provider, no shared endpoint. Installed on Android `emulator-5554` and iPhone Air / iOS 26.3 simulator. Android used a 93 MiB ARM64-only package with ordinary versionCode 18 after its storage limit rejected the 187 MiB universal package; no data or caches were deleted. These are simulated devices, not hardware tests.
 - Web mode: existing shared snapshot provider, debug-only localhost endpoint `http://127.0.0.1:8891/v1/snapshot.json`. It serves preserved common content and permitted media; reads do not fetch publishers. This is **not production deployment**. Release builds continue to reject local HTTP endpoints.
 - No merge into main, TestFlight upload, paid service or new production hosting was performed for this scoped repair.
 
@@ -30,13 +30,19 @@ Source/category diagnostics expose the bounded configured→enabled→due/deferr
 
 ## Validation
 
-- Full Flutter suite: **979 passed, 6 opt-in tests skipped**. Later targeted category-health suite: **4 passed**; storage/snapshot recovery suite: **7 passed**; image retry/expiry suite: **4 passed**.
+- Full Flutter suite: **985 passed, 6 opt-in tests skipped**. Targeted category-health suite: **4 passed**; storage/snapshot recovery suite: **7 passed**; image retry/expiry suite: **4 passed**.
 - Flutter analysis: **no issues found**.
 - Python backend: **126 passed**.
 - Final Android debug APK, iOS simulator debug app and debug web build: **passed**; exact embedded runtime commit verified.
 - Widget tests cover actual protected link callbacks, return scroll position, private/inactive cancellation, missing/pending/404 images, denied text, full-article contracts, partial/empty/deferred states, conditional responses, rate limits, malformed entries, and 200% text/semantics in both themes. Synthetic tests establish behavior, not publisher supply.
 - Baseline simulator UI: both empty-category messages reproduced. Final simulator/emulator/browser UI: **pending Mac unlock**. No claim of post-repair hardware or on-screen acceptance is made.
 - Real native host transport: **17/17 source endpoints returned HTTP 200**, in paced batches of 12 and 5 at 01:45–01:46 UTC. 16 responses used gzip and 1 were uncompressed; decoding, DNS validation and TLS verification succeeded. The persisted cursor scheduled the five deferred endpoints; the controller's automatic follow-up is separately covered by a regression test using the real provider and 17 endpoints. Both host passes had **no global warning**. Final native parsing produced **171 editorial + 15 sponsored** normalized records; this is not a visible-card count and no image request was made in that probe. Sports remained 3 text-eligible stories and Entertainment 1, with no permitted dynamic photos. These are macOS host transport results, **not iPhone execution**. Counts differ slightly from the earlier controlled 172-record sample because the live observations occurred at different times.
+
+## Captured NOAA correction and historical limits
+
+The final native parser also repairs an actual NOAA entry whose unused photo caption said “Courtesy of Northern Gulf Institute.” For sources that prohibit photos and allow excerpt normalization, a caption inside a figure containing an image no longer determines article-text rights. Full policy checks still inspect the original bounded story metadata; explicit article rights/copyright fields remain authoritative. The original feed entry is preserved as a regression fixture and its article becomes text-eligible without using the photo.
+
+The earlier live host snapshot already recorded article ID `390bd35971fb6ddfbaf20c2e3addca58` as revoked. It remains held in that historical ledger: older tombstones lack enough per-item reason evidence for a safe general migration that preserves genuine withdrawals. Device ledgers have not been inspected, so no claim is made that this particular historical hold exists or was removed on the installed apps. No cache, checkpoint or user data was reset. The final 65-test native regression run validates this caption repair using the captured response; it does not change the previously observed 171-editorial host receipt.
 
 ## Before/after supply and remaining requirements
 

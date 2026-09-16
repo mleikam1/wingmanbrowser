@@ -1,6 +1,6 @@
 {
-  "checkedAt": "2026-09-16T01:49:31.126698+00:00",
-  "runtimeCommit": "7170b960b40e6a541ee9973c37e268a2fe335bd9",
+  "checkedAt": "2026-09-16T02:07:04.121053+00:00",
+  "runtimeCommit": "0460434ec537d099e72bdff8192902a3da8c447a",
   "version": "0.15.1+18",
   "registryDigest": "c8c346c8ddf9357203fba7971f6ac008b815da9648b4eb3f577f1d7408f34806",
   "branch": "codex/editorial-delivery-repair",
@@ -12,7 +12,7 @@
   "productionWebEndpoint": null,
   "localWebMode": "shared snapshot; debug localhost only",
   "flutterTests": {
-    "passed": 979,
+    "passed": 985,
     "skippedOptIn": 6
   },
   "pythonTestsPassed": 126,
@@ -459,5 +459,24 @@
   ],
   "coverageTargetsMet": false,
   "screenAcceptanceComplete": false,
-  "noReleaseUploaded": true
+  "noReleaseUploaded": true,
+  "finalNativeRegressionTests": {
+    "passed": 65,
+    "skippedOptIn": 1
+  },
+  "historicalNoaaTombstone": {
+    "id": "390bd35971fb6ddfbaf20c2e3addca58",
+    "observedIn": "earlier native host snapshot.revokedItemIds",
+    "deviceLedger": "not inspected",
+    "automaticRemoval": false,
+    "finalParserFixture": "passes using captured original entry",
+    "preservesExplicitWithdrawals": true
+  },
+  "artifactVerification": {
+    "androidInstalledSha256": "6cdc5fd1007dac2ae95f070329bf882967b9b7c760625bffd86c9191ddbfad26",
+    "androidVersionCode": 18,
+    "androidTargetAbi": "arm64-v8a",
+    "webSha256": "50516893aa101e8c1d92c9d7587f30076cf8a7f5337b94424359842b95879ccf",
+    "embeddedRuntimeCommitConfirmedInAllThreeTargets": true
+  }
 }
