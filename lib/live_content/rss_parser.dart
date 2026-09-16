@@ -46,7 +46,11 @@ class _StrictFeedEntities extends XmlDefaultEntityMapping {
   }
 }
 
-String rssPlain(String text, {int limit = 100000}) {
+String rssPlain(
+  String text, {
+  int limit = 100000,
+  bool omitUnusedPhotoCaptions = false,
+}) {
   if (text.length > 100000) throw const RssFailure('text-too-large');
   final fragment = html.parseFragment(text);
   fragment
@@ -54,6 +58,16 @@ String rssPlain(String text, {int limit = 100000}) {
         'script,style,iframe,svg,noscript,object,embed,nav,footer',
       )
       .forEach((n) => n.remove());
+  if (omitUnusedPhotoCaptions) {
+    // A caption attached to an actual photo describes that photo's rights,
+    // not necessarily the surrounding article. This is only used when the
+    // source forbids images and permits normalizing its optional excerpt.
+    for (final figure in fragment.querySelectorAll('figure')) {
+      if (figure.querySelector('img') != null) {
+        figure.querySelectorAll('figcaption').forEach((n) => n.remove());
+      }
+    }
+  }
   final value = (fragment.text ?? '')
       .replaceAll(
         RegExp(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\u202a-\u202e\u2066-\u2069]'),
@@ -589,8 +603,24 @@ RssParsedFeed parseRssFeed(
         reason('oversized-entry-metadata');
         continue;
       }
-      final excerpt = isSyndicated ? '' : rssPlain(rawExcerpt);
-      final rights = rssPlain(field(entry, {'rights', 'copyright'}));
+      final policyExcerpt = isSyndicated ? '' : rssPlain(rawExcerpt);
+      final excerpt =
+          !isSyndicated &&
+              !source.source.rights.images &&
+              !source.preserveFeedText
+          ? rssPlain(rawExcerpt, omitUnusedPhotoCaptions: true)
+          : policyExcerpt;
+      if (excerpt != policyExcerpt) {
+        reason('unused-photo-caption-omitted', reject: false);
+      }
+      // Explicit article rights remain authoritative, including multiple
+      // fields. Never discard them as optional image metadata.
+      final rights = rssPlain(
+        entry.childElements
+            .where((n) => {'rights', 'copyright'}.contains(n.name.local))
+            .map((n) => n.innerText)
+            .join(' '),
+      );
       var author = field(entry, {'creator', 'author'});
       if (atom) {
         author = entry.childElements
@@ -612,7 +642,7 @@ RssParsedFeed parseRssFeed(
       }
       if (isSyndicated
           ? !acceptsSyndicatedPromotion(title)
-          : !allowsEditorialText(title, excerpt)) {
+          : !allowsEditorialText(title, policyExcerpt)) {
         revoked.add(id);
         reason('policy-held');
         continue;

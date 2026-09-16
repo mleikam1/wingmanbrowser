@@ -106,7 +106,7 @@ class RssFeedProvider implements FeedProvider, ResumableFeedProvider {
 
     String configKeyFor(ApprovedLiveSource source) => rssDigest(
       jsonEncode({
-        'version': 4,
+        'version': 5,
         'url': source.feedUri.toString(),
         'hosts': source.feedRedirectHosts.toList()..sort(),
         'articleHosts': source.allowedArticleHosts.toList()..sort(),

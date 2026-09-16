@@ -1,4 +1,8 @@
 import 'dart:convert';
+import 'dart:io';
+import 'package:wingman_browser/live_content/rss_parser.dart';
+import 'package:wingman_browser/live_content/eligibility.dart';
+import 'package:wingman_browser/policy/consumer_protection_policy.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wingman_browser/live_content/models.dart';
 import 'package:wingman_browser/live_content/controller.dart';
@@ -7,6 +11,104 @@ import 'package:wingman_browser/signature/storage/document_store.dart';
 import 'rss_provider_test.dart' as fixture;
 
 void main() {
+  test(
+    'actual NOAA photo caption does not withdraw independently approved text',
+    () async {
+      final registry = LiveSourceRegistry.fromJson(
+        feedMap(
+          jsonDecode(
+            File('assets/live_content/sources.json').readAsStringSync(),
+          ),
+        ),
+      );
+      final source = registry.sources['noaa-news']!;
+      final xml = File(
+        'test/fixtures/live_content/noaa-photo-caption.xml',
+      ).readAsStringSync();
+      final policy = await ConsumerProtectionPolicy.verifyBytes(
+        File(ConsumerProtectionPolicy.assetPath).readAsBytesSync(),
+      );
+      final gate = LiveContentEligibility(
+        registry: registry,
+        canOpenDestination: (uri) => policy.assessNavigation(uri).isAllowed,
+      );
+      final parsed = parseRssFeed(
+        fixture.bytes(xml),
+        source,
+        DateTime.utc(2026, 9, 16),
+        gate,
+        gate.acceptsFeedText,
+      );
+      expect(source.source.rights.images, false);
+      expect(
+        parsed.items.single.title,
+        'NOAA names Mississippi State University to host new Northern Gulf research institute',
+      );
+      expect(parsed.items.single.image, isNull);
+      expect(
+        parsed.items.single.publishedAt,
+        DateTime.utc(2026, 9, 8, 15, 48, 55),
+      );
+      expect(parsed.revokedIds, isEmpty);
+      expect(
+        parsed.optionalFieldReasons,
+        containsPair('unused-photo-caption-omitted', 1),
+      );
+      expect(
+        parsed.items.single.excerpt,
+        isNot(contains('Courtesy of Northern Gulf Institute')),
+      );
+    },
+  );
+
+  test('unused photo captions never hide article rights or policy withdrawals', () {
+    const caption =
+        '<figure><img src="https://publisher.example/photo.jpg">'
+        '<figcaption>Image credit: Courtesy of Photographer</figcaption></figure>';
+    final clean = fixture.rss(desc: '<p>Science reporting.</p>$caption');
+    expect(fixture.parse(clean).items, hasLength(1));
+    for (final rights in [
+      '<rights>All rights reserved</rights>',
+      '<copyright>Third-party copyright</copyright>',
+      '<rights>Publisher article</rights><copyright>All rights reserved</copyright>',
+    ]) {
+      final parsed = fixture.parse(
+        clean.replaceFirst('</item>', '$rights</item>'),
+      );
+      expect(parsed.items, isEmpty);
+      expect(parsed.revokedIds, hasLength(1));
+      expect(parsed.rejectionReasons, containsPair('rights-held', 1));
+    }
+    for (final rightsInText in [
+      '<p>Article courtesy of Another Publisher</p>$caption',
+      '<figure><figcaption>Courtesy of Another Publisher</figcaption></figure>',
+      '<p>Image credit: Courtesy of Another Publisher</p>',
+    ]) {
+      final parsed = fixture.parse(fixture.rss(desc: rightsInText));
+      expect(parsed.items, isEmpty);
+      expect(parsed.revokedIds, hasLength(1));
+    }
+    final base = fixture.source();
+    final unchanged = ApprovedLiveSource.fromJson({
+      ...base.source.toJson(),
+      'enabled': true,
+      'allowedArticleHosts': ['publisher.example'],
+      'articlePathPrefixes': ['/news/'],
+      'feedUrl': base.feedUri.toString(),
+      'feedRedirectHosts': ['publisher.example'],
+      'eligibilityScope': base.eligibilityScope,
+      'preserveFeedText': true,
+    });
+    expect(fixture.parse(clean, approved: unchanged).items, isEmpty);
+    final policyHeld = fixture.parse(
+      clean,
+      allows: (_, excerpt) => !excerpt.contains('Photographer'),
+    );
+    expect(policyHeld.items, isEmpty);
+    expect(policyHeld.rejectionReasons, containsPair('policy-held', 1));
+    expect(policyHeld.revokedIds, hasLength(1));
+  });
+
   test('publisher pacing survives a parser failure after HTTP 200', () async {
     final source = fixture.source();
     final transport = fixture.FakeTransport([
