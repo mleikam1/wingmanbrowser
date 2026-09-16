@@ -517,11 +517,13 @@ class ConfigurationTests(unittest.TestCase):
             "globalvoices-fashion", "globalvoices-food", "globalvoices-health",
             "globalvoices-science", "globalvoices-technology", "globalvoices-business",
             "globalvoices-entertainment", "globalvoices-headlines",
-            "newsusa-features", "phys-org", "tech-xplore", "medical-xpress", "nasa-photojournal",
+            "newsusa-features", "phys-org", "tech-xplore", "medical-xpress", "nasa-photojournal", "currents",
         })
         self.assertEqual({topic for source in config["sources"] for topic in source["topics"]}, {
             "sports", "fashion", "food", "health", "science", "technology",
             "business", "entertainment", "headlines", "environment", "travel",
+            "science_technology", "society", "politics_government", "lifestyle_leisure",
+            "human_interest", "crime_law_justice", "education", "labour", "automotive", "real_estate",
         })
 
     def test_real_pinned_baseline_loaded_and_mandatory_fixture_denied(self):

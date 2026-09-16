@@ -55,7 +55,7 @@ class LiveContentController extends ChangeNotifier {
   String? _etag, _lastModified, _error, _storageError;
   DateTime? _nextRefreshAt;
   DateTime? _lastAttemptAt, _lastSuccessAt;
-  Timer? _refreshTimer, _imageTimer, _imageExpiryTimer;
+  Timer? _refreshTimer, _imageTimer, _imageExpiryTimer, _contentExpiryTimer;
   bool _initialized = false, _refreshing = false, _disposed = false;
   bool _imagesLoading = false;
   bool _publisherImagesVerified = false;
@@ -115,6 +115,10 @@ class LiveContentController extends ChangeNotifier {
           status: _owner && _revokedSources.contains(source.id)
               ? 'revoked'
               : status?.status ?? 'unavailable',
+          availability:
+              source.id == 'currents' && provider is! SnapshotFeedProvider
+              ? 'configuration'
+              : status?.availability,
           fetchedAt: status?.fetchedAt,
           lastSuccessAt: status?.lastSuccessAt,
           nextRefreshAt: status?.nextRefreshAt,
@@ -151,7 +155,7 @@ class LiveContentController extends ChangeNotifier {
               (!requiresAssociatedPhoto(item) ||
                   imageBytesFor(item) != null ||
                   StoryImages.forItem(item) != null) &&
-              _preferences.follows(item.sourceId) &&
+              _followsItem(item) &&
               !_preferences.dismissedItemIds.contains(item.id) &&
               item.language == _preferences.language &&
               (_preferences.selectedTopics.isEmpty ||
@@ -188,6 +192,31 @@ class LiveContentController extends ChangeNotifier {
     return ordered;
   }
 
+  bool _followsItem(LiveContentItem item) {
+    if (!_preferences.follows(item.sourceId) ||
+        _preferences.hiddenSourceIds.contains(
+          'publisher:${item.publisherId}',
+        )) {
+      return false;
+    }
+    if (item.providerId != 'currents') return true;
+    String host(String value) =>
+        value.startsWith('www.') ? value.substring(4) : value;
+    final articleHost = host(item.canonicalUrl.host);
+    // An explicit publisher/source hide remains effective when another provider
+    // supplies the same original publisher. Preferences never leave the device.
+    return !_preferences.hiddenSourceIds.any((id) {
+      final hidden = eligibility.registry.sources[id];
+      return hidden != null &&
+          hidden.providerId != 'currents' &&
+          (hidden.allowedArticleHosts.any(
+                (value) => host(value) == articleHost,
+              ) ||
+              host(hidden.source.homepageUrl.host) == articleHost ||
+              hidden.publisherId == item.publisherId);
+    });
+  }
+
   List<LiveSavedItem> get savedItems => !_owner
       ? const []
       : List.unmodifiable(
@@ -204,8 +233,28 @@ class LiveContentController extends ChangeNotifier {
   bool canOpen(LiveContentItem item) {
     if (!_owner || !_savedReadable) return false;
     final saved = _saved.where((s) => s.id == item.id);
-    if (saved.isNotEmpty && saved.first.item == null) return false;
+    if (saved.isNotEmpty &&
+        saved.first.item == null &&
+        saved.first.linkUrl == null) {
+      return false;
+    }
     return _accepts(item, saved: saved.isNotEmpty);
+  }
+
+  bool canOpenSavedLink(LiveSavedItem saved) {
+    if (!_owner ||
+        !_savedReadable ||
+        saved.linkUrl == null ||
+        _revokedItems.contains(saved.id) ||
+        _revokedSources.contains(saved.sourceId) ||
+        eligibility.registry.sources[saved.sourceId]?.enabled != true) {
+      return false;
+    }
+    try {
+      return eligibility.canOpenDestination(saved.linkUrl!);
+    } catch (_) {
+      return false;
+    }
   }
 
   bool canDisplay(LiveContentItem item) =>
@@ -332,6 +381,7 @@ class LiveContentController extends ChangeNotifier {
     provider?.cancel();
     _cancelImages();
     if (_owner && _initialized) {
+      _expireProviderPreviews();
       _loadImages(_epoch);
       _scheduleRefresh();
     }
@@ -373,7 +423,28 @@ class LiveContentController extends ChangeNotifier {
         final preferences = value == null
             ? const LiveContentPreferences()
             : LiveContentPreferences.fromJson(value);
-        if (_valid(epoch)) _preferences = preferences;
+        if (_valid(epoch)) {
+          _preferences = preferences;
+          final legacyIds = eligibility.registry.sources.values
+              .where((s) => s.enabled && s.source.id != 'currents')
+              .map((s) => s.source.id)
+              .toSet();
+          if (eligibility.registry.sources['currents']?.enabled == true &&
+              legacyIds.isNotEmpty &&
+              preferences.selectedSourceIds.length == legacyIds.length &&
+              preferences.selectedSourceIds.containsAll(legacyIds)) {
+            _preferences = preferences.copyWith(
+              selectedSourceIds: {...legacyIds, 'currents'},
+            );
+            await _enqueue(
+              epoch,
+              () => store.writeDocument(
+                'liveContentPreferences',
+                _preferences.toJson(),
+              ),
+            );
+          }
+        }
       } catch (_) {
         if (_valid(epoch)) {
           _preferencesReadable = false;
@@ -457,7 +528,13 @@ class LiveContentController extends ChangeNotifier {
                   null,
                   (a, b) => a == null || b.isAfter(a) ? b : a,
                 );
+            if (provider is SnapshotFeedProvider && _lastAttemptAt != null) {
+              _nextRefreshAt = _lastAttemptAt!.add(const Duration(minutes: 15));
+            }
             _publisherImagesVerified = value['publisherImagesVerified'] == true;
+            eligibility.trustedProviderPreviews =
+                provider is SnapshotFeedProvider &&
+                value['trustedProviderPreviews'] == true;
             _etag = value['etag'] as String?;
             _lastModified = value['lastModified'] as String?;
             _revokedItems.addAll(snapshot.revokedItemIds);
@@ -485,6 +562,7 @@ class LiveContentController extends ChangeNotifier {
     } finally {
       if (_valid(epoch)) {
         _initialized = true;
+        _expireProviderPreviews();
         _notify();
         _loadImages(epoch);
         _scheduleRefresh();
@@ -505,7 +583,7 @@ class LiveContentController extends ChangeNotifier {
     }
   }
 
-  Future<void> refresh() async {
+  Future<void> refresh({bool force = false}) async {
     if (!_owner || !_preferences.enabled || provider == null || _refreshing) {
       return;
     }
@@ -518,7 +596,15 @@ class LiveContentController extends ChangeNotifier {
         !_providerStateReadable) {
       return;
     }
-    if (_nextRefreshAt != null && _now.isBefore(_nextRefreshAt!)) return;
+    if (_nextRefreshAt != null && _now.isBefore(_nextRefreshAt!)) {
+      // Manual refresh only revalidates the common cache, at most once/minute.
+      if (!force ||
+          provider is! SnapshotFeedProvider ||
+          (_lastAttemptAt != null &&
+              _now.difference(_lastAttemptAt!) < const Duration(minutes: 1))) {
+        return;
+      }
+    }
     final epoch = _epoch;
     _refreshTimer?.cancel();
     _lastAttemptAt = _now;
@@ -558,6 +644,8 @@ class LiveContentController extends ChangeNotifier {
       final snapshot = response.snapshot;
       if (snapshot == null) throw const FormatException();
       _validateSnapshot(snapshot);
+      eligibility.trustedProviderPreviews =
+          provider is SnapshotFeedProvider && response.trustedProviderPreviews;
       // Suppress withdrawn photos immediately, even when the following durable
       // checkpoint fails. Existing text/save semantics remain independent.
       _revokedImageSources.addAll(
@@ -609,9 +697,13 @@ class LiveContentController extends ChangeNotifier {
         for (final s in snapshot.sources)
           if (s.status == 'revoked' || !s.rights.titles) s.id,
         for (final s in _snapshot?.sources ?? <LiveSource>[])
-          if (!sourceIds.contains(s.id)) s.id,
+          if (!sourceIds.contains(s.id) &&
+              (s.id != 'currents' || provider is SnapshotFeedProvider))
+            s.id,
         for (final s in _saved)
-          if (!sourceIds.contains(s.sourceId)) s.sourceId,
+          if (!sourceIds.contains(s.sourceId) &&
+              (s.sourceId != 'currents' || provider is SnapshotFeedProvider))
+            s.sourceId,
       };
       final revokedItems = {..._revokedItems, ...snapshot.revokedItemIds};
       // Withdrawn optional excerpts are redacted without revoking permitted
@@ -744,6 +836,7 @@ class LiveContentController extends ChangeNotifier {
     } finally {
       if (_valid(epoch)) {
         _refreshing = false;
+        _expireProviderPreviews();
         _notify();
         _loadImages(epoch);
         _scheduleRefresh();
@@ -760,10 +853,12 @@ class LiveContentController extends ChangeNotifier {
   }
 
   LiveSnapshot _boundedSnapshot(LiveSnapshot snapshot) {
-    final rows = snapshot.items
-        .where((i) => _acceptsForSnapshot(i, snapshot))
-        .map(_redactExcerpt)
-        .toList();
+    final rows = balancedLiveItems(
+      snapshot.items
+          .where((i) => _acceptsForSnapshot(i, snapshot))
+          .map(_redactExcerpt),
+      eligibility.registry.sources.keys,
+    );
     var bounded = snapshot.withItems(rows);
     while (utf8
                 .encode(
@@ -794,6 +889,7 @@ class LiveContentController extends ChangeNotifier {
     'snapshot': _snapshot?.toJson(),
     'etag': _etag,
     'publisherImagesVerified': _publisherImagesVerified,
+    'trustedProviderPreviews': eligibility.trustedProviderPreviews,
     'lastModified': _lastModified,
     'lastAttemptAt': _lastAttemptAt?.toIso8601String(),
     'lastSuccessAt': _lastSuccessAt?.toIso8601String(),
@@ -859,6 +955,7 @@ class LiveContentController extends ChangeNotifier {
           : {..._preferences.selectedSourceIds, id},
     ),
   );
+  Future<void> hidePublisher(String id) => hideSource('publisher:$id');
   Future<void> unfollowSource(String id) => hideSource(id);
   Future<void> hideSource(String id) => _changePreferences(
     () => _preferences.copyWith(
@@ -904,6 +1001,7 @@ class LiveContentController extends ChangeNotifier {
     }
     await _changePreferences(() => _preferences.copyWith(enabled: enabled));
     if (enabled) {
+      _expireProviderPreviews();
       _loadImages(_epoch);
       _scheduleRefresh();
     }
@@ -927,7 +1025,8 @@ class LiveContentController extends ChangeNotifier {
             id: item.id,
             sourceId: item.sourceId,
             savedAt: _now,
-            item: _redactExcerpt(item),
+            item: item.providerId == 'currents' ? null : _redactExcerpt(item),
+            linkUrl: item.providerId == 'currents' ? item.openingUrl : null,
           ),
           ..._saved,
         ];
@@ -1040,6 +1139,7 @@ class LiveContentController extends ChangeNotifier {
     _disposed = true;
     _epoch++;
     _refreshTimer?.cancel();
+    _contentExpiryTimer?.cancel();
     provider?.cancel();
     _cancelImages(clear: true);
     super.dispose();
@@ -1077,6 +1177,41 @@ class LiveContentController extends ChangeNotifier {
           'excerptProvenance': null,
         })
       : item;
+
+  void _expireProviderPreviews() {
+    _contentExpiryTimer?.cancel();
+    if (!_owner) return;
+    final rows = _snapshot?.items ?? const <LiveContentItem>[];
+    final expired = rows
+        .where((i) => i.providerId == 'currents' && !i.expiresAt.isAfter(_now))
+        .toList();
+    if (expired.isNotEmpty) {
+      final ids = expired.map((i) => i.id).toSet();
+      _snapshot = _snapshot!.withItems(
+        rows.where((i) => !ids.contains(i.id)).toList(),
+      );
+      final epoch = _epoch;
+      unawaited(
+        _enqueue(
+          epoch,
+          () => store.writeDocument('liveContentCache', _cacheDocument()),
+        ).catchError((Object _) {}),
+      );
+    }
+    final next = (_snapshot?.items ?? const <LiveContentItem>[])
+        .where((i) => i.providerId == 'currents' && i.expiresAt.isAfter(_now))
+        .map((i) => i.expiresAt)
+        .fold<DateTime?>(null, (a, b) => a == null || b.isBefore(a) ? b : a);
+    if (next != null) {
+      final epoch = _epoch;
+      _contentExpiryTimer = Timer(next.difference(_now), () {
+        if (_valid(epoch)) {
+          _expireProviderPreviews();
+          _notify();
+        }
+      });
+    }
+  }
 
   DateTime? _providerNextRefresh() {
     final scheduler = _providerState?['scheduler'];

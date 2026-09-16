@@ -35,6 +35,18 @@ extension LiveContentDiagnostics on LiveContentController {
   }
 
   bool _failedSource(String id) {
+    final availability = _snapshot?.sources
+        .where((s) => s.id == id)
+        .firstOrNull
+        ?.availability;
+    if (const {
+      'configuration',
+      'quota-paused',
+      'policy-held',
+      'valid-empty',
+    }.contains(availability)) {
+      return false;
+    }
     final state = _sourceState(id), health = _sourceHealth(id);
     final outcome = health['outcome'];
     if ({'cache-prohibited', 'source-cache-prohibited'}.contains(outcome)) {
@@ -154,11 +166,36 @@ extension LiveContentDiagnostics on LiveContentController {
     if (visible.isNotEmpty) {
       return const LiveCategoryHealth('available', 'Updates available', '');
     }
+    final availability = sources
+        .where((s) => ids.contains(s.id))
+        .map((s) => s.availability)
+        .toSet();
+    if (availability.contains('configuration')) {
+      return const LiveCategoryHealth(
+        'configuration',
+        'Shared updates are not connected',
+        'This category needs Wingman’s configured shared news service. Other available publishers remain usable.',
+      );
+    }
+    if (availability.contains('quota-paused')) {
+      return const LiveCategoryHealth(
+        'quota-paused',
+        'News updates are paused',
+        'The shared service is waiting for its next permitted update. Available categories remain usable.',
+      );
+    }
+    if (availability.contains('policy-held')) {
+      return const LiveCategoryHealth(
+        'policy-held',
+        'No eligible updates right now',
+        'Current previews are held by source or protection requirements. Other categories remain available.',
+      );
+    }
     if (accepted.any((i) => !requiresAssociatedPhoto(i))) {
       return const LiveCategoryHealth(
         'local-filters',
         'No updates match your choices',
-        'Your local language, region or dismissed-story choices hide the available articles. Review topics and sources.',
+        'Your local source, language, region or dismissed-story choices hide the available articles. Review topics and sources.',
       );
     }
     if (accepted.isNotEmpty) {
@@ -421,6 +458,7 @@ extension LiveContentDiagnostics on LiveContentController {
         'editorialPublishersWithin72Hours': recent
             .map(
               (i) =>
+                  i.publisherId ??
                   eligibility.registry.sources[i.sourceId]?.publisherId ??
                   eligibility
                       .registry

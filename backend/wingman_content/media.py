@@ -154,7 +154,7 @@ def cache_ttl(headers):
     return max(0, min(1800, min(map(int, ages)) - int(age)))
 
 
-def ingest_media(snapshot, config, prior, now, fetcher=None, cursor=0):
+def ingest_media(snapshot, config, prior, now, fetcher=None, cursor=0, before_request=None):
     """Bounded common source interleave. No user or topic inputs; private report only."""
     fetcher = fetcher or SecureImageFetcher()
     sources = {s["id"]: s for s in config["sources"]}
@@ -188,6 +188,8 @@ def ingest_media(snapshot, config, prior, now, fetcher=None, cursor=0):
             attempts += 1
             next_cursor = (position + 1) % len(queue)
             try:
+                if before_request:
+                    before_request()
                 response = fetcher.fetch_image(image, source)
                 ttl = cache_ttl(response.headers)
                 if response.status != 200 or not ttl:

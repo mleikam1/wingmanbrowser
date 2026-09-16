@@ -47,7 +47,7 @@
       "permissionRequired": 0,
       "unreviewed": 0,
       "reasons": [
-        "No editorial publisher is currently approved for this category. Sponsored NewsUSA features are separate."
+        "Currents supplies attributed editorial link-out previews when relevant current inventory exists. Article images require independent permission."
       ],
       "evidenceUrls": []
     }
@@ -808,6 +808,62 @@
       "requiresAttribution": true,
       "displayMode": "publisher-link",
       "publisherId": "global-voices"
+    },
+    {
+      "id": "currents",
+      "name": "Currents News API",
+      "homepageUrl": "https://currentsapi.services/",
+      "language": "en",
+      "topics": [
+        "headlines",
+        "sports",
+        "entertainment",
+        "science_technology",
+        "science",
+        "technology",
+        "business",
+        "society",
+        "politics_government",
+        "lifestyle_leisure",
+        "human_interest",
+        "crime_law_justice",
+        "education",
+        "environment",
+        "labour",
+        "health",
+        "automotive",
+        "real_estate",
+        "food",
+        "fashion",
+        "travel"
+      ],
+      "allowedArticleHosts": [],
+      "articlePathPrefixes": [
+        "/"
+      ],
+      "eligibilityScope": "currents-preview",
+      "rights": {
+        "titles": true,
+        "excerpts": true,
+        "images": false,
+        "attribution": "Original publisher credit and link; Powered by Currents News API. Third-party images require separate permission.",
+        "licenseUrl": "https://currentsapi.services/terms"
+      },
+      "enabled": true,
+      "verifiedAt": "2026-09-16T00:00:00Z",
+      "feedUrl": "https://api.currentsapi.services/v2/latest-news",
+      "feedRedirectHosts": [
+        "api.currentsapi.services"
+      ],
+      "minRefreshSeconds": 1800,
+      "retentionSeconds": 86400,
+      "displayMode": "publisher-link",
+      "providerId": "currents",
+      "articleHostPolicy": "validated-public",
+      "providerAttribution": {
+        "label": "Powered by Currents News API",
+        "url": "https://currentsapi.services/"
+      }
     }
   ]
 }

@@ -22,6 +22,13 @@ spec:
               value: REPLACE_NEW_DEDICATED_PROJECT_ID
             - name: CONTENT_BUCKET
               value: REPLACE_PRIVATE_CONTENT_BUCKET
+            - name: CURRENTS_LEDGER_OBJECT
+              value: wingman-operations/currents-ledger.json
+            - name: CURRENTS_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: REPLACE_CURRENTS_SECRET_NAME
+                  key: latest
             resources:
               limits:
                 cpu: '1'

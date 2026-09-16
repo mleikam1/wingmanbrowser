@@ -354,6 +354,7 @@ class LiveSource {
     required this.topics,
     required this.rights,
     this.status = 'fresh',
+    this.availability,
     this.fetchedAt,
     this.lastSuccessAt,
     this.nextRefreshAt,
@@ -364,9 +365,22 @@ class LiveSource {
     name: feedText(json['name'], max: 160),
     homepageUrl: feedArticleUri(json['homepageUrl']),
     language: feedId(json['language']),
-    topics: feedIds(json['topics'], max: 20),
+    topics: feedIds(json['topics'], max: 32),
     rights: LiveContentRights.fromJson(feedMap(json['rights'])),
     status: feedText(json['status'] ?? 'fresh', max: 40),
+    availability:
+        const {
+          'configuration',
+          'quota-paused',
+          'policy-held',
+          'valid-empty',
+          'cached',
+          'fresh',
+          'unavailable',
+          'revoked',
+        }.contains(json['availability'])
+        ? json['availability'] as String
+        : null,
     fetchedAt: json['fetchedAt'] == null ? null : feedDate(json['fetchedAt']),
     lastSuccessAt: json['lastSuccessAt'] == null
         ? null
@@ -381,6 +395,7 @@ class LiveSource {
         : const {},
   );
   final String id, name, language, status;
+  final String? availability;
   final Uri homepageUrl;
   final Set<String> topics;
   final LiveContentRights rights;
@@ -394,6 +409,7 @@ class LiveSource {
     'topics': topics.toList(),
     'rights': rights.toJson(),
     'status': status,
+    if (availability != null) 'availability': availability,
     'fetchedAt': fetchedAt?.toIso8601String(),
     'lastSuccessAt': lastSuccessAt?.toIso8601String(),
     'nextRefreshAt': nextRefreshAt?.toIso8601String(),
@@ -421,6 +437,8 @@ class ApprovedLiveSource {
     this.branding,
     this.feedCompatibility,
     this.publisherId,
+    this.providerId,
+    this.articleHostPolicy = 'pinned',
     String? displayMode,
   }) : displayMode =
            displayMode ??
@@ -521,6 +539,15 @@ class ApprovedLiveSource {
       branding: PublisherBranding.tryFromJson(json['branding']),
       displayMode: displayMode as String,
       feedCompatibility: compatibility as String?,
+      providerId: json['providerId'] == null
+          ? null
+          : feedId(json['providerId']),
+      articleHostPolicy:
+          json['articleHostPolicy'] == 'validated-public' &&
+              json['providerId'] == 'currents' &&
+              json['id'] == 'currents'
+          ? 'validated-public'
+          : 'pinned',
       publisherId: json['publisherId'] == null
           ? null
           : feedId(json['publisherId']),
@@ -550,7 +577,8 @@ class ApprovedLiveSource {
   final bool preserveFeedText;
   final PublisherBranding? branding;
   final String? feedCompatibility;
-  final String? publisherId;
+  final String? publisherId, providerId;
+  final String articleHostPolicy;
   final String displayMode;
   bool get isSponsoredSyndication => displayMode == 'sponsored-syndication';
 }
@@ -600,7 +628,7 @@ class LiveSourceRegistry {
   final String? digest;
   final Map<String, Map<String, dynamic>> reviewStatusByTopic;
   static Map<String, Map<String, dynamic>> _reviewStatus(Object? raw) {
-    if (raw is! Map || raw.length > 20) return const {};
+    if (raw is! Map || raw.length > 32) return const {};
     return Map.unmodifiable({
       for (final entry in raw.entries)
         if (entry.key is String &&
@@ -616,7 +644,12 @@ class LiveSourceRegistry {
 class LiveExcerptProvenance {
   const LiveExcerptProvenance({required this.field, this.shortened = false});
   factory LiveExcerptProvenance.fromJson(Map<String, dynamic> json) {
-    if (!{'rss-description', 'atom-summary'}.contains(json['field']) ||
+    if (!{
+          'rss-description',
+          'atom-summary',
+          'currents-description',
+          'api-description',
+        }.contains(json['field']) ||
         json['format'] != 'plain-text' ||
         json['shortened'] is! bool) {
       throw const FormatException('Invalid publisher excerpt provenance.');
@@ -660,6 +693,12 @@ class LiveContentItem {
     this.outboundUrl,
     this.updatedAt,
     this.excerptProvenance,
+    this.providerId,
+    this.providerArticleId,
+    this.author,
+    this.publisherId,
+    this.publisherName,
+    this.providerCategories = const {},
   });
   factory LiveContentItem.fromJson(Map<String, dynamic> json) {
     final eligibility = feedMap(json['eligibility']);
@@ -692,9 +731,24 @@ class LiveContentItem {
     return LiveContentItem(
       id: feedId(json['id']),
       sourceId: feedId(json['sourceId']),
+      providerId: json['providerId'] == null
+          ? null
+          : feedId(json['providerId']),
+      publisherId: json['publisherId'] == null
+          ? null
+          : feedId(json['publisherId']),
+      publisherName: optionalText(json['publisherName'], 160),
+      providerArticleId: optionalText(json['providerArticleId'], 120),
+      author: optionalText(json['author'], 200),
+      providerCategories: feedIds(json['providerCategories'] ?? [], max: 20),
       title: feedText(json['title'], max: 500),
       excerpt: optionalText(json['excerpt'], 1600),
-      attribution: optionalText(json['attribution'], 200),
+      attribution: optionalText(
+        json['attribution'],
+        json['providerId'] == 'currents' && json['sourceId'] == 'currents'
+            ? 500
+            : 200,
+      ),
       canonicalUrl: feedArticleUri(json['canonicalUrl']),
       originalUrl: json['originalUrl'] == null
           ? null
@@ -709,7 +763,7 @@ class LiveContentItem {
           : feedDate(json['publishedAt']),
       fetchedAt: feedDate(json['fetchedAt']),
       language: feedId(json['language']),
-      topics: feedIds(json['topics'], max: 20),
+      topics: feedIds(json['topics'], max: 32),
       rights: LiveContentRights.fromJson(feedMap(json['rights'])),
       eligibilityState: feedId(eligibility['state']),
       eligibilityBasis: feedId(eligibility['basis']),
@@ -732,7 +786,15 @@ class LiveContentItem {
       eligibilityState,
       eligibilityBasis,
       eligibilityScope;
-  final String? excerpt, region, attribution;
+  final String? excerpt,
+      region,
+      attribution,
+      providerId,
+      publisherId,
+      publisherName,
+      providerArticleId,
+      author;
+  final Set<String> providerCategories;
   final Uri canonicalUrl;
   final Uri? originalUrl, outboundUrl;
   Uri get openingUrl => outboundUrl ?? canonicalUrl;
@@ -751,6 +813,13 @@ class LiveContentItem {
     'id': id,
     'sourceId': sourceId,
     'title': title,
+    if (providerId != null) 'providerId': providerId,
+    if (providerArticleId != null) 'providerArticleId': providerArticleId,
+    if (author != null) 'author': author,
+    if (publisherId != null) 'publisherId': publisherId,
+    if (publisherName != null) 'publisherName': publisherName,
+    if (providerCategories.isNotEmpty)
+      'providerCategories': providerCategories.toList(),
     'excerpt': excerpt,
     'attribution': attribution,
     'canonicalUrl': canonicalUrl.toString(),

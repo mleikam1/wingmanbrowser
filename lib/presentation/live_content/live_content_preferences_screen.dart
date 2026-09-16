@@ -121,8 +121,10 @@ class _LiveContentPreferencesScreenState
               'Choose what appears in your feed. Preferences, dismissed items and your reading list stay on this device.',
             ),
             const SizedBox(height: 12),
-            const Text(
-              'Wingman downloads public feeds directly from publishers. Publishers can see your IP address and ordinary connection information. Your browsing history and chosen topics stay on this device. Feed updates stop in private browsing and when the feed is off.',
+            Text(
+              controller.provider is SnapshotFeedProvider
+                  ? 'Wingman reads a shared feed. Your chosen topics and browsing history stay on this device. Approved native-only photos can connect directly to their publisher. Feed requests stop in private browsing and when updates are off.'
+                  : 'Wingman downloads public feeds directly from publishers. Publishers can see your IP address and ordinary connection information. Your browsing history and chosen topics stay on this device. Feed updates stop in private browsing and when the feed is off.',
             ),
             SwitchListTile(
               key: const ValueKey('live-preferences-enabled'),

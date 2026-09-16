@@ -1,6 +1,10 @@
 # Miscellaneous
 *.class
 *.log
+
+# Backend-only local credentials. Never part of Flutter assets or builds.
+/backend/.env.currents
+/backend/.env.currents.*
 *.pyc
 *.swp
 .DS_Store

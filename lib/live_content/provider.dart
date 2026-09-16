@@ -2,6 +2,9 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'models.dart';
 import 'rss_transport.dart';
+import 'rss_transport_native.dart'
+    if (dart.library.js_interop) 'rss_transport_web.dart'
+    as image_platform;
 import 'transport.dart';
 import 'transport_native.dart'
     if (dart.library.js_interop) 'transport_web.dart'
@@ -17,6 +20,7 @@ class FeedResponse {
     this.providerState,
     this.warning,
     this.publisherImagesVerified = false,
+    this.trustedProviderPreviews = false,
   });
   final LiveSnapshot? snapshot;
   final bool notModified;
@@ -26,6 +30,7 @@ class FeedResponse {
 
   /// Set by the publisher parser or configured shared provider, never JSON.
   final bool publisherImagesVerified;
+  final bool trustedProviderPreviews;
 }
 
 abstract interface class FeedProvider {
@@ -50,10 +55,13 @@ class SnapshotFeedProvider implements FeedProvider {
   final FeedTransport _transport;
   ArticleImageTransport createImageTransport({
     FeedTransport Function()? factory,
-  }) => SnapshotImageTransport(
-    endpoint,
-    factory: factory,
-    allowLocal: _allowLocal,
+  }) => SharedOrNativeImageTransport(
+    shared: SnapshotImageTransport(
+      endpoint,
+      factory: factory,
+      allowLocal: _allowLocal,
+    ),
+    native: kIsWeb ? null : image_platform.createArticleImageTransport(),
   );
   static FeedProvider? fromEnvironment() {
     const value = String.fromEnvironment('WINGMAN_FEED_URL');
@@ -130,6 +138,7 @@ class SnapshotFeedProvider implements FeedProvider {
         etag: _header(response.headers['etag']),
         lastModified: _header(response.headers['last-modified']),
         publisherImagesVerified: true,
+        trustedProviderPreviews: true,
       );
     } on FeedFailure {
       rethrow;
@@ -208,5 +217,25 @@ class SnapshotImageTransport implements ArticleImageTransport {
       transport.cancel();
     }
     _active.clear();
+  }
+}
+
+/// Preserve a publisher's native-only, transient photo contract in shared mode.
+/// It never refetches the RSS feed or routes provider secrets to image hosts.
+class SharedOrNativeImageTransport implements ArticleImageTransport {
+  SharedOrNativeImageTransport({required this.shared, this.native});
+  final ArticleImageTransport shared;
+  final ArticleImageTransport? native;
+  @override
+  Future<RssFetchResponse> fetchImage(
+    LiveArticleImage image,
+    ApprovedLiveSource source, {
+    required bool Function(Uri) canOpenDestination,
+  }) => (source.isSponsoredSyndication && native != null ? native! : shared)
+      .fetchImage(image, source, canOpenDestination: canOpenDestination);
+  @override
+  void cancel() {
+    shared.cancel();
+    native?.cancel();
   }
 }

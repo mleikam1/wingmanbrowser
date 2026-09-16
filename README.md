@@ -4,6 +4,13 @@
 
 **Built for discovery. Designed with boundaries.**
 
+The shared Currents integration extends Home/Discover with the reviewed v2
+categories, backend-only credentials and a durable 150-attempt daily ceiling.
+Existing approved feeds and NewsUSA remain supported. Setup, testing, deployment
+boundaries and rollback are in [Currents integration](docs/CURRENTS_INTEGRATION.md).
+Production Currents delivery requires an authorized shared HTTPS backend and
+`WINGMAN_FEED_URL`; no production endpoint is bundled by this change.
+
 Version **0.14.0+16** adds current article-associated images, a broader U.S.
 feature mix and a cleaner Discover feed. Source-approved RSS thumbnails accompany
 technology, science and health reporting. Clearly labeled NewsUSA sponsored

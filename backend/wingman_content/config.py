@@ -5,12 +5,13 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 SCOPES = {"technology-reporting", "science-reporting", "public-information",
-          "sports-reporting", "general-reporting", "lifestyle-education", "sponsored-features", "health-reporting"}
+          "sports-reporting", "general-reporting", "lifestyle-education", "sponsored-features", "health-reporting", "currents-preview"}
 REGISTRY_KEYS = ("id", "name", "homepageUrl", "language", "topics", "allowedArticleHosts",
                  "articlePathPrefixes", "eligibilityScope", "rights", "enabled", "verifiedAt",
                  "feedUrl", "feedRedirectHosts", "minRefreshSeconds", "retentionSeconds",
                  "articleUrlFormat", "requiredTopicTerms", "requiresAttribution",
-                 "imagePolicy", "preserveFeedText", "displayMode", "branding", "publisherId", "feedCompatibility")
+                 "imagePolicy", "preserveFeedText", "displayMode", "branding", "publisherId", "feedCompatibility",
+                 "providerId", "articleHostPolicy", "providerAttribution")
 
 
 def load_config(path):
@@ -23,10 +24,17 @@ def load_config(path):
         if not re.fullmatch(r"[a-z0-9-]{1,80}", sid) or sid in seen:
             raise ValueError("Invalid or duplicate source id")
         seen.add(sid)
+        provider = source.get("providerId", "rss")
+        if provider not in ("rss", "currents"):
+            raise ValueError("Unreviewed content provider")
+        if source.get("articleHostPolicy") and not (provider == "currents" and sid == "currents"
+                and source["articleHostPolicy"] == "validated-public"
+                and source["eligibilityScope"] == "currents-preview"):
+            raise ValueError("Unreviewed article host policy")
         if source["eligibilityScope"] not in SCOPES or source["language"] != "en":
             raise ValueError("Unreviewed source scope/language")
         for field in ("feedRedirectHosts", "allowedArticleHosts"):
-            if not source.get(field) or any(not re.fullmatch(r"[a-z0-9.-]+", host)
+            if (not source.get(field) and not (provider == "currents" and field == "allowedArticleHosts")) or any(not re.fullmatch(r"[a-z0-9.-]+", host)
                                             for host in source[field]):
                 raise ValueError("Invalid source hosts")
         feed = urlsplit(source["feedUrl"])
@@ -44,6 +52,11 @@ def load_config(path):
             raise ValueError("Invalid refresh interval")
         if not 3600 <= source["retentionSeconds"] <= 604800:
             raise ValueError("Invalid cache retention")
+        if provider == "currents" and (source["retentionSeconds"] > 86400 or
+                source["feedUrl"] != "https://api.currentsapi.services/v2/latest-news" or
+                source["feedRedirectHosts"] != ["api.currentsapi.services"] or
+                source.get("articleHostPolicy") != "validated-public"):
+            raise ValueError("Invalid Currents provider contract")
         if not isinstance(source["enabled"], bool) or not source.get("articlePathPrefixes"):
             raise ValueError("Missing explicit article scope")
         if source.get("articleUrlFormat", "path-prefix") not in ("path-prefix", "dated-story"):

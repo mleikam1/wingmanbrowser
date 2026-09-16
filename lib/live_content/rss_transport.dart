@@ -49,7 +49,8 @@ Uri checkedImageUri(Uri uri, ApprovedLiveSource source) {
 
 Uri checkedRssUri(Uri uri, ApprovedLiveSource source) {
   final text = uri.toString();
-  if (text.length > 4096 ||
+  if ((source.providerId != null && source.providerId != 'rss') ||
+      text.length > 4096 ||
       RegExp(r'[\x00-\x20\x7f\\]').hasMatch(text) ||
       uri.scheme != 'https' ||
       uri.userInfo.isNotEmpty ||

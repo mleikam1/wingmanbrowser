@@ -70,7 +70,13 @@ class RssFeedProvider implements FeedProvider, ResumableFeedProvider {
       if (epoch != _epoch) throw const RssFailure('cancelled');
     }
 
-    final approved = registry.sources.values.toList();
+    // Provider dispatch is a security boundary: credentials and all Currents
+    // calls stay in Wingman's scheduled backend, even without a shared URL.
+    final approved = registry.sources.values
+        .where(
+          (source) => source.providerId == null || source.providerId == 'rss',
+        )
+        .toList();
     final priorStates = feedMap(_state['sources'] ?? {});
     final states = <String, dynamic>{},
         health = <String, LiveSource>{},

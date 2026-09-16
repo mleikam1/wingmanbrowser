@@ -221,7 +221,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      for (final topic in liveContentTopicOrder) {
+      for (final topic in liveContentQuickTopics) {
         expect(_key('live-topic-$topic'), findsOneWidget);
       }
       final headerY = tester.getTopLeft(_key('live-topic-scroll')).dy;

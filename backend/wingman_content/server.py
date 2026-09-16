@@ -3,7 +3,7 @@ import hashlib
 import http.client
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from email.utils import format_datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from .normalize import date_value, iso
@@ -113,18 +113,37 @@ def handler_for(store):
                 self.reply(503, b'{"error":"snapshot-unavailable"}')
                 return
             now = datetime.now(timezone.utc)
-            snapshot = dict(snapshot, items=[item for item in snapshot["items"] if is_unexpired(item, now) and item_current(item, now)])
+            original_items = snapshot['items']
+            snapshot = dict(snapshot, items=[item for item in original_items if is_unexpired(item, now) and item_current(item, now)],
+                            sources=[{key: value for key, value in source.items() if key != 'diagnostics'}
+                                     for source in snapshot.get('sources', [])])
             data = encode(snapshot)
             etag = '"' + hashlib.sha256(data).hexdigest() + '"'
             generated = date_value(snapshot.get("generatedAt"))
             modified = format_datetime(generated, usegmt=True) if generated else None
             expires = date_value(snapshot.get("expiresAt"))
-            cache = "public, max-age=60, must-revalidate" if expires and expires > datetime.now(timezone.utc) else "no-cache"
+            deadlines = [value for value in [expires] + [date_value(item.get('expiresAt'))
+                         for item in snapshot['items']] if value is not None]
+            for item in snapshot['items']:
+                published = date_value(item.get('publishedAt'))
+                if published:
+                    deadlines.append(published + timedelta(days=30))
+                if item.get('providerId') == 'currents':
+                    fetched = date_value(item.get('fetchedAt'))
+                    if fetched:
+                        deadlines.append(fetched + timedelta(hours=24))
+            ttl = max(0, min([60] + [int((value - now).total_seconds()) for value in deadlines])) if deadlines else 0
+            cache = "public, max-age=%d, must-revalidate" % ttl if ttl else "no-cache, must-revalidate"
             headers = {"ETag": etag, "Cache-Control": cache}
             if modified:
                 headers["Last-Modified"] = modified
             none_match = self.headers.get("If-None-Match")
-            same = none_match == etag or (none_match is None and self.headers.get("If-Modified-Since") == modified)
+            matches = [value.strip().removeprefix('W/') for value in (none_match or '').split(',')]
+            # Expiry can change this representation without changing the saved
+            # generation's date. Only ETag may validate that filtered response.
+            same = etag in matches or '*' in matches or (none_match is None and modified is not None
+                    and len(original_items) == len(snapshot['items'])
+                    and self.headers.get("If-Modified-Since") == modified)
             self.reply(304 if same else 200, b"" if same else data, headers)
 
         def do_POST(self):

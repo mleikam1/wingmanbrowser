@@ -19,6 +19,7 @@ List<LiveContentItem> balancedLiveItems(
     'medical-xpress',
     'phys-org',
     ...sourceOrder,
+    ...rows.map((row) => row.publisherId ?? row.sourceId),
   };
   final result = <LiveContentItem>[];
   for (final sponsored in [false, true]) {
@@ -29,7 +30,7 @@ List<LiveContentItem> balancedLiveItems(
                     row.sourceId == 'newsusa-features') ==
                 sponsored &&
             row.topics.any(fewerTopics.contains) == fewer) {
-          (groups[row.sourceId] ??= []).add(row);
+          (groups[row.publisherId ?? row.sourceId] ??= []).add(row);
         }
       }
       for (var n = 0; ; n++) {

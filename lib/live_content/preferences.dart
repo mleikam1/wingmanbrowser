@@ -80,11 +80,13 @@ class LiveSavedItem {
     required this.savedAt,
     required this.item,
     this.unavailableReason,
+    this.linkUrl,
   });
   factory LiveSavedItem.fromJson(Map<String, dynamic> json) => LiveSavedItem(
     id: feedId(json['id']),
     sourceId: feedId(json['sourceId']),
     savedAt: feedDate(json['savedAt']),
+    linkUrl: json['linkUrl'] == null ? null : feedArticleUri(json['linkUrl']),
     item: json['item'] == null
         ? null
         : LiveContentItem.fromJson(feedMap(json['item'])),
@@ -96,7 +98,10 @@ class LiveSavedItem {
   final DateTime savedAt;
   final LiveContentItem? item;
   final String? unavailableReason;
-  bool get available => item != null;
+
+  /// A saved URL is user data; provider preview/photo retention does not apply.
+  final Uri? linkUrl;
+  bool get available => item != null || linkUrl != null;
   LiveSavedItem unavailable(String reason) => LiveSavedItem(
     id: id,
     sourceId: sourceId,
@@ -109,6 +114,7 @@ class LiveSavedItem {
     'sourceId': sourceId,
     'savedAt': savedAt.toIso8601String(),
     'item': item?.toJson(),
+    if (linkUrl != null) 'linkUrl': linkUrl.toString(),
     'unavailableReason': unavailableReason,
   };
 }

@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from .config import registry
 from .fetch import FetchError, SecureFeedFetcher
 from .normalize import date_value, iso, parse_feed, canonical_url, item_id, matches_topic_scope
-from .store import encode
+from .store import encode, WriterLeaseError
 
 MAX_SHARED_ITEMS = 300
 MAX_SNAPSHOT_BYTES = 512 * 1024
@@ -19,6 +19,28 @@ class NewsProvider(ABC):
     @abstractmethod
     def refresh(self, source, prior, now):
         """Return validated normalized source state; never accepts user context."""
+
+
+class CompositeNewsProvider(NewsProvider):
+    """Exactly one adapter per source; provider absence never disables RSS."""
+    def __init__(self, rss_provider, currents_provider=None):
+        self.rss_provider, self.currents_provider = rss_provider, currents_provider
+
+    def refresh(self, source, prior, now):
+        if source.get('providerId', 'rss') == 'rss':
+            return self.rss_provider.refresh(source, prior, now)
+        if source.get('providerId') != 'currents':
+            raise ValueError('unreviewed-provider')
+        if self.currents_provider is not None:
+            return self.currents_provider.refresh(source, prior, now)
+        return dict(prior, status='cached' if prior.get('lastSuccessAt') else 'not-configured',
+                    error='provider-not-configured', lastHttpStatus=None,
+                    nextRefreshAt=iso(now + timedelta(minutes=30)))
+
+    def bind_writer_guard(self, guard):
+        gateway = getattr(self.currents_provider, 'gateway', None)
+        if gateway is not None:
+            gateway.before_request = guard
 
 
 def delay_seconds(headers, now, floor):
@@ -48,6 +70,10 @@ class RssAtomProvider(NewsProvider):
         self.fetcher = fetcher or SecureFeedFetcher()
 
     def refresh(self, source, prior, now):
+        if source.get('providerId', 'rss') != 'rss':
+            # A miswired caller cannot turn the legacy fetcher into an API path
+            # that bypasses Currents' durable reservation gateway.
+            raise ValueError('rss-provider-mismatch')
         normalization_key = hashlib.sha256(encode({"version": NORMALIZATION_VERSION,
                                                   "source": source})).hexdigest()
         validators = {}
@@ -107,12 +133,83 @@ class RssAtomProvider(NewsProvider):
 
 def is_unexpired(item, now):
     expires = date_value(item.get("expiresAt"))
+    if item.get('providerId') == 'currents':
+        fetched = date_value(item.get('fetchedAt'))
+        if fetched is None or fetched > now + timedelta(minutes=5):
+            return False
+        expires = min(expires, fetched + timedelta(hours=24)) if expires else None
     return expires is not None and expires > now
 
 
 def item_current(item, now):
     published = date_value(item.get("publishedAt"))
     return published is None or published >= now - timedelta(days=30)
+
+
+def diverse_inventory(items, topics):
+    """Round-robin categories and prefer less represented publishers per turn.
+
+    Sorting once by publication preserves recency within each publisher. This
+    ordering is applied before either the item or byte budget is consumed.
+    """
+    items = sorted(items, key=lambda item: (item.get('publishedAt') or '', item['id']), reverse=True)
+    buckets = {topic: [item for item in items if topic in item.get('topics', [])] for topic in topics}
+    buckets['_other'] = [item for item in items if not any(t in topics for t in item.get('topics', []))]
+    selected, seen, publisher_counts = [], set(), {}
+    while len(selected) < MAX_SHARED_ITEMS:
+        progressed = False
+        for rows in buckets.values():
+            rows[:] = [item for item in rows if item['id'] not in seen]
+            if not rows:
+                continue
+            item = min(rows, key=lambda row: publisher_counts.get(row.get('publisherId', row['sourceId']), 0))
+            seen.add(item['id'])
+            selected.append(item)
+            publisher = item.get('publisherId', item['sourceId'])
+            publisher_counts[publisher] = publisher_counts.get(publisher, 0) + 1
+            progressed = True
+            if len(selected) == MAX_SHARED_ITEMS:
+                break
+        if not progressed:
+            break
+    return selected
+
+
+def bounded_public_item(item):
+    """Keep the typed app envelope finite even when old stored fields are huge."""
+    fields = ('id', 'sourceId', 'providerId', 'providerArticleId', 'publisherId', 'publisherName',
+              'providerCategories', 'providerAttribution', 'title', 'canonicalUrl', 'originalUrl',
+              'outboundUrl', 'publishedAt', 'fetchedAt', 'expiresAt', 'updatedAt', 'language',
+              'topics', 'rights', 'eligibility', 'image', 'excerpt', 'excerptProvenance',
+              'attribution', 'author', 'syndicatedArticle', 'region')
+    result = {key: item[key] for key in fields if key in item}
+    for key, limit in (('excerpt', 1600), ('attribution', 500), ('author', 200),
+                       ('publisherName', 120), ('publisherId', 253), ('providerArticleId', 120)):
+        if key in result and isinstance(result[key], str) and len(result[key]) > limit:
+            result[key] = result[key][:limit]
+    # An overlong optional blob cannot evict all other publishers/categories.
+    for key in ('image', 'excerptProvenance', 'providerAttribution'):
+        if key in result and len(encode(result[key])) > 16384:
+            result.pop(key)
+    return result
+
+
+def public_availability(state, status):
+    """Small reader-facing state, never operational usage or query diagnostics."""
+    if status == 'revoked':
+        return 'revoked'
+    error = state.get('error')
+    if error in ('provider-not-configured', 'currents-unconfigured', 'currents-setup-required',
+                 'authentication-paused', 'http-401', 'http-403'):
+        return 'configuration'
+    if error in ('http-429', 'provider-wait', 'local-budget-exhausted', 'provider-quota-reserve',
+                 'supplement-budget-reserve'):
+        return 'quota-paused'
+    if error in ('query-held', 'http-400') or state.get('refreshSuspended'):
+        return 'policy-held'
+    if state.get('status') == 'valid-empty':
+        return 'valid-empty'
+    return status if status in ('cached', 'fresh', 'unavailable') else 'unavailable'
 
 
 def public_snapshot(config, states, now, prior_snapshot=None):
@@ -143,9 +240,11 @@ def public_snapshot(config, states, now, prior_snapshot=None):
             stale.append(source["id"])
         metadata = {key: source[key] for key in ("id", "name", "homepageUrl", "language", "topics", "rights")}
         metadata.update(status=status, fetchedAt=state.get("fetchedAt"),
-                        lastSuccessAt=state.get("lastSuccessAt"), nextRefreshAt=state.get("nextRefreshAt"))
-        if state.get('diagnostics'):
-            metadata['diagnostics'] = state['diagnostics']
+                        lastSuccessAt=state.get("lastSuccessAt"), nextRefreshAt=state.get("nextRefreshAt"),
+                        availability=public_availability(state, status))
+        for key in ('providerId', 'providerAttribution'):
+            if key in source:
+                metadata[key] = source[key]
         sources.append(metadata)
         if status in ("revoked", "unavailable"):
             continue
@@ -158,7 +257,7 @@ def public_snapshot(config, states, now, prior_snapshot=None):
             if (not matches_topic_scope(item.get('title', ''), item.get('excerpt', ''), source)
                     or (source.get('requiresAttribution') and not item.get('attribution'))):
                 continue
-            candidate = {key: value for key, value in item.items() if not key.startswith("_")}
+            candidate = bounded_public_item(item)
             candidate["rights"] = {"title": True, "excerpt": source["rights"]["excerpts"],
                                    "image": source['rights']['images'], "licenseUrl": source["rights"]["licenseUrl"]}
             if not source["rights"]["excerpts"]:
@@ -167,6 +266,7 @@ def public_snapshot(config, states, now, prior_snapshot=None):
             from .media import accepts_image
             if not accepts_image(candidate.get('image'), source):
                 candidate['image'] = None
+            candidate['rights']['image'] = candidate.get('image') is not None
             if source.get('displayMode', 'publisher-link') != 'sponsored-syndication':
                 candidate.pop('syndicatedArticle', None)
             # Stable URL identity wins deterministically; distinct articles with
@@ -175,13 +275,25 @@ def public_snapshot(config, states, now, prior_snapshot=None):
             # The same article may appear in a broad feed and its reviewed
             # photo-specific feed. Keep the complete approved representation;
             # never combine permissions or image fields from different sources.
-            if old is None or (candidate.get('image') and not old.get('image')):
+            if old is None:
                 by_url[candidate['canonicalUrl']] = candidate
+            else:
+                # Merge only membership, preserving one complete rights/assets
+                # representation. Never graft one provider's image onto another.
+                winner = candidate if candidate.get('image') and not old.get('image') else old
+                compatible = (old.get('providerId', 'rss') == candidate.get('providerId', 'rss') and
+                              old.get('rights') == candidate.get('rights'))
+                if compatible:
+                    winner['topics'] = sorted(set(old.get('topics', [])) | set(candidate.get('topics', [])))
+                if compatible and old.get('providerId') == candidate.get('providerId') == 'currents':
+                    winner['providerCategories'] = sorted(set(old.get('providerCategories', [])) |
+                                                          set(candidate.get('providerCategories', [])))
+                by_url[candidate['canonicalUrl']] = winner
     revoked_sources = sorted(set(revoked_sources) | set((prior_snapshot or {}).get("revokedSourceIds", [])))
     items = [item for item in by_url.values() if item["id"] not in revoked
              and item["sourceId"] not in revoked_sources]
-    items.sort(key=lambda item: (item.get("publishedAt") or "", item["id"]), reverse=True)
-    items = items[:MAX_SHARED_ITEMS]
+    topics = list(dict.fromkeys(topic for source in config['sources'] for topic in source['topics']))
+    items = diverse_inventory(items, topics)
     result = {"schemaVersion": 1, "snapshotId": "0" * 32, "generatedAt": iso(now),
               "expiresAt": iso(now + timedelta(seconds=1800)), "sources": sources, "items": items,
               "revokedItemIds": sorted(revoked), "revokedSourceIds": revoked_sources,
@@ -193,8 +305,15 @@ def public_snapshot(config, states, now, prior_snapshot=None):
                       revokedSourceIds=sorted(set(revoked_sources) | current_ids))
         for source in result['sources']:
             source['status'] = 'revoked'
-    while len(encode(result)) > MAX_SNAPSHOT_BYTES and result["items"]:
-        result["items"].pop()
+    # Reserve balanced order first, then add records that fit. A large feature
+    # is skipped individually rather than consuming the remaining categories.
+    result['items'] = []
+    remaining = MAX_SNAPSHOT_BYTES - len(encode(result))
+    for item in items if not result.get('recoveryRequired') else []:
+        size = len(encode(item)) + (1 if result['items'] else 0)
+        if size <= remaining:
+            result['items'].append(item)
+            remaining -= size
     if len(encode(result)) > MAX_SNAPSHOT_BYTES:
         raise ValueError("Snapshot metadata/revocation size limit")
     result["snapshotId"] = hashlib.sha256(encode(result)).hexdigest()[:32]
@@ -202,6 +321,19 @@ def public_snapshot(config, states, now, prior_snapshot=None):
 
 
 def ingest(config, store, provider, now=None, media_fetcher=None):
+    # All programmatic callers share the same cross-process publication lock.
+    # Acquiring it precedes both the content read and every provider operation.
+    with store.writer() as writer_guard:
+        if hasattr(provider, 'bind_writer_guard'):
+            provider.bind_writer_guard(writer_guard)
+        try:
+            return _ingest(config, store, provider, now, media_fetcher, writer_guard)
+        finally:
+            if hasattr(provider, 'bind_writer_guard'):
+                provider.bind_writer_guard(None)
+
+
+def _ingest(config, store, provider, now=None, media_fetcher=None, writer_guard=lambda: None):
     live_clock = now is None
     now = now or datetime.now(timezone.utc)
     prior = store.read() or {"states": {}, "snapshot": {}}
@@ -217,8 +349,12 @@ def ingest(config, store, provider, now=None, media_fetcher=None):
         if source["enabled"] and not state.get("sourceRevoked") and not state.get("refreshSuspended") and (due is None or source_now >= due):
             requested = True
             try:
+                writer_guard()
                 state = provider.refresh(source, previous, source_now)
-                action = "http-%d" % state["lastHttpStatus"]
+                writer_guard()
+                action = "http-%d" % state["lastHttpStatus"] if state.get('lastHttpStatus') else state.get('error') or state.get('status', 'not-due')
+            except WriterLeaseError:
+                raise
             except Exception as exc:
                 # One bounded attempt per due run; retry next scheduled run with
                 # exponential backoff. No multiplicative immediate retry storm.
@@ -241,6 +377,13 @@ def ingest(config, store, provider, now=None, media_fetcher=None):
                 action = reason
         # Do not retain bodies, HTML, image URLs or expired normalized records.
         state["items"] = [item for item in state.get("items", []) if is_unexpired(item, source_now)]
+        if 'currentsPools' in state:
+            state['currentsPools'] = {key: [item for item in items if is_unexpired(item, source_now)]
+                                     for key, items in state['currentsPools'].items()}
+        if not source['enabled'] or not source['rights'].get('titles') or state.get('sourceRevoked'):
+            state['items'] = []
+            if 'currentsPools' in state:
+                state['currentsPools'] = {}
         from .diagnostics import source_diagnostics
         state['diagnostics'] = source_diagnostics(source, state, source_now, action, requested,
                                                   was_due=due is None or source_now >= due)
@@ -249,14 +392,18 @@ def ingest(config, store, provider, now=None, media_fetcher=None):
                        "held": state.get("heldCount", 0), "heldReasons": state.get("heldReasons", {}),
                        "heldExamples": state.get("heldExamples", []), "nextRefreshAt": state.get("nextRefreshAt"),
                        'diagnostics': state['diagnostics']})
+        if source.get('providerId') == 'currents':
+            report[-1]['jobReport'] = state.get('jobReport', [])
     snapshot = public_snapshot(config, states, datetime.now(timezone.utc) if live_clock else now, prior.get("snapshot"))
     if snapshot.get('recoveryRequired'):
         for state in states.values():
             state.update(sourceRevoked=True, items=[], revokedItemIds=[])
     from .media import ingest_media
+    writer_guard()
     media, media_report = ingest_media(snapshot, config, prior.get('media', {}),
                                        datetime.now(timezone.utc) if live_clock else now, media_fetcher,
-                                       cursor=prior.get('mediaCursor', 0))
+                                       cursor=prior.get('mediaCursor', 0), before_request=writer_guard)
+    writer_guard()
     store.write({"schemaVersion": 1, "states": states, "snapshot": snapshot,
                  "media": media, "mediaReport": media_report,
                  "mediaCursor": media_report[-1]['scheduler']['nextCursor']})

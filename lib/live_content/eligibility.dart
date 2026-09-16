@@ -12,6 +12,33 @@ class LiveContentEligibility {
   final LiveSourceRegistry registry;
   final bool Function(Uri) canOpenDestination;
 
+  /// Provenance is established by the configured shared transport, never by a
+  /// JSON flag or a native RSS response. Registry approval remains mandatory.
+  bool trustedProviderPreviews = false;
+
+  bool _publicArticleHost(Uri uri) {
+    final host = uri.host.toLowerCase();
+    return RegExp(r'^[a-z0-9-]+(?:\.[a-z0-9-]+)+$').hasMatch(host) &&
+        !RegExp(r'^[0-9.]+$').hasMatch(host) &&
+        !host.endsWith('.local') &&
+        !host.endsWith('.localhost') &&
+        !host.endsWith('.internal') &&
+        !host.endsWith('.test') &&
+        !host.endsWith('.currentsapi.services') &&
+        host != 'currentsapi.services';
+  }
+
+  bool _providerPreview(LiveContentItem item, ApprovedLiveSource approved) =>
+      trustedProviderPreviews &&
+      approved.articleHostPolicy == 'validated-public' &&
+      approved.providerId == 'currents' &&
+      item.providerId == 'currents' &&
+      item.sourceId == 'currents' &&
+      item.publisherId != null &&
+      item.publisherName?.isNotEmpty == true &&
+      _publicArticleHost(item.canonicalUrl) &&
+      item.expiresAt.difference(item.fetchedAt) <= const Duration(hours: 24);
+
   /// Image permission is independent of headline permission. This checks pinned
   /// origin/license/rendition and association consistency; provenance comes from
   /// the direct RSS provider, not from a self-asserted JSON image object.
@@ -85,13 +112,16 @@ class LiveContentEligibility {
     bool saved = false,
   }) {
     final approved = registry.sources[item.sourceId];
+    final providerPreview =
+        approved != null && _providerPreview(item, approved);
     if (approved == null ||
         !approved.enabled ||
         !approved.source.rights.titles ||
         !item.rights.titles ||
         item.title.isEmpty ||
         item.title.length > 500 ||
-        !approved.allowedArticleHosts.contains(item.canonicalUrl.host) ||
+        (!providerPreview &&
+            !approved.allowedArticleHosts.contains(item.canonicalUrl.host)) ||
         !_approvedPath(item.canonicalUrl, approved.articlePathPrefixes) ||
         (approved.articleUrlFormat == 'dated-story' &&
             !RegExp(
@@ -103,7 +133,9 @@ class LiveContentEligibility {
         item.topics.isEmpty ||
         !item.topics.any(approved.source.topics.contains) ||
         item.eligibilityState != 'eligible' ||
-        item.eligibilityBasis != 'curated-source-scope' ||
+        (providerPreview
+            ? item.eligibilityBasis != 'provider-preview'
+            : item.eligibilityBasis != 'curated-source-scope') ||
         item.eligibilityScope != approved.eligibilityScope ||
         item.fetchedAt.isAfter(now.add(const Duration(hours: 24))) ||
         (item.publishedAt?.isAfter(now.add(const Duration(hours: 24))) ??
@@ -116,7 +148,8 @@ class LiveContentEligibility {
         (item.updatedAt?.isAfter(now.add(const Duration(hours: 24))) ??
             false) ||
         !item.expiresAt.isAfter(item.fetchedAt) ||
-        (!saved && !now.isBefore(item.expiresAt)) ||
+        ((!saved || item.providerId == 'currents') &&
+            !now.isBefore(item.expiresAt)) ||
         item.expiresAt.difference(item.fetchedAt) > const Duration(days: 30)) {
       return false;
     }

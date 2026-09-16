@@ -100,6 +100,8 @@ class _LiveReadingListState extends State<LiveReadingList> {
     final item = saved.item;
     final allowed =
         widget.canContinue() && item != null && controller.canOpen(item);
+    final savedLinkAllowed =
+        widget.canContinue() && controller.canOpenSavedLink(saved);
     final storyImage = allowed ? StoryImages.forItem(item) : null;
     final publisherImage = allowed ? controller.imageFor(item) : null;
     final approved = controller.eligibility.registry.sources[saved.sourceId];
@@ -110,7 +112,10 @@ class _LiveReadingListState extends State<LiveReadingList> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         LivePublisherIdentity(
-          name: liveContentSourceName(controller, saved.sourceId),
+          name:
+              item?.publisherName ??
+              saved.linkUrl?.host ??
+              liveContentSourceName(controller, saved.sourceId),
           sponsored: item?.syndicatedArticle != null,
           branding: allowed && controller.preferences.enabled
               ? approved?.branding
@@ -118,7 +123,9 @@ class _LiveReadingListState extends State<LiveReadingList> {
         ),
         const SizedBox(height: 8),
         Text(
-          item?.title ?? 'Saved article unavailable',
+          item?.title ??
+              saved.linkUrl?.toString() ??
+              'Saved article unavailable',
           style: Theme.of(context).textTheme.titleMedium,
         ),
         if (excerpt != null)
@@ -157,7 +164,7 @@ class _LiveReadingListState extends State<LiveReadingList> {
             canContinue: widget.canContinue,
           ),
         ],
-        if (item == null || !allowed) ...[
+        if ((item == null || !allowed) && !savedLinkAllowed) ...[
           const SizedBox(height: 8),
           Text(
             saved.unavailableReason ??
@@ -175,6 +182,13 @@ class _LiveReadingListState extends State<LiveReadingList> {
                   ? () {
                       if (widget.canContinue() && controller.canOpen(item)) {
                         widget.onOpen(item);
+                      }
+                    }
+                  : savedLinkAllowed && widget.onOpenUri != null
+                  ? () {
+                      if (widget.canContinue() &&
+                          controller.canOpenSavedLink(saved)) {
+                        widget.onOpenUri!(saved.linkUrl!);
                       }
                     }
                   : null,

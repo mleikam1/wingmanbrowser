@@ -1,6 +1,7 @@
 """RSS/Atom normalization and conservative source-scoped eligibility."""
 import hashlib
 import html
+import ipaddress
 import json
 import re
 import unicodedata
@@ -33,9 +34,13 @@ def date_value(value, now=None):
         parsed = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
     except ValueError:
         try:
-            parsed = parsedate_to_datetime(value.strip())
-        except (ValueError, TypeError, OverflowError):
-            return None
+            # Currents documents a space before its numeric timezone offset.
+            parsed = datetime.strptime(value.strip(), '%Y-%m-%d %H:%M:%S %z')
+        except ValueError:
+            try:
+                parsed = parsedate_to_datetime(value.strip())
+            except (ValueError, TypeError, OverflowError):
+                return None
     if not parsed or parsed.tzinfo is None:
         return None
     parsed = parsed.astimezone(timezone.utc)
@@ -79,12 +84,16 @@ def plain(value, limit, preserve=False):
 
 
 def canonical_url(value, source):
+    if not isinstance(value, str):
+        return None
     value = html.unescape(value.strip())
     if len(value) > 4096 or "\\" in value or any(ord(c) < 33 or ord(c) == 127 for c in value):
         return None
     try:
         parsed = urlsplit(value)
-        if (parsed.scheme != "https" or parsed.hostname not in source["allowedArticleHosts"]
+        dynamic = (source.get("providerId") == "currents" and source.get("articleHostPolicy") == "validated-public")
+        allowed = public_article_host(parsed.hostname) if dynamic else parsed.hostname in source["allowedArticleHosts"]
+        if (parsed.scheme != "https" or not allowed
                 or parsed.username is not None or parsed.password is not None
                 or parsed.port not in (None, 443)):
             return None
@@ -105,6 +114,26 @@ def canonical_url(value, source):
         return urlunsplit(("https", parsed.hostname, parsed.path or "/", urlencode(query), ""))
     except (ValueError, UnicodeError):
         return None
+
+
+def public_article_host(host):
+    """Admit public DNS article names, never IPs, local names or API destinations.
+
+    Article pages are never fetched here. Navigation still uses Wingman's normal
+    destination and redirect protection; media has its separate pinned allowlist.
+    """
+    if not isinstance(host, str) or len(host) > 253 or not re.fullmatch(
+            r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+", host):
+        return False
+    if host.split('.')[-1].isdigit() or host.endswith(('.localhost', '.local', '.internal', '.invalid')):
+        return False
+    if host == 'currentsapi.services' or host.endswith('.currentsapi.services'):
+        return False
+    try:
+        ipaddress.ip_address(host)
+        return False
+    except ValueError:
+        return True
 
 
 def item_id(url):
@@ -388,3 +417,138 @@ def parse_feed(data, source, now, destination_policy):
             held['imagePermitted'] += 1
         items.append(item)
     return items, held, deleted
+
+
+# A provider taxonomy is evidence for its parent category. Narrow Wingman topics
+# additionally require explicit subject evidence, never a blanket parent alias.
+DERIVED_TOPIC_PATTERNS = {
+    'food': r'\b(recipes?|cooking|cuisine|restaurants?|chefs?|baking|culinary)\b',
+    'fashion': r'\b(fashion|clothing|apparel|couture|runway|garments?|fashion\s+design)\b',
+    'travel': r'\b(travel|tourism|tourists?|destinations?|vacations?|getaways?|sightseeing)\b',
+    'science': r'\b(scientists?|scientific|researchers?|astronomy|physics|chemistry|biology|geology|space\s+(?:mission|telescope)|climate\s+research)\b',
+    'technology': r'\b(technology|software|computers?|artificial\s+intelligence|semiconductors?|smartphones?|cybersecurity|robotics|microchips?)\b',
+}
+
+
+def currents_topics(categories, title='', description=''):
+    from .currents import CATEGORY_TOPICS
+    topics = {topic for category in categories for topic in
+              ([CATEGORY_TOPICS[category]] if isinstance(CATEGORY_TOPICS.get(category), str)
+               else CATEGORY_TOPICS.get(category, []))}
+    text = title + ' ' + description
+    for topic, pattern in DERIVED_TOPIC_PATTERNS.items():
+        if topic in ('science', 'technology') and 'science_technology' not in categories:
+            continue
+        if re.search(pattern, text, re.I):
+            topics.add(topic)
+    return sorted(topics)
+
+
+def currents_publisher(row, url):
+    host = urlsplit(url).hostname.removeprefix('www.')
+    # Currents does not promise publisher metadata. Trust a name only when its
+    # accompanying domain matches the original destination; author is separate.
+    metadata = row.get('source')
+    if isinstance(metadata, dict):
+        claimed = metadata.get('url') or metadata.get('domain') or ''
+        try:
+            claimed_host = urlsplit(claimed if '://' in claimed else 'https://' + claimed).hostname
+        except (TypeError, ValueError):
+            claimed_host = None
+        name = metadata.get('name')
+        if (claimed_host and claimed_host.removeprefix('www.') == host and
+                isinstance(name, str) and len(name) <= 120):
+            name = plain(name, 120, preserve=True)
+            if name and 'currents' not in name.lower():
+                return host, name
+    return host, host
+
+
+def parse_currents_news(news, source, now, destination_policy, provider_category=None):
+    """Normalize only short API previews; never store bodies or unapproved media.
+
+    ``provider_category`` is the canonical fixed query, not reader input. Source
+    text permission belongs to this API contract, independently of old RSS rows.
+    """
+    from .currents import CATEGORIES
+    from .media import accepts_image
+    if not isinstance(news, list) or len(news) > 20:
+        raise ValueError('invalid-currents-news')
+    held = {'count': 0, 'reasons': {}, 'examples': [], 'parsedEntries': len(news),
+            'textEligible': 0, 'topicMatched': 0, 'imagePermitted': 0, 'optionalFieldReasons': {}}
+    items = []
+    for row in news:
+        if not isinstance(row, dict):
+            row = {}
+        raw_title, raw_description = row.get('title') or '', row.get('description') or ''
+        raw_title = raw_title if isinstance(raw_title, str) else ''
+        raw_description = raw_description if isinstance(raw_description, str) else ''
+        title = plain(raw_title, 100000, preserve=True)
+        description = plain(raw_description, 100000, preserve=True)
+        url = canonical_url(row.get('url'), source)
+        supplied = row.get('category') or []
+        supplied = supplied if isinstance(supplied, list) else []
+        categories = {value for value in supplied if isinstance(value, str) and value in CATEGORIES}
+        if provider_category in CATEGORIES:
+            categories.add(provider_category)
+        categories = sorted(categories)
+        published = date_value(row.get('published'), now)
+        reason = ('source-text-not-permitted' if not source.get('enabled') or not source['rights'].get('titles')
+                  else 'missing-title' if not title
+                  else 'metadata-size-limit' if max(len(raw_title), len(raw_description)) > 100000
+                  else 'headline-size-limit' if len(title) > MAX_TITLE
+                  else 'unreviewed-destination' if not url
+                  else 'destination-policy' if not destination_policy.allows(url)
+                  else 'language-mismatch' if row.get('language') not in (None, '', 'en')
+                  else 'promotion-or-rights-ambiguity' if not text_eligible(title, description, categories)
+                  else 'outside-publication-window' if published and published < now - timedelta(days=7)
+                  else None)
+        topics = currents_topics(categories, title, description)
+        if not reason and not topics:
+            reason = 'unmapped-category'
+        if reason:
+            held['count'] += 1
+            held['reasons'][reason] = held['reasons'].get(reason, 0) + 1
+            continue
+        held['textEligible'] += 1
+        held['topicMatched'] += 1
+        publisher_id, publisher_name = currents_publisher(row, url)
+        original = html.unescape(row['url'].strip())
+        author = plain(row['author'], 200, preserve=True) if isinstance(row.get('author'), str) else ''
+        copyright_notice = plain(row['copyright'], 300, preserve=True) if isinstance(row.get('copyright'), str) else ''
+        item = {'id': item_id(url), 'sourceId': source['id'], 'providerId': 'currents',
+                'providerArticleId': str(row.get('id') or '')[:120],
+                'publisherId': publisher_id, 'publisherName': publisher_name,
+                'providerCategories': categories, 'title': title,
+                'canonicalUrl': url, 'originalUrl': original, 'outboundUrl': original,
+                'publishedAt': iso(published) if published else None, 'fetchedAt': iso(now),
+                'expiresAt': iso(now + timedelta(seconds=min(86400, source['retentionSeconds']))),
+                'language': 'en', 'topics': topics, 'image': None,
+                'rights': {'title': True, 'excerpt': source['rights']['excerpts'],
+                           'image': False, 'licenseUrl': source['rights']['licenseUrl']},
+                'eligibility': {'state': 'eligible', 'basis': 'provider-preview',
+                                'scope': 'currents-preview', 'reviewedAt': source['verifiedAt']},
+                'providerAttribution': {'label': 'Powered by Currents News API',
+                                        'url': 'https://currentsapi.services/'}}
+        if source['rights']['excerpts'] and description:
+            item['excerpt'] = plain(raw_description, 800, preserve=True)
+            item['excerptProvenance'] = {'field': 'api-description', 'format': 'plain-text',
+                                         'shortened': len(description) > 800}
+        if author:
+            item['author'] = author
+        if author or copyright_notice:
+            item['attribution'] = '; '.join(value for value in (author, copyright_notice) if value)
+        # Existing individually reviewed image contracts remain usable, but the
+        # exact associated API URL must match the approved article's asset.
+        raw_image = row.get('image')
+        policy = source.get('imagePolicy') or {}
+        reviewed = policy.get('reviewedArticles', {}).get(url)
+        if (isinstance(raw_image, str) and raw_image.strip().lower() not in ('', 'null', 'none')
+                and reviewed and reviewed.get('url') == raw_image and accepts_image(reviewed, source)):
+            item['image'] = dict(reviewed)
+            item['rights']['image'] = True
+            held['imagePermitted'] += 1
+        elif raw_image:
+            held['optionalFieldReasons']['image-permission-pending'] = held['optionalFieldReasons'].get('image-permission-pending', 0) + 1
+        items.append(item)
+    return items, held

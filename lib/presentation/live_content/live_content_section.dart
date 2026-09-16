@@ -6,14 +6,18 @@ import 'live_story_image.dart';
 import 'live_story_excerpt.dart';
 import 'publisher_identity.dart';
 
-String liveContentTopicLabel(String topic) => topic
-    .replaceAll('-', ' ')
-    .split(' ')
-    .map(
-      (word) =>
-          word.isEmpty ? word : '${word[0].toUpperCase()}${word.substring(1)}',
-    )
-    .join(' ');
+String liveContentTopicLabel(String topic) =>
+    liveContentTopicLabels[topic] ??
+    topic
+        .replaceAll('_', ' ')
+        .replaceAll('-', ' ')
+        .split(' ')
+        .map(
+          (word) => word.isEmpty
+              ? word
+              : '${word[0].toUpperCase()}${word.substring(1)}',
+        )
+        .join(' ');
 
 String liveContentDate(DateTime value) {
   final date = value.toUtc();
@@ -309,7 +313,7 @@ class _LiveContentSectionState extends State<LiveContentSection> {
             controller.refreshing ||
             _busy
         ? null
-        : () => _change(controller.refresh),
+        : () => _change(() => controller.refresh(force: true)),
     icon: const Icon(Icons.refresh),
     label: const Text('Refresh'),
   );
@@ -334,7 +338,8 @@ class _LiveContentSectionState extends State<LiveContentSection> {
     LiveContentItem item, {
     required bool featured,
   }) {
-    final source = liveContentSourceName(controller, item.sourceId);
+    final source =
+        item.publisherName ?? liveContentSourceName(controller, item.sourceId);
     final approved = controller.eligibility.registry.sources[item.sourceId];
     final saved = controller.isSaved(item.id),
         allowed = _current && controller.canOpen(item);
@@ -388,7 +393,11 @@ class _LiveContentSectionState extends State<LiveContentSection> {
         } else if (action == 'pin') {
           if (controller.canOpen(item)) widget.onPin(item);
         } else if (action == 'hide') {
-          _change(() => controller.hideSource(item.sourceId));
+          _change(
+            () => item.providerId == 'currents' && item.publisherId != null
+                ? controller.hidePublisher(item.publisherId!)
+                : controller.hideSource(item.sourceId),
+          );
         } else if (action == 'dismiss') {
           _change(() => controller.dismiss(item.id));
         } else if (action.startsWith('fewer:')) {
@@ -421,6 +430,25 @@ class _LiveContentSectionState extends State<LiveContentSection> {
               ? approved?.branding
               : null,
         ),
+        if (item.providerId == 'currents')
+          TextButton(
+            key: ValueKey('live-currents-credit-${item.id}'),
+            onPressed: allowed && widget.onOpenUri != null
+                ? () {
+                    final uri = Uri.parse('https://currentsapi.services/');
+                    if (_current &&
+                        controller.canOpen(item) &&
+                        controller.eligibility.canOpenDestination(uri)) {
+                      widget.onOpenUri!(uri);
+                    }
+                  }
+                : null,
+            style: TextButton.styleFrom(
+              padding: EdgeInsets.zero,
+              alignment: Alignment.centerLeft,
+            ),
+            child: const Text('Powered by Currents News API'),
+          ),
         const SizedBox(height: 4),
         headline,
         if (excerpt != null)
@@ -602,7 +630,7 @@ class _LiveContentTopicBarState extends State<LiveContentTopicBar> {
         children: [
           for (final topic in <String?>[
             null,
-            ...liveContentTopicOrder.where((topic) => topic != 'headlines'),
+            ...liveContentQuickTopics.where((topic) => topic != 'headlines'),
           ])
             Padding(
               padding: const EdgeInsets.only(right: 8),
@@ -625,6 +653,23 @@ class _LiveContentTopicBarState extends State<LiveContentTopicBar> {
                     : (_) => _select(topic),
               ),
             ),
+          PopupMenuButton<String>(
+            key: const ValueKey('live-all-topics'),
+            tooltip: 'All topics',
+            enabled: !_busy && widget.canContinue(),
+            onSelected: (topic) => _select(topic == 'headlines' ? null : topic),
+            itemBuilder: (_) => [
+              for (final topic in liveContentTopicOrder)
+                PopupMenuItem(
+                  value: topic,
+                  child: Text(liveContentTopicLabel(topic)),
+                ),
+            ],
+            child: const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              child: Text('All topics'),
+            ),
+          ),
         ],
       ),
     ),
@@ -650,7 +695,7 @@ class LiveContentCredits extends StatelessWidget {
     final approved = controller.sources
         .where((source) => source.id == item.sourceId)
         .firstOrNull;
-    final source = approved?.name ?? 'Publisher';
+    final source = item.publisherName ?? approved?.name ?? 'Publisher';
     final credit = item.rights.attribution.isNotEmpty
         ? item.rights.attribution
         : approved?.rights.attribution ?? '';

@@ -1,5 +1,14 @@
 # Optional deployment templates — not deployed
 
+Current integration: [Currents operations](../../docs/CURRENTS_INTEGRATION.md).
+The writer template now references an **existing** backend Secret Manager secret;
+pass `--currents-secret EXISTING_SECRET_NAME` to the renderer. This is a resource
+name, never the API key. The reader receives no secret. The writer identity must
+already have the approved secret access; this change does not grant IAM access.
+Initialize the independent `wingman-operations/currents-ledger.json` explicitly
+once before setup/bootstrap, using the same project/bucket as the job. Exclude it
+from content TTL/cleanup rules. Never reset it on deployment or key replacement.
+
 The templates target a **new dedicated Google Cloud project** selected by the owner.
 Do not use the CLI default project, `trivia-tue`, or the unrelated
 `wingman-interactive-live` project. Creating a project, enabling APIs, attaching
@@ -47,7 +56,7 @@ docker push "$WM_IMAGE_TAG"
 gcloud artifacts docker images describe "$WM_IMAGE_TAG" --format='value(image_summary.digest)' --project "$WM_PROJECT"
 WM_DIGEST='REPLACE_WITH_SHA256_DIGEST_FROM_PREVIOUS_COMMAND'
 WM_IMAGE="${WM_REGION}-docker.pkg.dev/${WM_PROJECT}/content/service@${WM_DIGEST}"
-python3 backend/deploy/render.py --project "$WM_PROJECT" --project-number "$WM_PROJECT_NUMBER" --region "$WM_REGION" --bucket "$WM_BUCKET" --image "$WM_IMAGE"
+python3 backend/deploy/render.py --project "$WM_PROJECT" --project-number "$WM_PROJECT_NUMBER" --region "$WM_REGION" --bucket "$WM_BUCKET" --image "$WM_IMAGE" --currents-secret REPLACE_EXISTING_SECRET_NAME
 
 # Inspect the rendered local YAML/JSON before the following mutations.
 gcloud run jobs replace work/live-content/deploy/cloud-run-job.yaml --region "$WM_REGION" --project "$WM_PROJECT"
