@@ -21,7 +21,8 @@ class WingmanTaskPanel extends StatefulWidget {
   });
   final WorkspaceController controller;
   final bool Function() canContinue;
-  final VoidCallback onClose, onFinishMode, onReviewTerms, onSpaces;
+  final VoidCallback onClose, onReviewTerms, onSpaces;
+  final ValueChanged<String?> onFinishMode;
   final Future<void> Function(String taskId) onSave, onAssociate;
   final String? initialTaskId;
   final CompanionTone tone;
@@ -348,7 +349,7 @@ class _WingmanTaskPanelState extends State<WingmanTaskPanel> {
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.track_changes),
                 title: const Text('Open Finish Mode'),
-                onTap: !enabled ? null : widget.onFinishMode,
+                onTap: !enabled ? null : () => widget.onFinishMode(task?.id),
               ),
               ListTile(
                 contentPadding: EdgeInsets.zero,

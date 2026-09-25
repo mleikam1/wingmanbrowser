@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:wingman_browser/presentation/design_system/ui_preferences.dart';
 import 'package:wingman_browser/presentation/home/home_screen.dart';
 import 'package:wingman_browser/presentation/theme.dart';
+import 'package:wingman_browser/signature/workspaces/workspace_models.dart';
 
 void main() {
   setUpAll(() async {
@@ -15,6 +16,56 @@ void main() {
     }
     await font.load();
   });
+  testWidgets(
+    'Home resume remains an actionable button outside progress semantics',
+    (tester) async {
+      final semantics = tester.ensureSemantics();
+      try {
+        var resumed = 0;
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: WingmanTheme.make(Brightness.light),
+            home: Scaffold(
+              body: TaskResumeCard(
+                task: FinishWorkspace(
+                  id: 'task-test',
+                  goal: 'Plan a weekend project',
+                  checklist: const [
+                    ChecklistItem('step-test', 'Measure the room'),
+                  ],
+                ),
+                onResume: () => resumed++,
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        final action = tester.getSemantics(find.text('Continue'));
+        expect(action.getSemanticsData().flagsCollection.isButton, isTrue);
+        for (var node = action.parent; node != null; node = node.parent) {
+          expect(
+            node.getSemanticsData().role,
+            isNot(ui.SemanticsRole.progressBar),
+          );
+        }
+        tester
+            .renderObject<RenderObject>(find.text('Continue'))
+            .owner!
+            .semanticsOwner!
+            .performAction(action.id, ui.SemanticsAction.tap);
+        await tester.pump();
+        expect(resumed, 1);
+        expect(
+          find.bySemanticsLabel('0 of 1 checklist steps complete'),
+          findsOneWidget,
+        );
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox.shrink());
+      } finally {
+        semantics.dispose();
+      }
+    },
+  );
   for (final private in [false, true]) {
     testWidgets('Home search is an independently enabled semantic button '
         '${private ? 'private' : 'normal'}', (tester) async {

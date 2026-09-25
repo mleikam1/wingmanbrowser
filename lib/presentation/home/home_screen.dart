@@ -519,12 +519,17 @@ class TaskResumeCard extends StatelessWidget {
             ),
             if (task != null && task!.checklist.isNotEmpty) ...[
               const SizedBox(height: 20),
-              LinearProgressIndicator(
-                value: count / task!.checklist.length,
-                backgroundColor: t.divider,
-                borderRadius: BorderRadius.circular(8),
-                semanticsLabel:
-                    '$count of ${task!.checklist.length} checklist steps complete',
+              // Keep progress semantics separate from the card and its action.
+              // Otherwise a web progressbar can absorb the Continue button.
+              Semantics(
+                container: true,
+                child: LinearProgressIndicator(
+                  value: count / task!.checklist.length,
+                  backgroundColor: t.divider,
+                  borderRadius: BorderRadius.circular(8),
+                  semanticsLabel:
+                      '$count of ${task!.checklist.length} checklist steps complete',
+                ),
               ),
             ],
             const SizedBox(height: 18),
