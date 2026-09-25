@@ -5,7 +5,8 @@ import 'package:sqflite/sqflite.dart';
 
 Future<Database> openGuardDatabase(OpenDatabaseOptions options) async {
   final String directory;
-  if (defaultTargetPlatform == TargetPlatform.iOS) {
+  if (defaultTargetPlatform == TargetPlatform.iOS ||
+      defaultTargetPlatform == TargetPlatform.macOS) {
     final result = await const MethodChannel(
       'wingman/browser',
     ).invokeMethod<String>('localDataDirectory');

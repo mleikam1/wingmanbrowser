@@ -4,10 +4,11 @@ import 'package:path/path.dart' as path;
 import 'package:sqflite/sqflite.dart';
 
 Future<Database> openLocalDatabase(OpenDatabaseOptions options) async {
-  // iOS exposes user downloads in Files. Keep browser data in Application
-  // Support, outside shared Documents, and excluded from OS cloud backups.
+  // Apple adapters return the app-owned Application Support directory, outside
+  // shared Documents/Downloads, with their native backup-exclusion policy.
   final String directory;
-  if (defaultTargetPlatform == TargetPlatform.iOS) {
+  if (defaultTargetPlatform == TargetPlatform.iOS ||
+      defaultTargetPlatform == TargetPlatform.macOS) {
     final nativeDirectory = await const MethodChannel(
       'wingman/browser',
     ).invokeMethod<String>('localDataDirectory');

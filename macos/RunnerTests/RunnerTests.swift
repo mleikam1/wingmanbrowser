@@ -1,14 +1,14 @@
-@testable import Runner
+@testable import wingman_browser
 import Network
-import Flutter
+import FlutterMacOS
 import CryptoKit
-import UIKit
+import Cocoa
 import WebKit
 import XCTest
 
 final class RunnerTests: XCTestCase {
   private func consumerPolicy() throws -> ConsumerNativePolicy {
-    let app = try XCTUnwrap(Bundle(path: Bundle.main.bundlePath + "/Frameworks/App.framework"))
+    let app = try XCTUnwrap(Bundle(path: Bundle.main.bundlePath + "/Contents/Frameworks/App.framework"))
     let asset = try XCTUnwrap(app.path(forResource: "consumer_protection", ofType: "json", inDirectory: "flutter_assets/assets/policy"))
     return ConsumerNativePolicy(path: asset, expectedDigest: ProtectedWebBridge.protectionSHA256)
   }
@@ -42,11 +42,28 @@ final class RunnerTests: XCTestCase {
     XCTAssertNil(policy.check("file:///unsupported").category)
   }
 
+  @MainActor
+  func testUnavailableProtectionNeverGrantsDesktopRendererAndCountersStayUnobservable() throws {
+    let messenger = PopupTestMessenger()
+    let bridge = ProtectedWebBridge(testPolicy: ConsumerNativePolicy(path: "/missing", expectedDigest: "0"), rules: [], messenger: messenger)
+    messenger.invoke("capabilities", [:])
+    let capabilities = try XCTUnwrap(messenger.latestResult as? [String: Any])
+    XCTAssertEqual(capabilities["supported"] as? Bool, false)
+    XCTAssertEqual(capabilities["privateAvailable"] as? Bool, false)
+    XCTAssertEqual(capabilities["resourceCountersObservable"] as? Bool, false)
+    XCTAssertEqual(capabilities["resourceCounterScope"] as? String, "unobservable")
+    let view = bridge.create(withViewIdentifier: 990, arguments: ["tabId": "unavailable", "private": false, "edition": "consumer"])
+    messenger.invoke("open", ["viewId": 990, "requestId": 1, "url": "https://example.com/"])
+    XCTAssertNotNil(messenger.errors.last!)
+    XCTAssertTrue(view.subviews.isEmpty)
+    bridge.closeAll()
+  }
+
   func testDialogReplyCompletesOnceAcrossDismissalAndLateAction() {
     var replies = [Bool]()
     let reply = ConsumerReply<Bool> { replies.append($0) }
     reply.resolve(false) // Renderer release cancels a pending dialog.
-    reply.resolve(true) // A late UIKit action must not call WebKit again.
+    reply.resolve(true) // A late AppKit action must not call WebKit again.
     XCTAssertEqual(replies, [false])
   }
 
@@ -101,43 +118,44 @@ final class RunnerTests: XCTestCase {
       let bridge = ProtectedWebBridge(testPolicy: policy, rules: [compiledRule], messenger: messenger)
       defer { bridge.closeAll() }
       let args: [String: Any] = ["tabId": "parent", "private": privateMode, "edition": "consumer"]
-      let parent = bridge.create(withFrame: CGRect(x: 0, y: 0, width: 430, height: 700), viewIdentifier: 710, arguments: args)
+      let parent = bridge.create(withViewIdentifier: 710, arguments: args)
       messenger.invoke("open", ["viewId": 710, "requestId": 1, "url": origin + "/popup-parent"])
-      let parentWeb = try XCTUnwrap(parent.view().subviews.compactMap { $0 as? WKWebView }.first)
-      let window = UIWindow(frame: parent.view().frame); let controller = UIViewController()
-      window.rootViewController = controller; controller.view.addSubview(parent.view()); window.isHidden = false
-      defer { window.isHidden = true }
+      let parentWeb = try XCTUnwrap(parent.subviews.compactMap { $0 as? WKWebView }.first)
+      let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 700, height: 700), styleMask: [.titled], backing: .buffered, defer: false)
+      let controller = NSViewController(); controller.view = NSView(frame: window.contentLayoutRect)
+      window.contentViewController = controller; parent.frame = controller.view.bounds; controller.view.addSubview(parent); window.orderFront(nil)
+      defer { window.orderOut(nil) }
       waitForJavaScript(parentWeb, "document.title === 'Popup parent'")
-      var childViews: [FlutterPlatformView] = []
+      var childViews: [NSView] = []
       var nextId: Int64 = 711
       messenger.onEvent = { call in
         guard call.method == "newWindowRequested", let event = call.arguments as? [String: Any], let token = event["windowToken"] as? String else { return }
         // Match the asynchronous Flutter factory + adoption round trip.
         DispatchQueue.main.async {
           let id = nextId; nextId += 1
-          let child = bridge.create(withFrame: parent.view().frame, viewIdentifier: id,
+          let child = bridge.create(withViewIdentifier: id,
             arguments: ["tabId": "child-\(id)", "private": privateMode, "edition": "consumer", "windowToken": token])
-          childViews.append(child); controller.view.addSubview(child.view())
+          childViews.append(child); child.frame = controller.view.bounds; controller.view.addSubview(child)
           messenger.invoke("adoptWindow", ["viewId": id, "requestId": 1, "windowToken": token])
         }
       }
       parentWeb.evaluateJavaScript("document.getElementById('get-child').click()", completionHandler: nil)
       waitForJavaScript(parentWeb, "document.getElementById('result').textContent === 'GET opener retained'")
       XCTAssertEqual(childViews.count, 1)
-      let getChild = try XCTUnwrap(childViews.first?.view().subviews.compactMap { $0 as? WKWebView }.first)
+      let getChild = try XCTUnwrap(childViews.first?.subviews.compactMap { $0 as? WKWebView }.first)
       XCTAssertTrue(getChild.configuration.websiteDataStore === parentWeb.configuration.websiteDataStore)
       XCTAssertEqual(getChild.configuration.websiteDataStore.isPersistent, !privateMode)
       parentWeb.evaluateJavaScript("document.getElementById('post-child').click()", completionHandler: nil)
       waitForJavaScript(parentWeb, "document.getElementById('result').textContent === 'POST opener retained'")
       XCTAssertEqual(childViews.count, 2)
       XCTAssertFalse(messenger.errors.contains { $0 != nil })
-      let postChild = try XCTUnwrap(childViews.last?.view().subviews.compactMap { $0 as? WKWebView }.first)
+      let postChild = try XCTUnwrap(childViews.last?.subviews.compactMap { $0 as? WKWebView }.first)
       waitForJavaScript(postChild, "document.body.textContent.includes('marker=synthetic-post-body')")
       let closed = expectation(description: "Script child close event")
       messenger.onEvent = { call in if call.method == "closeRequested" { closed.fulfill() } }
       postChild.evaluateJavaScript("window.close()", completionHandler: nil)
       wait(for: [closed], timeout: 5)
-      XCTAssertTrue(childViews.last?.view().subviews.isEmpty == true)
+      XCTAssertTrue(childViews.last?.subviews.isEmpty == true)
     }
     XCTAssertEqual(server.counts["/popup-post"], 2, "Each normal/private popup sends its original POST once")
   }
@@ -159,23 +177,24 @@ final class RunnerTests: XCTestCase {
     let messenger = PopupTestMessenger()
     let bridge = ProtectedWebBridge(testPolicy: try consumerPolicy(), rules: [try XCTUnwrap(rule)], messenger: messenger)
     defer { bridge.closeAll() }
-    let view = bridge.create(withFrame: CGRect(x: 0, y: 0, width: 430, height: 700), viewIdentifier: 810,
+    let view = bridge.create(withViewIdentifier: 810,
       arguments: ["tabId": "history", "private": true, "edition": "consumer", "blockedUrls": [origin + "/denied-history"]])
     messenger.invoke("open", ["viewId": 810, "requestId": 1, "url": origin + "/popup-parent"])
     // Additional rules compile asynchronously before the renderer is created.
     let mounted = expectation(description: "History renderer exists")
     let rendererDeadline = Date().addingTimeInterval(9)
     func waitForRenderer() {
-      if !view.view().subviews.isEmpty { mounted.fulfill() }
+      if !view.subviews.isEmpty { mounted.fulfill() }
       else if Date() >= rendererDeadline { XCTFail("History renderer was not created"); mounted.fulfill() }
       else { DispatchQueue.main.asyncAfter(deadline: .now() + 0.05, execute: waitForRenderer) }
     }
     waitForRenderer(); wait(for: [mounted], timeout: 10)
-    let web = try XCTUnwrap(view.view().subviews.compactMap { $0 as? WKWebView }.first)
+    let web = try XCTUnwrap(view.subviews.compactMap { $0 as? WKWebView }.first)
     let retiredDelegate = web.navigationDelegate
-    let window = UIWindow(frame: view.view().frame); let controller = UIViewController()
-    window.rootViewController = controller; controller.view.addSubview(view.view()); window.isHidden = false
-    defer { window.isHidden = true }
+    let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 700, height: 700), styleMask: [.titled], backing: .buffered, defer: false)
+    let controller = NSViewController(); controller.view = NSView(frame: window.contentLayoutRect)
+    window.contentViewController = controller; view.frame = controller.view.bounds; controller.view.addSubview(view); window.orderFront(nil)
+    defer { window.orderOut(nil) }
     waitForJavaScript(web, "document.title === 'Popup parent'")
     let generation = try XCTUnwrap(bridge.testDocumentIdentity(810)).generation
     var publishedURLs: [String] = [], blocked: [String] = []
@@ -194,7 +213,7 @@ final class RunnerTests: XCTestCase {
       XCTAssertEqual(bridge.testDocumentIdentity(810)?.url, origin + suffix)
       XCTAssertTrue(publishedURLs.contains(origin + suffix), "Native pageState must expose the current same-document URL")
       XCTAssertEqual(bridge.testDocumentIdentity(810)?.generation, generation, "Same-document history must keep its document lease")
-      XCTAssertTrue(view.view().subviews.contains { $0 === web })
+      XCTAssertTrue(view.subviews.contains { $0 === web })
     }
     change("window.historyMarker='kept'; history.pushState({}, '', '/history-results?q=pencils')", suffix: "/history-results?q=pencils")
     change("history.replaceState({}, '', '/history-results?q=colored-pencils')", suffix: "/history-results?q=colored-pencils")
@@ -214,7 +233,7 @@ final class RunnerTests: XCTestCase {
     messenger.invoke("open", ["viewId": 810, "requestId": 2, "url": origin + "/history-redirect"])
     wait(for: [redirected], timeout: 7)
     waitForJavaScript(web, "!document.hidden && window.historyMarker === 'kept'")
-    XCTAssertTrue(view.view().subviews.contains { $0 === web }, "A blocked network redirect must keep the previous renderer")
+    XCTAssertTrue(view.subviews.contains { $0 === web }, "A blocked network redirect must keep the previous renderer")
     XCTAssertEqual(bridge.testDocumentIdentity(810)?.url, origin + "/history-results?q=colored-pencils#details")
     XCTAssertEqual(server.counts["/history-redirect"], 1)
     XCTAssertNil(server.counts["/denied-history"])
@@ -228,7 +247,7 @@ final class RunnerTests: XCTestCase {
     web.evaluateJavaScript("history.pushState({}, '', '/denied-history')", completionHandler: nil)
     wait(for: [denied], timeout: 5)
     XCTAssertEqual(blocked, ["blockAdditionalRestriction"])
-    XCTAssertTrue(view.view().subviews.isEmpty, "A denied history URL must not leave an interactive renderer")
+    XCTAssertTrue(view.subviews.isEmpty, "A denied history URL must not leave an interactive renderer")
     XCTAssertNil(server.counts["/denied-history"])
 
     // A queued callback from the retired renderer must not manufacture a denial
@@ -236,7 +255,7 @@ final class RunnerTests: XCTestCase {
     var lateBoundaries = 0
     messenger.onEvent = { call in if call.method == "navigationBlocked" { lateBoundaries += 1 } }
     messenger.invoke("open", ["viewId": 810, "requestId": 3, "url": origin + "/popup-parent?new=1"])
-    let replacement = try XCTUnwrap(view.view().subviews.compactMap { $0 as? WKWebView }.first)
+    let replacement = try XCTUnwrap(view.subviews.compactMap { $0 as? WKWebView }.first)
     waitForJavaScript(replacement, "document.title === 'Popup parent'")
     retiredDelegate?.webView?(web, didReceiveServerRedirectForProvisionalNavigation: nil)
     XCTAssertEqual(lateBoundaries, 0)
@@ -255,12 +274,12 @@ final class RunnerTests: XCTestCase {
     let nextMounted = expectation(description: "New navigation resumes after rule compilation")
     let nextDeadline = Date().addingTimeInterval(10)
     func waitForNext() {
-      if view.view().subviews.contains(where: { $0 is WKWebView }) { nextMounted.fulfill() }
+      if view.subviews.contains(where: { $0 is WKWebView }) { nextMounted.fulfill() }
       else if Date() >= nextDeadline { XCTFail("Replacement renderer did not mount"); nextMounted.fulfill() }
       else { DispatchQueue.main.asyncAfter(deadline: .now() + 0.05, execute: waitForNext) }
     }
     waitForNext(); wait(for: [nextMounted], timeout: 11)
-    let nextWeb = try XCTUnwrap(view.view().subviews.compactMap { $0 as? WKWebView }.first)
+    let nextWeb = try XCTUnwrap(view.subviews.compactMap { $0 as? WKWebView }.first)
     waitForJavaScript(nextWeb, "location.search === '?new=2' && document.title === 'Popup parent'")
     XCTAssertFalse(restoredStaleDestination)
 
@@ -280,7 +299,7 @@ final class RunnerTests: XCTestCase {
       else { DispatchQueue.main.asyncAfter(deadline: .now() + 0.05, execute: waitForClose) }
     }
     waitForClose(); wait(for: [closed], timeout: 11)
-    XCTAssertTrue(view.view().subviews.isEmpty)
+    XCTAssertTrue(view.subviews.isEmpty)
     XCTAssertNil(server.targets["/popup-parent?must-not-open=1"])
 
   }
@@ -399,7 +418,7 @@ final class RunnerTests: XCTestCase {
     XCTAssertTrue(normal.defaultWebpagePreferences.allowsContentJavaScript)
     XCTAssertFalse(normal.preferences.javaScriptCanOpenWindowsAutomatically)
     XCTAssertTrue(normal.preferences.isFraudulentWebsiteWarningEnabled)
-    if #available(iOS 15.4, *) { XCTAssertTrue(normal.preferences.isElementFullscreenEnabled) }
+    if #available(macOS 12.3, *) { XCTAssertTrue(normal.preferences.isElementFullscreenEnabled) }
     let cookie = try XCTUnwrap(HTTPCookie(properties: [.domain: "session.protection.test", .path: "/", .name: "wingman_native_fixture", .value: "synthetic", .expires: Date().addingTimeInterval(60)]))
     let stored = expectation(description: "Normal fixture cookie stored")
     normal.websiteDataStore.httpCookieStore.setCookie(cookie) { stored.fulfill() }
@@ -421,11 +440,8 @@ final class RunnerTests: XCTestCase {
   @MainActor
   func testConsumerPathResourceRulesRejectAlternateSpellingsWithPositiveControl() throws {
     let ready = expectation(description: "Test-owned resource server starts")
-    let imageFormat = UIGraphicsImageRendererFormat(); imageFormat.scale = 1
-    let image = UIGraphicsImageRenderer(size: CGSize(width: 4, height: 4), format: imageFormat).image { context in
-      UIColor.systemTeal.setFill(); context.fill(CGRect(x: 0, y: 0, width: 4, height: 4))
-    }
-    let server = try ContentRuleFixtureServer(png: XCTUnwrap(image.pngData()), ready: ready)
+    let bitmap = try XCTUnwrap(NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 4, pixelsHigh: 4, bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0))
+    let server = try ContentRuleFixtureServer(png: XCTUnwrap(bitmap.representation(using: .png, properties: [:])), ready: ready)
     defer { server.stop() }
     wait(for: [ready], timeout: 5)
     let origin = "http://127.0.0.1:\(try XCTUnwrap(server.port))"
@@ -471,173 +487,6 @@ final class RunnerTests: XCTestCase {
     XCTAssertEqual(server.counts.values.reduce(0, +), permitted.count, "A blocked spelling reached the owned server: \(server.counts)")
   }
 
-  /// This fixture uses the actual production rule builder with test-owned
-  /// loopback URLs. There is no production manifest override or app-channel
-  /// loader for localhost, arbitrary HTML or caller-supplied JavaScript.
-  @MainActor
-  func testWebKitBlocksUnreviewedResourcesAndResourceRedirects() throws {
-    let ready = expectation(description: "Owned loopback server starts")
-    let imageFormat = UIGraphicsImageRendererFormat()
-    imageFormat.scale = 1
-    let image = UIGraphicsImageRenderer(size: CGSize(width: 4, height: 4), format: imageFormat).image { context in
-      UIColor.systemTeal.setFill()
-      context.fill(CGRect(x: 0, y: 0, width: 4, height: 4))
-    }
-    let server = try ContentRuleFixtureServer(png: XCTUnwrap(image.pngData()), ready: ready)
-    defer { server.stop() }
-    wait(for: [ready], timeout: 5)
-    let port = try XCTUnwrap(server.port, server.startError ?? "No listener port")
-    let origin = "http://127.0.0.1:\(port)"
-    let document = origin + "/document"
-    let rules = try XCTUnwrap(protectedContentRuleJSON(
-      documents: [document],
-      resources: [
-        origin + "/allowed.png": "image",
-        origin + "/redirect.png": "image",
-        origin + "/allowed.css?modules=one%7Ctwo%2Cthree&only=styles": "styleSheet",
-      ],
-      privacyDomains: []
-    ))
-    let identifier = "wingman-xctest-owned-rules-\(UUID().uuidString)"
-    defer { WKContentRuleListStore.default().removeContentRuleList(forIdentifier: identifier) { _ in } }
-    let compiled = expectation(description: "Production rule JSON compiles in real WebKit")
-    var list: WKContentRuleList?
-    var compileError: Error?
-    WKContentRuleListStore.default().compileContentRuleList(
-      forIdentifier: identifier,
-      encodedContentRuleList: rules
-    ) { result, error in
-      list = result
-      compileError = error
-      compiled.fulfill()
-    }
-    wait(for: [compiled], timeout: 10)
-    XCTAssertNil(compileError)
-    let configuration = WKWebViewConfiguration()
-    configuration.websiteDataStore = .nonPersistent()
-    configuration.defaultWebpagePreferences.allowsContentJavaScript = false
-    configuration.preferences.javaScriptCanOpenWindowsAutomatically = false
-    configuration.userContentController.add(try XCTUnwrap(list))
-    let loaded = expectation(description: "Owned HTML document finishes")
-    let delegate = ContentRuleNavigationObserver(loaded: loaded)
-    let web = WKWebView(frame: CGRect(x: 0, y: 0, width: 390, height: 844), configuration: configuration)
-    web.navigationDelegate = delegate
-    defer {
-      web.stopLoading()
-      web.navigationDelegate = nil
-      web.removeFromSuperview()
-    }
-    web.load(URLRequest(url: try XCTUnwrap(URL(string: document))))
-    wait(for: [loaded], timeout: 15)
-    XCTAssertNil(delegate.error)
-
-    // A positive decoded image prevents ATS/network failure from masquerading
-    // as successful blocking. The explicit redirect request is also required.
-    let decoded = expectation(description: "Allowed image is actually decoded")
-    var imageState: [String: Any]?
-    web.evaluateJavaScript("({allowed:document.getElementById('allowed').naturalWidth,redirect:document.getElementById('redirect').naturalWidth,unknown:document.getElementById('unknown').naturalWidth,title:document.title,styles:Array.from(document.styleSheets).filter(function(s){return !!s.href}).length,font:getComputedStyle(document.body).fontFamily})") { result, error in
-      XCTAssertNil(error)
-      imageState = result as? [String: Any]
-      decoded.fulfill()
-    }
-    wait(for: [decoded], timeout: 5)
-    XCTAssertEqual(imageState?["allowed"] as? Int, 4)
-    XCTAssertEqual(imageState?["redirect"] as? Int, 0)
-    XCTAssertEqual(imageState?["unknown"] as? Int, 0)
-    XCTAssertEqual(imageState?["title"] as? String, "Owned resource-rule fixture")
-    XCTAssertEqual(imageState?["styles"] as? Int, 1)
-    XCTAssertEqual(imageState?["font"] as? String, "sans-serif")
-    let counts = server.counts
-    XCTAssertEqual(counts["/document"], 1)
-    XCTAssertEqual(counts["/allowed.png"], 1)
-    XCTAssertEqual(counts["/allowed.css"], 1)
-    XCTAssertEqual(counts["/redirect.png"], 1)
-    for path in ["/forbidden.png", "/unknown.png", "/unknown.css", "/css-forbidden.png", "/frame", "/script.js"] {
-      XCTAssertEqual(counts[path, default: 0], 0, "Unexpected network request: \(path)")
-    }
-    let decodedWidth = imageState?["allowed"] as? Int ?? 0
-    print("WINGMAN_WEBKIT_RULE_EVIDENCE \(counts) allowedImageWidth=\(decodedWidth) externalStyles=1 font=sans-serif forbiddenRequests=0")
-  }
-
-  /// Uses the production's query-independent rules and navigation predicate.
-  /// All documents here are synthetic loopback fixtures, never search results.
-  @MainActor
-  func testStrictSearchRulesAndNavigationRejectFramesAndRedirects() throws {
-    let ready = expectation(description: "Owned search fixture server starts")
-    let server = try ContentRuleFixtureServer(png: Data(), ready: ready)
-    defer { server.stop() }
-    wait(for: [ready], timeout: 5)
-    let origin = "http://127.0.0.1:\(try XCTUnwrap(server.port))"
-    let document = origin + "/lite/?q=fixture&kp=1"
-    let rules = try XCTUnwrap(strictSearchContentRuleJSON(
-      documentOrigin: origin, styleURL: origin + "/search.css"
-    ))
-    XCTAssertFalse(rules.contains("q=fixture"), "Rules must not persist a query")
-    let identifier = "wingman-xctest-search-rules-\(UUID().uuidString)"
-    defer { WKContentRuleListStore.default().removeContentRuleList(forIdentifier: identifier) { _ in } }
-    let compiled = expectation(description: "Production search rule JSON compiles")
-    var list: WKContentRuleList?
-    var compileError: Error?
-    WKContentRuleListStore.default().compileContentRuleList(
-      forIdentifier: identifier, encodedContentRuleList: rules
-    ) { result, error in
-      list = result; compileError = error; compiled.fulfill()
-    }
-    wait(for: [compiled], timeout: 10)
-    XCTAssertNil(compileError)
-    let configuration = WKWebViewConfiguration()
-    configuration.websiteDataStore = .nonPersistent()
-    configuration.defaultWebpagePreferences.allowsContentJavaScript = false
-    configuration.preferences.javaScriptCanOpenWindowsAutomatically = false
-    configuration.userContentController.add(try XCTUnwrap(list))
-    let loaded = expectation(description: "Synthetic search document loads")
-    let delegate = StrictSearchNavigationObserver(currentURL: document, loaded: loaded)
-    let web = WKWebView(frame: CGRect(x: 0, y: 0, width: 390, height: 844), configuration: configuration)
-    web.navigationDelegate = delegate
-    defer { web.stopLoading(); web.navigationDelegate = nil; web.removeFromSuperview() }
-    web.load(URLRequest(url: try XCTUnwrap(URL(string: document))))
-    wait(for: [loaded], timeout: 15)
-    XCTAssertNil(delegate.error)
-    let inspected = expectation(description: "Synthetic document and CSS positive controls")
-    var state: [String: Any]?
-    web.evaluateJavaScript("({title:document.title,font:getComputedStyle(document.body).fontFamily,styles:Array.from(document.styleSheets).filter(function(s){return !!s.href}).length,inputDisplay:getComputedStyle(document.getElementById('query')).display})") { result, error in
-      XCTAssertNil(error); state = result as? [String: Any]; inspected.fulfill()
-    }
-    wait(for: [inspected], timeout: 5)
-    XCTAssertEqual(state?["title"] as? String, "Owned search fixture")
-    XCTAssertEqual(state?["font"] as? String, "sans-serif")
-    XCTAssertEqual(state?["styles"] as? Int, 1)
-    XCTAssertEqual(state?["inputDisplay"] as? String, "none")
-    XCTAssertEqual(server.targets["/lite/?q=fixture&kp=1"], 1)
-    XCTAssertEqual(server.counts["/search.css"], 1)
-    XCTAssertEqual(server.targets["/lite/?q=frame&kp=1", default: 0], 0)
-    for path in ["/unknown.png", "/unknown.css", "/script.js", "/t/sl_l"] {
-      XCTAssertEqual(server.counts[path, default: 0], 0, "Unexpected search fixture request: \(path)")
-    }
-    XCTAssertGreaterThan(delegate.deniedSubframes, 0)
-
-    // A main-document 302 targets a URL matching the broad static rule pattern.
-    // The production navigation/lifecycle gate must still stop that request.
-    let redirectURL = origin + "/lite/?q=redirect&kp=1"
-    let redirected = expectation(description: "Owned redirect is rejected")
-    let redirectDelegate = StrictSearchNavigationObserver(currentURL: redirectURL, loaded: redirected)
-    web.navigationDelegate = redirectDelegate
-    web.load(URLRequest(url: try XCTUnwrap(URL(string: redirectURL))))
-    wait(for: [redirected], timeout: 15)
-    // Let canceled local network work drain before taking the final receipt;
-    // an early delegate callback alone is not evidence of zero target traffic.
-    let drained = expectation(description: "Canceled local redirect work drains")
-    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { drained.fulfill() }
-    wait(for: [drained], timeout: 2)
-    XCTAssertTrue(redirectDelegate.sawRedirect || redirectDelegate.deniedMainFrames > 0)
-    XCTAssertEqual(server.targets["/lite/?q=redirect&kp=1"], 1)
-    XCTAssertEqual(server.targets["/lite/?q=redirect-target&kp=1", default: 0], 0)
-
-    // Both POST and reusing the initial grant are denied even for the same URL.
-    XCTAssertFalse(protectedAllowsInitialNavigation(isMainFrame: true, method: "POST", requestedURL: document, currentURL: document, initial: true, scopePermitted: true))
-    XCTAssertFalse(protectedAllowsInitialNavigation(isMainFrame: true, method: "GET", requestedURL: document, currentURL: document, initial: false, scopePermitted: true))
-    print("WINGMAN_SEARCH_WEBKIT_EVIDENCE \(server.targets) cssPositive=1 subframesDenied=\(delegate.deniedSubframes) redirectTargetRequests=\(server.targets["/lite/?q=redirect-target&kp=1", default: 0])")
-  }
 }
 
 @MainActor
@@ -721,6 +570,7 @@ private final class PopupTestMessenger: NSObject, FlutterBinaryMessenger {
   var onEvent: ((FlutterMethodCall) -> Void)?
   var errors: [FlutterError?] = []
   var completions: [String: Int] = [:]
+  var latestResult: Any?
   func send(onChannel channel: String, message: Data?) { if let data = message { onEvent?(FlutterStandardMethodCodec.sharedInstance().decodeMethodCall(data)) } }
   func send(onChannel channel: String, message: Data?, binaryReply callback: FlutterBinaryReply?) { send(onChannel: channel, message: message); callback?(nil) }
   func setMessageHandlerOnChannel(_ channel: String, binaryMessageHandler handler: FlutterBinaryMessageHandler?) -> FlutterBinaryMessengerConnection { self.handler = handler; return 1 }
@@ -728,7 +578,7 @@ private final class PopupTestMessenger: NSObject, FlutterBinaryMessenger {
   func invoke(_ method: String, _ args: [String: Any]) {
     let codec = FlutterStandardMethodCodec.sharedInstance()
     handler?(codec.encode(FlutterMethodCall(methodName: method, arguments: args))) { data in
-      self.completions[method, default: 0] += 1; guard let data = data else { return }; self.errors.append(codec.decodeEnvelope(data) as? FlutterError)
+      self.completions[method, default: 0] += 1; guard let data = data else { return }; let value = codec.decodeEnvelope(data); self.latestResult = value; self.errors.append(value as? FlutterError)
     }
   }
 }

@@ -1,4 +1,3 @@
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as path;
@@ -77,7 +76,8 @@ class SqliteConsumerUpdateStore implements ConsumerUpdateStore {
     var target = databasePath;
     if (target == null) {
       final String directory;
-      if (defaultTargetPlatform == TargetPlatform.iOS) {
+      if (defaultTargetPlatform == TargetPlatform.iOS ||
+          defaultTargetPlatform == TargetPlatform.macOS) {
         final value = await const MethodChannel(
           'wingman/browser',
         ).invokeMethod<String>('localDataDirectory');

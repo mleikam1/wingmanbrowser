@@ -194,7 +194,7 @@ class _SearchSettingsScreenState extends State<SearchSettingsScreen> {
                   ? 'Your additional boundary disables web search. Private tabs inherit this choice. Local library search remains available.'
                   : available
                   ? 'Search opens DuckDuckGo with required Strict adult filtering. Native browsing supports refinement, subsequent results and ordinary permitted destinations. Search previews and ads can contain filtering misses.'
-                  : 'Native search requires a working browser engine and protection baseline. The web companion opens the strict provider in the host browser, whose protections Wingman cannot control. Native desktop apps are a separate project.',
+                  : 'Native search requires a working browser engine and protection baseline. The web companion opens the strict provider in the host browser, whose protections Wingman cannot control. Windows and Linux native browsing are unavailable.',
               tone: WingmanTone.info,
             ),
             const WingmanStatus(

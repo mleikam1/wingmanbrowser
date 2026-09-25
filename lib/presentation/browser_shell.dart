@@ -2058,7 +2058,7 @@ class _BrowserShellState extends State<BrowserShell>
           ? HomeArtwork.earthrise
           : HomeArtwork.none,
       unavailableReason:
-          'Use the supported Android or iOS app to open this reviewed website.',
+          'Use a supported Android, iOS, or macOS app with an available protection baseline to open this website.',
       onOpen: allowed
           ? () {
               if (_validOrigin(origin)) _navigateWebsite(uri);

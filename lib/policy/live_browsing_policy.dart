@@ -23,7 +23,7 @@ class LiveResourceRecord {
   final Set<String> mimeTypes;
 
   /// Enforced by the Android mediated fetcher. WKWebView does not expose an
-  /// equivalent pre-consumption HTTPS byte limit; it is not claimed on iOS.
+  /// equivalent pre-consumption HTTPS byte limit; it is not claimed on iOS or macOS.
   final int maxBytes;
 }
 

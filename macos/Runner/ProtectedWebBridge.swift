@@ -1,5 +1,5 @@
-import Flutter
-import UIKit
+import FlutterMacOS
+import Cocoa
 import WebKit
 import CryptoKit
 import UniformTypeIdentifiers
@@ -17,8 +17,8 @@ final class ProtectedWebBridge: NSObject, FlutterPlatformViewFactory {
   private var revertUpdate: (token: String, policy: ConsumerNativePolicy, rules: [WKContentRuleList], receipt: [String: Any], recoveryRequired: Bool)?
   private var activeDigest = ProtectedWebBridge.protectionSHA256
   private var updateRecoveryRequired = false
-  private var views: [Int64: WeakProtectedWebView] = [:]
-  private var retainedViews: [ProtectedWebView] { views.values.compactMap { $0.value } }
+  private var views: [Int64: ProtectedWebView] = [:]
+  private var retainedViews: [ProtectedWebView] { Array(views.values) }
   private var ready = false
   private var preparing = false
   private var foreground = true
@@ -31,7 +31,7 @@ final class ProtectedWebBridge: NSObject, FlutterPlatformViewFactory {
   private var nextPendingViewId: Int64 = -1
 
   init(registrar: FlutterPluginRegistrar) {
-    channel = FlutterMethodChannel(name: "wingman/protected-browser", binaryMessenger: registrar.messenger())
+    channel = FlutterMethodChannel(name: "wingman/protected-browser", binaryMessenger: registrar.messenger)
     let key = registrar.lookupKey(forAsset: Self.protectionAsset)
     baseline = ConsumerNativePolicy(path: Bundle.main.path(forResource: key, ofType: nil), expectedDigest: Self.protectionSHA256)
     let updateKeyAsset = registrar.lookupKey(forAsset: "assets/policy/consumer_update_keys.json")
@@ -57,12 +57,13 @@ final class ProtectedWebBridge: NSObject, FlutterPlatformViewFactory {
     channel.setMethodCallHandler { [weak self] call, result in self?.handle(call, result) }
   }
   func testDocumentIdentity(_ viewId: Int64) -> (url: String, generation: Int)? {
-    guard let view = views[viewId]?.value else { return nil }
+    guard let view = views[viewId] else { return nil }
     return (view.currentURL, view.documentGeneration)
   }
   #endif
-  func createArgsCodec() -> FlutterMessageCodec & NSObjectProtocol { FlutterStandardMessageCodec.sharedInstance() }
-  func create(withFrame frame: CGRect, viewIdentifier viewId: Int64, arguments args: Any?) -> FlutterPlatformView {
+  func createArgsCodec() -> (FlutterMessageCodec & NSObjectProtocol)? { FlutterStandardMessageCodec.sharedInstance() }
+  func create(withViewIdentifier viewId: Int64, arguments args: Any?) -> NSView {
+    let frame = NSRect.zero
     let values = args as? [String: Any] ?? [:]
     if let token = values["windowToken"] as? String, let pending = pendingWindows.removeValue(forKey: token) {
       let view = pending.view
@@ -70,16 +71,15 @@ final class ProtectedWebBridge: NSObject, FlutterPlatformViewFactory {
         (values["edition"] as? String) == "consumer", view.privateMode == (values["private"] as? Bool == true),
         let tabId = values["tabId"] as? String, !tabId.isEmpty, tabId.count <= 100, view.matchesRestrictions(values) {
         view.adoptIdentity(viewId: viewId, tabId: tabId, frame: frame)
-        views[viewId] = WeakProtectedWebView(view)
-        return view
+        views[viewId] = view
+        return view.view()
       }
       view.release()
     }
     let view = ProtectedWebView(frame: frame, id: viewId, tabId: values["tabId"] as? String ?? "", privateMode: values["private"] as? Bool == true,
       consumer: (values["edition"] as? String ?? "unknown") == "consumer", restrictions: values, bridge: self)
-    views = views.filter { $0.value.value != nil }
-    views[viewId] = WeakProtectedWebView(view)
-    return view
+    views[viewId] = view
+    return view.view()
   }
   /// Startup only prepares pinned protection. The native migration caller owns
   /// the one-time legacy purge; this never clears valid consumer sessions.
@@ -172,7 +172,7 @@ final class ProtectedWebBridge: NSObject, FlutterPlatformViewFactory {
         "handoffBlocked": handoffBlocked, "cleanupPending": cleanupPending, "baselineValid": baseline.valid,
         "preparedRuleSets": compiled.count, "ruleCompilationCount": compilationCount, "domainCount": baseline.domainCount, "policyRecoveryRequired": updateRecoveryRequired, "policySHA256": activeDigest]); return
     }
-    guard let id = (args["viewId"] as? NSNumber)?.int64Value, let view = views[id]?.value else { error(result); return }
+    guard let id = (args["viewId"] as? NSNumber)?.int64Value, let view = views[id] else { error(result); return }
     switch call.method {
     case "adoptWindow":
       guard let token = args["windowToken"] as? String, let request = (args["requestId"] as? NSNumber)?.int64Value,
@@ -280,11 +280,6 @@ final class ProtectedWebBridge: NSObject, FlutterPlatformViewFactory {
   }
 }
 
-private final class WeakProtectedWebView {
-  weak var value: ProtectedWebView?
-  init(_ value: ProtectedWebView) { self.value = value }
-}
-
 private final class ConsumerPendingWindow {
   weak var opener: ProtectedWebView?
   let view: ProtectedWebView
@@ -315,7 +310,7 @@ final class ConsumerReply<Value> {
   func resolve(_ value: Value) { let callback = self.callback; self.callback = nil; callback?(value) }
 }
 
-/// UIKit can return an older export picker while a new upload is pending.
+/// Native sheets can return an older export while a new upload is pending.
 /// A callback may consume only the reply owned by its original picker.
 final class ConsumerOwnedReply<Value> {
   private weak var owner: AnyObject?
@@ -331,18 +326,18 @@ final class ConsumerOwnedReply<Value> {
 }
 
 private final class ConsumerPresentation {
-  weak var controller: UIViewController?
+  weak var window: NSWindow?
   let cancel: () -> Void
-  init(_ controller: UIViewController, cancel: @escaping () -> Void) { self.controller = controller; self.cancel = cancel }
+  init(_ window: NSWindow, cancel: @escaping () -> Void) { self.window = window; self.cancel = cancel }
 }
 
-private final class ProtectedWebView: NSObject, FlutterPlatformView, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate, UIDocumentPickerDelegate {
+private final class ProtectedWebView: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate {
   private(set) var id: Int64
   private(set) var tabId: String
   let privateMode: Bool
   let consumer: Bool
   weak var bridge: ProtectedWebBridge?
-  private let container: UIView
+  private let container: NSView
   private var web: WKWebView?
   private var observations: [NSKeyValueObservation] = []
   private(set) var currentURL = ""
@@ -355,6 +350,7 @@ private final class ProtectedWebView: NSObject, FlutterPlatformView, WKNavigatio
   private var findQuery = ""
   private var uploadReply: ConsumerOwnedReply<[URL]?>?
   private var downloads: [ObjectIdentifier: (WKDownload, URL?)] = [:]
+  private var downloadTickets: [ObjectIdentifier: (generation: Int, origin: String?)] = [:]
   private var downloadGestureUntil = Date.distantPast
   private var blockedDomains = Set<String>()
   private var blockedSearch = false
@@ -370,6 +366,7 @@ private final class ProtectedWebView: NSObject, FlutterPlatformView, WKNavigatio
   private var restrictionsReady = true
   private var restrictionFailure = false
   private var exportedTemporary: [ObjectIdentifier: URL] = [:]
+  private var sharingPicker: NSSharingServicePicker?
   private var presentations: [ConsumerPresentation] = []
   fileprivate var windowToken: String?
   private var scriptWindow = false
@@ -391,7 +388,7 @@ private final class ProtectedWebView: NSObject, FlutterPlatformView, WKNavigatio
   init(frame: CGRect, id: Int64, tabId: String, privateMode: Bool, consumer: Bool, restrictions: [String: Any], bridge: ProtectedWebBridge, inheriting opener: ProtectedWebView? = nil) {
     self.id = id; self.tabId = tabId; self.privateMode = privateMode; self.consumer = consumer; self.bridge = bridge
     foreground = bridge.isForeground
-    container = UIView(frame: frame); container.backgroundColor = .systemBackground
+    container = NSView(frame: frame); container.wantsLayer = true; container.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
     super.init()
     if let opener = opener {
       blockedDomains = opener.blockedDomains; blockedURLs = opener.blockedURLs; blockedSearch = opener.blockedSearch
@@ -399,7 +396,7 @@ private final class ProtectedWebView: NSObject, FlutterPlatformView, WKNavigatio
       active = false; awaitingWindowAdoption = true; scriptWindow = true
     } else { updateRestrictions(restrictions) {} }
   }
-  func view() -> UIView { container }
+  func view() -> NSView { container }
   fileprivate func matchesRestrictions(_ values: [String: Any]) -> Bool {
     let domains = Set((values["blockedDomains"] as? [String] ?? []).compactMap { NativeGuardPolicy.normalizeHost($0) }.prefix(1000))
     let urls = Set((values["blockedUrls"] as? [String] ?? []).compactMap { consumerCheckedURL($0)?.absoluteString.components(separatedBy: "#")[0] }.prefix(5000))
@@ -491,11 +488,11 @@ private final class ProtectedWebView: NSObject, FlutterPlatformView, WKNavigatio
     }
     if let additionalRules = additionalRules { configuration.userContentController.add(additionalRules) }
     let renderer = WKWebView(frame: container.bounds, configuration: configuration)
-    renderer.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+    renderer.autoresizingMask = [.width, .height]
     renderer.navigationDelegate = self; renderer.uiDelegate = self
     renderer.allowsLinkPreview = false // Preview can navigate outside our tab delegate.
     renderer.allowsBackForwardNavigationGestures = true
-    if #available(iOS 16.4, *) { renderer.isInspectable = false }
+    if #available(macOS 13.3, *) { renderer.isInspectable = false }
     web = renderer
     consumerSetWebActivity(renderer, allowed: active && foreground)
     observations = [
@@ -548,8 +545,8 @@ private final class ProtectedWebView: NSObject, FlutterPlatformView, WKNavigatio
     request.setValue("1", forHTTPHeaderField: "DNT"); request.setValue("1", forHTTPHeaderField: "Sec-GPC")
     renderer.load(request); emit()
   }
-  func setActive(_ value: Bool) { active = value; if let web = web { consumerSetWebActivity(web, allowed: active && foreground) }; emit() }
-  func setForeground(_ value: Bool) { foreground = value; if let web = web { consumerSetWebActivity(web, allowed: active && foreground) } }
+  func setActive(_ value: Bool) { active = value; if !value { cancelOwnedPresentations() }; if let web = web { consumerSetWebActivity(web, allowed: active && foreground) }; emit() }
+  func setForeground(_ value: Bool) { foreground = value; if !value { cancelOwnedPresentations() }; if let web = web { consumerSetWebActivity(web, allowed: active && foreground) } }
   func back() { errorText = nil; web?.goBack() }
   func forward() { errorText = nil; web?.goForward() }
   func reload() {
@@ -560,19 +557,26 @@ private final class ProtectedWebView: NSObject, FlutterPlatformView, WKNavigatio
     emit()
   }
   func stop() { web?.stopLoading(); emit() }
+  private func cancelOwnedPresentations() {
+    uploadReply?.cancel(nil); uploadReply = nil; uploadRenderer = nil; uploadOrigin = nil
+    let owned = presentations; presentations.removeAll()
+    for presentation in owned {
+      presentation.cancel()
+      if let window = presentation.window { window.sheetParent?.endSheet(window, returnCode: .cancel); window.orderOut(nil) }
+    }
+    sharingPicker?.close(); sharingPicker = nil
+  }
   func release() {
     lifecycleRevision += 1
     bridge?.cancelWindows(openedBy: self)
     windowToken = nil; awaitingWindowAdoption = false
     let deferred = deferredWindowNavigations; deferredWindowNavigations.removeAll(); deferred.forEach { $0.cancel() }
     committedURL = ""; policyCancellationUntil = .distantPast
-    uploadReply?.cancel(nil); uploadReply = nil; uploadRenderer = nil; uploadOrigin = nil
-    let owned = presentations; presentations.removeAll()
-    for presentation in owned { presentation.cancel(); presentation.controller?.dismiss(animated: false) }
+    cancelOwnedPresentations()
     for url in exportedTemporary.values { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
     exportedTemporary.removeAll()
     for (_, entry) in downloads { entry.0.delegate = nil; entry.0.cancel { _ in }; if let url = entry.1 { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) } }
-    downloads.removeAll(); observations.forEach { $0.invalidate() }; observations.removeAll()
+    downloads.removeAll(); downloadTickets.removeAll(); observations.forEach { $0.invalidate() }; observations.removeAll()
     if let web = web { consumerSetWebActivity(web, allowed: false) }
     web?.stopLoading(); web?.navigationDelegate = nil; web?.uiDelegate = nil; web?.removeFromSuperview(); web = nil
   }
@@ -594,21 +598,21 @@ private final class ProtectedWebView: NSObject, FlutterPlatformView, WKNavigatio
     let configuration = WKFindConfiguration(); configuration.backwards = !forward; configuration.wraps = true
     web.find(findQuery, configuration: configuration) { result($0.matchFound) }
   }
-  private var presenter: UIViewController? {
-    var controller = container.window?.rootViewController
-    while let presented = controller?.presentedViewController { controller = presented }
-    return controller
+  private var presenter: NSWindow? { container.window }
+  private func presentOwned(_ alert: NSAlert, from presenter: NSWindow, cancel: @escaping () -> Void = {}, completed: @escaping (NSApplication.ModalResponse) -> Void) {
+    presentations = presentations.filter { $0.window != nil }
+    presentations.append(ConsumerPresentation(alert.window, cancel: cancel))
+    alert.beginSheetModal(for: presenter, completionHandler: completed)
   }
-  private func presentOwned(_ controller: UIViewController, from presenter: UIViewController, cancel: @escaping () -> Void = {}) {
-    presentations = presentations.filter { $0.controller != nil }
-    presentations.append(ConsumerPresentation(controller, cancel: cancel))
-    presenter.present(controller, animated: true)
+  private func trackPanel(_ panel: NSSavePanel, cancel: @escaping () -> Void) {
+    presentations = presentations.filter { $0.window != nil }
+    presentations.append(ConsumerPresentation(panel, cancel: cancel))
   }
   func share() {
-    guard active, foreground, let url = checked(currentURL).url, let presenter = presenter else { return }
-    let sheet = UIActivityViewController(activityItems: [url], applicationActivities: nil)
-    sheet.popoverPresentationController?.sourceView = container; sheet.popoverPresentationController?.sourceRect = container.bounds
-    presentOwned(sheet, from: presenter)
+    guard active, foreground, let url = checked(currentURL).url, presenter != nil else { return }
+    sharingPicker?.close()
+    let picker = NSSharingServicePicker(items: [url]); sharingPicker = picker
+    picker.show(relativeTo: NSRect(x: 12, y: container.bounds.height - 12, width: 1, height: 1), of: container, preferredEdge: .minY)
   }
   func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
     guard webView === web, bridge?.mayOpen == true, let raw = action.request.url?.absoluteString else { decisionHandler(.cancel); return }
@@ -711,54 +715,45 @@ private final class ProtectedWebView: NSObject, FlutterPlatformView, WKNavigatio
   func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping () -> Void) {
     guard webView === web, active, foreground, let presenter = presenter else { completionHandler(); return }
     let reply = ConsumerReply<Void> { _ in completionHandler() }
-    let alert = UIAlertController(title: frame.securityOrigin.host, message: String(message.prefix(2000)), preferredStyle: .alert)
-    alert.addAction(UIAlertAction(title: "OK", style: .default) { _ in reply.resolve(()) })
-    presentOwned(alert, from: presenter, cancel: { reply.resolve(()) })
+    let alert = NSAlert(); alert.messageText = frame.securityOrigin.host; alert.informativeText = String(message.prefix(2000)); alert.addButton(withTitle: "OK")
+    presentOwned(alert, from: presenter, cancel: { reply.resolve(()) }) { _ in reply.resolve(()) }
   }
   func webView(_ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (Bool) -> Void) {
     guard webView === web, active, foreground, let presenter = presenter else { completionHandler(false); return }
     let reply = ConsumerReply(completionHandler)
-    let alert = UIAlertController(title: frame.securityOrigin.host, message: String(message.prefix(2000)), preferredStyle: .alert)
-    alert.addAction(UIAlertAction(title: "Cancel", style: .cancel) { _ in reply.resolve(false) })
-    alert.addAction(UIAlertAction(title: "OK", style: .default) { _ in reply.resolve(true) })
-    presentOwned(alert, from: presenter, cancel: { reply.resolve(false) })
+    let generation = documentGeneration, origin = consumerOrigin(currentURL)
+    let alert = NSAlert(); alert.messageText = frame.securityOrigin.host; alert.informativeText = String(message.prefix(2000))
+    alert.addButton(withTitle: "Cancel"); alert.addButton(withTitle: "OK")
+    presentOwned(alert, from: presenter, cancel: { reply.resolve(false) }) { [weak self, weak webView] response in
+      reply.resolve(response == .alertSecondButtonReturn && self?.web === webView && self?.active == true && self?.foreground == true && self?.documentGeneration == generation && consumerOrigin(self?.currentURL ?? "") == origin)
+    }
   }
   func webView(_ webView: WKWebView, runJavaScriptTextInputPanelWithPrompt prompt: String, defaultText: String?, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (String?) -> Void) {
     guard webView === web, active, foreground, let presenter = presenter else { completionHandler(nil); return }
     let reply = ConsumerReply(completionHandler)
-    let alert = UIAlertController(title: frame.securityOrigin.host, message: String(prompt.prefix(2000)), preferredStyle: .alert)
-    alert.addTextField { $0.text = String((defaultText ?? "").prefix(2000)) }
-    alert.addAction(UIAlertAction(title: "Cancel", style: .cancel) { _ in reply.resolve(nil) })
-    alert.addAction(UIAlertAction(title: "OK", style: .default) { [weak alert] _ in reply.resolve(alert?.textFields?.first?.text) })
-    presentOwned(alert, from: presenter, cancel: { reply.resolve(nil) })
+    let generation = documentGeneration, origin = consumerOrigin(currentURL)
+    let alert = NSAlert(); alert.messageText = frame.securityOrigin.host; alert.informativeText = String(prompt.prefix(2000))
+    let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 320, height: 28)); field.stringValue = String((defaultText ?? "").prefix(2000)); alert.accessoryView = field
+    alert.addButton(withTitle: "Cancel"); alert.addButton(withTitle: "OK")
+    presentOwned(alert, from: presenter, cancel: { reply.resolve(nil) }) { [weak self, weak webView] response in
+      reply.resolve(response == .alertSecondButtonReturn && self?.web === webView && self?.active == true && self?.foreground == true && self?.documentGeneration == generation && consumerOrigin(self?.currentURL ?? "") == origin ? String(field.stringValue.prefix(2000)) : nil)
+    }
   }
-  @available(iOS 18.4, *)
   func webView(_ webView: WKWebView, runOpenPanelWith parameters: WKOpenPanelParameters, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping ([URL]?) -> Void) {
     guard webView === web, bridge?.mayOpen == true, active, foreground, uploadReply == nil, let raw = frame.request.url?.absoluteString, checked(raw).url != nil, let presenter = presenter else { completionHandler(nil); return }
     guard frame.isMainFrame, let origin = consumerOrigin(raw), origin == consumerOrigin(currentURL) else { completionHandler(nil); return }
     uploadGeneration = documentGeneration; uploadRenderer = web; uploadOrigin = origin
-    let picker = UIDocumentPickerViewController(forOpeningContentTypes: parameters.allowsDirectories ? [.folder, .item] : [.item], asCopy: true)
-    uploadReply = ConsumerOwnedReply(owner: picker, callback: completionHandler)
-    picker.allowsMultipleSelection = parameters.allowsMultipleSelection; picker.delegate = self
-    presentOwned(picker, from: presenter)
-  }
-  func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
-    if let reply = uploadReply, reply.belongs(to: controller) {
-      uploadReply = nil
-      let valid = active && foreground && bridge?.mayOpen == true && uploadRenderer === web && uploadGeneration == documentGeneration && uploadOrigin == consumerOrigin(currentURL) && checked(currentURL).url != nil
-      uploadRenderer = nil; uploadOrigin = nil
-      reply.resolve(from: controller, value: valid ? urls : nil)
+    let picker = NSOpenPanel(); picker.canChooseFiles = true; picker.canChooseDirectories = parameters.allowsDirectories
+    picker.allowsMultipleSelection = parameters.allowsMultipleSelection
+    let reply = ConsumerOwnedReply(owner: picker, callback: completionHandler); uploadReply = reply
+    trackPanel(picker, cancel: { reply.cancel(nil) })
+    picker.beginSheetModal(for: presenter) { [weak self, weak picker] response in
+      guard let self = self, let picker = picker else { reply.cancel(nil); return }
+      guard self.uploadReply === reply else { reply.cancel(nil); return }
+      let valid = response == .OK && self.active && self.foreground && self.bridge?.mayOpen == true && self.uploadRenderer === self.web && self.uploadGeneration == self.documentGeneration && self.uploadOrigin == consumerOrigin(self.currentURL) && self.checked(self.currentURL).url != nil
+      self.uploadReply = nil; self.uploadRenderer = nil; self.uploadOrigin = nil
+      reply.resolve(from: picker, value: valid ? picker.urls : nil)
     }
-    cleanExport(for: controller)
-  }
-  func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
-    if let reply = uploadReply, reply.belongs(to: controller) {
-      uploadReply = nil; uploadRenderer = nil; uploadOrigin = nil; reply.resolve(from: controller, value: nil)
-    }
-    cleanExport(for: controller)
-  }
-  private func cleanExport(for controller: UIDocumentPickerViewController) {
-    if let url = exportedTemporary.removeValue(forKey: ObjectIdentifier(controller)) { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
   }
   func webView(_ webView: WKWebView, requestMediaCapturePermissionFor origin: WKSecurityOrigin, initiatedByFrame frame: WKFrameInfo, type: WKMediaCaptureType, decisionHandler: @escaping (WKPermissionDecision) -> Void) {
     guard webView === web, bridge?.mayOpen == true, active, foreground, origin.protocol == "https", let frameURL = frame.request.url, frameURL.host == origin.host,
@@ -766,13 +761,16 @@ private final class ProtectedWebView: NSObject, FlutterPlatformView, WKNavigatio
     decisionHandler(.prompt) // WebKit's origin-scoped prompt plus OS permission.
   }
   private func ownsDownload(_ download: WKDownload) -> Bool {
-    web != nil && bridge?.mayOpen == true && !awaitingWindowAdoption && downloads[ObjectIdentifier(download)]?.0 === download
+    guard web != nil, bridge?.mayOpen == true, !awaitingWindowAdoption, downloads[ObjectIdentifier(download)]?.0 === download,
+      let ticket = downloadTickets[ObjectIdentifier(download)] else { return false }
+    return ticket.generation == documentGeneration && ticket.origin == consumerOrigin(currentURL)
   }
   private func acceptDownload(_ download: WKDownload, from source: WKWebView) {
     guard source === web, bridge?.mayOpen == true, active, foreground, !awaitingWindowAdoption else {
       download.delegate = nil; download.cancel { _ in }; return
     }
-    downloads[ObjectIdentifier(download)] = (download, nil); download.delegate = self
+    downloads[ObjectIdentifier(download)] = (download, nil)
+    downloadTickets[ObjectIdentifier(download)] = (documentGeneration, consumerOrigin(currentURL)); download.delegate = self
   }
   func webView(_ webView: WKWebView, navigationAction: WKNavigationAction, didBecome download: WKDownload) { acceptDownload(download, from: webView) }
   func webView(_ webView: WKWebView, navigationResponse: WKNavigationResponse, didBecome download: WKDownload) { acceptDownload(download, from: webView) }
@@ -781,17 +779,17 @@ private final class ProtectedWebView: NSObject, FlutterPlatformView, WKNavigatio
     let reply = ConsumerReply(completionHandler)
     let filename = String(URL(fileURLWithPath: suggestedFilename).lastPathComponent.prefix(180))
     let safeName = filename.isEmpty || filename == "." || filename == ".." ? "download" : filename
-    let alert = UIAlertController(title: "Download file?", message: "\(safeName)\nFrom \(url.host ?? "this website")", preferredStyle: .alert)
-    alert.addAction(UIAlertAction(title: "Cancel", style: .cancel) { _ in reply.resolve(nil) })
-    alert.addAction(UIAlertAction(title: "Download", style: .default) { _ in
-      guard self.ownsDownload(download), self.active, self.foreground, self.checked(url.absoluteString).url != nil else { reply.resolve(nil); return }
+    let alert = NSAlert(); alert.messageText = "Download file?"; alert.informativeText = "\(safeName)\nFrom \(url.host ?? "this website")"
+    alert.addButton(withTitle: "Cancel"); alert.addButton(withTitle: "Download")
+    presentOwned(alert, from: presenter, cancel: { reply.resolve(nil) }) { [weak self] response in
+      guard let self = self, response == .alertSecondButtonReturn, self.ownsDownload(download), self.active, self.foreground, self.checked(url.absoluteString).url != nil else { reply.resolve(nil); return }
       let directory = FileManager.default.temporaryDirectory.appendingPathComponent("WingmanDownload-" + UUID().uuidString, isDirectory: true)
       do {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let destination = directory.appendingPathComponent(safeName)
         self.downloads[ObjectIdentifier(download)] = (download, destination); reply.resolve(destination)
       } catch { reply.resolve(nil) }
-    }); presentOwned(alert, from: presenter, cancel: { reply.resolve(nil) })
+    }
   }
   func download(_ download: WKDownload, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest, decisionHandler: @escaping (WKDownload.RedirectPolicy) -> Void) {
     guard ownsDownload(download), let raw = request.url?.absoluteString, let target = checked(raw).url, target.absoluteString == raw else { decisionHandler(.cancel); return }
@@ -800,18 +798,33 @@ private final class ProtectedWebView: NSObject, FlutterPlatformView, WKNavigatio
   func download(_ download: WKDownload, didReceive challenge: URLAuthenticationChallenge, completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) { completionHandler(ownsDownload(download) ? .performDefaultHandling : .cancelAuthenticationChallenge, nil) }
   func downloadDidFinish(_ download: WKDownload) {
     let current = ownsDownload(download)
+    downloadTickets.removeValue(forKey: ObjectIdentifier(download))
     guard let entry = downloads.removeValue(forKey: ObjectIdentifier(download)), let url = entry.1 else { return }
     download.delegate = nil
     guard current, let presenter = presenter, active, foreground else { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()); return }
-    let picker = UIDocumentPickerViewController(forExporting: [url], asCopy: true)
+    let renderer = web, generation = documentGeneration
+    let picker = NSSavePanel(); picker.nameFieldStringValue = url.lastPathComponent
     exportedTemporary[ObjectIdentifier(picker)] = url
-    picker.delegate = self
-    presentOwned(picker, from: presenter)
-    // Exported files are user-owned; remove the temporary source after the
-    // picker completes or cancels, and at next launch after a process crash.
+    trackPanel(picker, cancel: { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) })
+    picker.beginSheetModal(for: presenter) { [weak self, weak picker] response in
+      defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+      guard let self = self, let picker = picker else { return }
+      self.exportedTemporary.removeValue(forKey: ObjectIdentifier(picker))
+      guard response == .OK, let destination = picker.url, self.web === renderer, self.documentGeneration == generation, self.active, self.foreground, self.bridge?.mayOpen == true else { return }
+      let access = destination.startAccessingSecurityScopedResource(); defer { if access { destination.stopAccessingSecurityScopedResource() } }
+      do {
+        // NSSavePanel owns overwrite confirmation. Copy/move files without
+        // reading an arbitrarily large download into application memory.
+        if FileManager.default.fileExists(atPath: destination.path) {
+          _ = try FileManager.default.replaceItemAt(destination, withItemAt: url)
+        } else { try FileManager.default.copyItem(at: url, to: destination) }
+      }
+      catch { self.bridge?.emit("downloadFailed", ["viewId": self.id, "requestId": self.requestId, "reason": "The file could not be saved."]) }
+    }
   }
   func download(_ download: WKDownload, didFailWithError error: Error, resumeData: Data?) {
     let current = ownsDownload(download)
+    downloadTickets.removeValue(forKey: ObjectIdentifier(download))
     guard let entry = downloads.removeValue(forKey: ObjectIdentifier(download)) else { return }
     download.delegate = nil
     if let url = entry.1 { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
