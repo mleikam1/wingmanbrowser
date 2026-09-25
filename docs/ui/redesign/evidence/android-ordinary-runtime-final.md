@@ -20,3 +20,9 @@ Only this dedicated AVD was temporarily restarted in GUI mode to expose it to CU
 Evidence image: `docs/ui/redesign/screenshots/android-release-launch-blocked-system-ui.png`.
 
 The separate final native integration result in `android-native-final-integration.log` passed its real WebView resource-counting, typed/redacted boundary, additional-restriction, normal/private storage, and renderer-lifetime journey before this ordinary APK install. That remains separate evidence; it is not a substitute for the blocked ordinary-app visual/manual journey.
+
+## Final shutdown and manual retry
+
+After the concurrent verification jobs finished, one read-only follow-up screenshot still showed the same Android System UI ANR. The dedicated task emulator was then shut down gracefully with `adb -s emulator-5560 emu kill`; it acknowledged shutdown and its emulator process exited. No other AVD or global adb state was changed. The task-local AVD userdata image and final release APK remain present.
+
+The outstanding manual retry requires launching the existing dedicated `Wingman_Redesign_QA_20260925` AVD in a healthy UI environment, retaining its disk/data, then inspecting the installed ordinary release app. It does **not** require wiping data or reinstalling a different application. Home/companion/native-browser manual journeys remain unverified until that retry succeeds.
