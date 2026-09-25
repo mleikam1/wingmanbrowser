@@ -41,8 +41,8 @@ No remote branch, deployed service or published app needs rollback because this 
 ## Preserved local builds
 
 - Android: `artifacts/android/Wingman-0.16.0+19-local-release.apk` (ordinary entrypoint, existing debug signing fallback).
-- iOS simulator: `artifacts/ios-simulator/Wingman-20260925T203524Z.app` (ordinary app, no XCTest bundle).
+- iOS simulator: `artifacts/ios-simulator/Wingman-20260925T211144Z.app` (ordinary app with ownership/history corrections, no XCTest bundle).
 - Web companion: `artifacts/web-companion/`, with91 file hashes in `artifacts/web-companion-manifest.json`. Serve this existing build without rebuilding: `python3 -m http.server 8799 --bind 127.0.0.1 --directory artifacts/web-companion` when that port is free.
 - macOS: use the separate desktop worktree's `artifacts/` and native ledger for its final named app.
 
-Prior simulator artifacts are retained for provenance; use the newest verified ownership-patched artifact above. Logs and copied builds are local output and are intentionally excluded from the source repository.
+Prior simulator artifacts are retained for provenance; use the newest verified artifact above. Copied builds and most raw logs are excluded from the source repository; selected native/build evidence logs and concise manifests are committed.

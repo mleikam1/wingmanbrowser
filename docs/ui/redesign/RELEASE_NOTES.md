@@ -8,6 +8,8 @@ The companion uses real captured task state and explicit page saving. Spaces add
 
 Production feeds and backend behavior are unchanged. No accounts, cloud assistant, page capture, feed polling or paid service was added. The About constant now matches the existing package version; this work does not imply a new store release.
 
+Apple adapters also reject retired-renderer callbacks and stale async restoration, and now synchronize the address after native Back/Forward traversal settles. These corrections preserve mandatory policy checks and the same document/renderer. The final iOS simulator artifact includes both corrections and passed the native history tests and installed-app smoke.
+
 ## Verification and scope
 
 Current test/build/device results belong to [IMPLEMENTATION_STATUS](IMPLEMENTATION_STATUS.md) and [PLATFORM_MATRIX](PLATFORM_MATRIX.md). Do not read earlier full-suite failures, earlier milestone totals or selected passing tests as final aggregate acceptance. The [visual index](VISUAL_INDEX.md) identifies widget renders versus ordinary running iOS simulator captures. A separate `feat/wingman-macos` worktree implements the native AppKit WKWebView browser; its runtime/test ledger records actual desktop coverage. Windows/Linux native engines are unsupported here. Physical-device accessibility/performance and store distribution are not claimed.

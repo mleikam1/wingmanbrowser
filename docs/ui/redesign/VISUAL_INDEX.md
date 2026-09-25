@@ -2,7 +2,7 @@
 
 Updated 2026-09-25. [Open the local visual gallery](evidence-preview.html) to inspect full-resolution files. The gallery is an evidence viewer, not the application.
 
-The indexed files include **54 production-widget renders**, **17 actual iOS simulator captures** (including one SpringBoard setup image), **10 final ordinary web captures**, **1 Android captures**, and one ordinary web baseline capture. Supplied concept boards remain design references; none is presented as a screenshot of the implementation. Reference filenames/hashes are recorded in [REFERENCE_MANIFEST](REFERENCE_MANIFEST.json).
+The indexed files include **54 production-widget renders**, **18 actual iOS simulator captures** (including one SpringBoard setup image), **10 final ordinary web captures**, **1 Android captures**, and one ordinary web baseline capture. Supplied concept boards remain design references; none is presented as a screenshot of the implementation. Reference filenames/hashes are recorded in [REFERENCE_MANIFEST](REFERENCE_MANIFEST.json).
 
 ## How to read the evidence
 
@@ -10,7 +10,7 @@ The indexed files include **54 production-widget renders**, **17 actual iOS simu
 - **Ordinary runtime capture:** the running production `lib/main.dart` app or its standard web build, captured through the host UI. iOS files are simulator captures, not physical-device evidence. The SpringBoard installation image only records setup.
 - **Reference:** supplied PNG concept; illustrative prices, tasks and totals are not production defaults. The app uses real empty/populated state and unavailable observation where appropriate.
 
-Final aggregate test/build status belongs to [IMPLEMENTATION_STATUS](IMPLEMENTATION_STATUS.md) and [PLATFORM_MATRIX](PLATFORM_MATRIX.md); exact final results are recorded there. Native source/test scope is in [NATIVE_AUDIT](NATIVE_AUDIT.md). The separate macOS worktree records its adapter tests, captures and limits in `../wingman-macos/docs/ui/redesign/macos/README.md`. Windows/Linux native engines remain absent.
+Final aggregate test/build status belongs to [IMPLEMENTATION_STATUS](IMPLEMENTATION_STATUS.md) and [PLATFORM_MATRIX](PLATFORM_MATRIX.md); exact final results are recorded there. Native source/test scope is in [NATIVE_AUDIT](NATIVE_AUDIT.md). The separate macOS worktree records its adapter tests, captures and limits in the [desktop ledger](../../../../wingman-macos/docs/ui/redesign/macos/README.md). Windows/Linux native engines remain absent.
 
 ## All nine boards
 
@@ -143,6 +143,7 @@ These original files are 1206 × 2622 physical pixels from a dedicated iOS simul
 | [ios-finish-final-checklist.png](screenshots/ios-finish-final-checklist.png) | Ordinary iOS simulator capture; see runtime ledger for exact journey. |
 | [ios-finish-final-paused-restart.png](screenshots/ios-finish-final-paused-restart.png) | Ordinary iOS simulator capture; see runtime ledger for exact journey. |
 | [ios-finish-final-running.png](screenshots/ios-finish-final-running.png) | Ordinary iOS simulator capture; see runtime ledger for exact journey. |
+| [ios-history-final-example.png](screenshots/ios-history-final-example.png) | Ordinary iOS simulator capture; see runtime ledger for exact journey. |
 | [ios-home-current.png](screenshots/ios-home-current.png) | Ordinary production app Home after setup. |
 | [ios-home-final-populated.png](screenshots/ios-home-final-populated.png) | Ordinary iOS simulator capture; see runtime ledger for exact journey. |
 | [ios-install-springboard.png](screenshots/ios-install-springboard.png) | Simulator SpringBoard installation/setup. This is not an application-screen capture. |

@@ -37,5 +37,4 @@ flutter test --no-pub --reporter expanded test/browser/protected_web_controller_
 flutter analyze --no-pub
 ```
 
-Native testing remains the 13-method consumer/ownership selection, not a claim that every historical native target test ran. Existing runtime screenshots precede this final history fix; the real WKWebView regression establishes the corrected native behavior. `git diff --check` passes for source and follow-up notes.
-
+Native testing remains the 13-method consumer/ownership selection, not a claim that every historical native target test ran. A subsequent [ordinary runtime smoke](evidence/ios-ownership-final-runtime.md) installed this final artifact, restored its task/checklist/notes and rendered example.com; [the final capture](screenshots/ios-history-final-example.png) records that run. The real WKWebView regression establishes the corrected native history behavior. `git diff --check` passes for source and follow-up notes.

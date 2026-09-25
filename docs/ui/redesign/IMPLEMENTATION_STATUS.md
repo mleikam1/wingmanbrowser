@@ -1,6 +1,6 @@
 # Wingman redesign implementation status
 
-Updated2026-09-25. The shared production redesign is implemented, with **1041 Flutter tests passed/6 existing opt-in skips**, clean analysis, Android/iOS/web local builds and runtime evidence. The separate macOS native workstream has **1055 Flutter tests passed/6 skips** and **14 native tests passed**; its ordinary foreground/integration verification is finishing. Android's ordinary visual smoke has an explicit emulator OS/CUA blocker. This ledger is local acceptance evidence, not release certification.
+Updated 2026-09-25. The shared production redesign is implemented, with **1041 Flutter tests passed/6 existing opt-in skips**, clean analysis, Android/iOS/web local builds and runtime evidence. The separate macOS native workstream has **1055 Flutter tests passed/6 skips**, **14 native tests passed before the final history patch**, and a passing production-app integration journey after that patch. The Apple history timing defect is corrected on both Apple branches; the rebuilt iOS app passed native tests and an ordinary runtime smoke. Android ordinary visual QA, macOS foreground input and the final macOS XCTest launch have documented environment blockers. This ledger is local acceptance evidence, not release certification.
 
 ## Protected starting state
 
@@ -18,6 +18,7 @@ Production entrypoint is `lib/main.dart`. Android System WebView/iOS WKWebView u
 - Protection configuration/observation/limitations dashboard; actual Android interception counters with renderer lifetime, saturation and redacted typed boundary events. WK/web do not fabricate totals.
 - Calm mandatory boundaries with safe task/Home recovery and preview-only review details. Local supplied-text terms analysis with excerpts/uncertainty, grouped Settings, tone/reduced motion and private preference separation.
 - Native callbacks/async rule preparation are fenced to the captured renderer, request and lifetime on both Apple branches.
+- Native Apple Back/Forward address publication follows loading/history settlement while retaining current-renderer, history-item and policy checks. iOS regressions cover first and interior history entries without reloading the document.
 - Production feed/backend behavior unchanged. The only backend edit freezes a pre-existing time-sensitive test fixture. No account, cloud AI, telemetry, automatic page capture, new polling or paid service was added.
 
 ## Verified results and outputs
@@ -34,15 +35,19 @@ Local builds are preserved under `artifacts/android/`, `artifacts/ios-simulator/
 - `1a31bfd`: independently accessible task Continue and restored companion → selected-task detail; local run script.
 - `efdd150`: ordinary Android artifact verification and explicit emulator/CUA blocker evidence.
 - `50dab41`: iOS renderer/request/lifetime fences, expanded native regression and final1041-test/analyzer evidence.
+- `9ee6d45`: final shared build/evidence records and production loading/failure captures.
+- `edf5499`: iOS Back/Forward address synchronization, 13 passing native tests, 22 focused Dart tests and a replacement ordinary simulator artifact.
 - The final documentation/capture commit is the branch tip after these changes; use `git log -1` for its exact hash.
 
 `outputs/wingman-macos` / `feat/wingman-macos` starts from3a6cd00 and includes the shared runtime corrections, new AppKit WKWebView target and shared Apple policy code. Its [native ledger](../../../../wingman-macos/docs/ui/redesign/macos/README.md) owns desktop commits, artifact names, foreground checks, native fixture/integration results and gaps. Windows/Linux native targets remain absent.
 
-## Remaining verification at this checkpoint
+## Final follow-up and manual verification gaps
 
-1. Finish bounded macOS ordinary foreground and cross-layer integration checks, retain exact successes/blockers, and finalize its release artifact/commit.
-2. Completed: final ownership-patched iOS artifact restored the task/checklist/notes and rendered example.com through native WKWebView; see `evidence/ios-ownership-final-runtime.md`.
-3. Refresh aggregate documentation with those results and finalize scoped local evidence commits.
+The macOS production-app journey passed real AppKitView rendering, JavaScript, Back/Forward address updates, Home, a redirected mandatory boundary and safe recovery. The matching iOS history fix passed all 13 selected native tests; the latest ordinary `Wingman-20260925T211144Z.app` restored the task/checklist/notes and rendered example.com. See [history evidence](IOS_HISTORY_FOLLOWUP.md) and [installed-app smoke](evidence/ios-ownership-final-runtime.md).
+
+Android's ordinary APK is installed and its MainActivity launch was verified, but System UI ANR obscured visual acceptance. The dedicated emulator was gracefully stopped with its data preserved. macOS foreground mouse/keyboard/scroll acceptance remains blocked by the local activation path; the inactive privacy cover was retained. The smallest manual follow-up is to open the packaged macOS preview in an interactive foreground session and relaunch the existing Android QA device in a healthy emulator UI. No security changes, data wipe, payment or production access is required.
+
+The final macOS XCTest rerun stalled in dyld before application initialization or any test case, including one clean retry. The expanded first/interior history regressions compiled but were not executed by that run. Earlier 14-case native results, the final passing full-app integration, and the matching iOS native history tests are separate evidence; none is labeled a final 14-case macOS pass. The desktop ledger retains the startup samples and exact retry command.
 
 ## Boundaries
 
