@@ -1,7 +1,12 @@
 import 'dart:async';
+import 'dart:io';
+import 'dart:ui' as ui;
+import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wingman_browser/main.dart';
+import 'package:wingman_browser/presentation/theme.dart';
 import 'package:wingman_browser/presentation/design_system/ui_preferences.dart';
 import 'package:wingman_browser/presentation/home/customize_home_screen.dart';
 import 'package:wingman_browser/presentation/home/home_screen.dart';
@@ -33,6 +38,40 @@ class _ResetStore extends MemorySignatureDocumentStore {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  setUpAll(() async {
+    if (!const bool.fromEnvironment('WINGMAN_REDESIGN_CAPTURES')) return;
+    final font = FontLoader('Roboto');
+    for (final weight in ['Regular', 'Medium', 'Bold']) {
+      font.addFont(rootBundle.load('assets/fonts/Roboto-$weight.ttf'));
+    }
+    await font.load();
+    await (FontLoader(
+      'MaterialIcons',
+    )..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'))).load();
+  });
+
+  Future<void> capture(WidgetTester tester, GlobalKey key, String name) async {
+    if (!const bool.fromEnvironment('WINGMAN_REDESIGN_CAPTURES')) return;
+    final images = tester.widgetList<Image>(find.byType(Image)).toList();
+    await tester.runAsync(() async {
+      for (final image in images) {
+        await precacheImage(image.image, key.currentContext!);
+      }
+    });
+    // The pending write intentionally keeps an indeterminate progress indicator
+    // active. A single frame captures that genuine UI state without settling it.
+    await tester.pump(const Duration(milliseconds: 150));
+    await tester.runAsync(() async {
+      final boundary =
+          key.currentContext!.findRenderObject()! as RenderRepaintBoundary;
+      final image = await boundary.toImage(pixelRatio: 1);
+      final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+      final file = File('docs/ui/redesign/screenshots/$name.png');
+      await file.parent.create(recursive: true);
+      await file.writeAsBytes(bytes!.buffer.asUint8List());
+      image.dispose();
+    });
+  }
 
   test(
     'explicit reset alone repairs malformed Home data after durable success',
@@ -118,15 +157,21 @@ void main() {
       await controller.initialize();
       await controller.update((p) => p.copyWith(showOfficial: false));
       final before = store.writes;
+      final boundary = GlobalKey();
       await tester.pumpWidget(
-        MaterialApp(
-          home: CustomizeHomeScreen(
-            controller: controller,
-            policy: policy,
-            eligible: (_) => false,
-            canContinue: () => true,
-            onSpaces: () {},
-            isPrivate: false,
+        RepaintBoundary(
+          key: boundary,
+          child: MaterialApp(
+            debugShowCheckedModeBanner: false,
+            theme: WingmanTheme.make(Brightness.light),
+            home: CustomizeHomeScreen(
+              controller: controller,
+              policy: policy,
+              eligible: (_) => false,
+              canContinue: () => true,
+              onSpaces: () {},
+              isPrivate: false,
+            ),
           ),
         ),
       );
@@ -150,6 +195,7 @@ void main() {
         expect(store.entered!.isCompleted, isTrue);
         expect(controller.snapshot.showOfficial, isFalse);
         expect(find.byType(LinearProgressIndicator), findsOneWidget);
+        await capture(tester, boundary, '08-preferences-saving-light');
         store.gate!.complete();
         await tester.pumpAndSettle();
         expect(controller.snapshot.showOfficial, isTrue);
@@ -173,7 +219,13 @@ void main() {
     final repository = RecordingRepository()..failSave = true;
     final state = BrowserState(repository: repository, policyRuntime: policy);
     await state.init();
-    await tester.pumpWidget(WingmanApp(state: state, policy: policy));
+    final boundary = GlobalKey();
+    await tester.pumpWidget(
+      RepaintBoundary(
+        key: boundary,
+        child: WingmanApp(state: state, policy: policy),
+      ),
+    );
     Future<void> start() async {
       await tester.ensureVisible(find.text('Get started'));
       await tester.pumpAndSettle();
@@ -186,6 +238,11 @@ void main() {
       expect(find.byType(WelcomeScreen), findsOneWidget);
       expect(find.byType(HomeScreen), findsNothing);
       expect(find.text('Welcome not completed'), findsOneWidget);
+      if (const bool.fromEnvironment('WINGMAN_REDESIGN_CAPTURES')) {
+        await tester.ensureVisible(find.text('Welcome not completed'));
+        await tester.pumpAndSettle();
+      }
+      await capture(tester, boundary, '09-welcome-save-failure-light');
       expect(state.settings.onboardingComplete, isFalse);
       expect(repository.savedSettings, isNull);
       expect(policy.status.usable, isTrue);

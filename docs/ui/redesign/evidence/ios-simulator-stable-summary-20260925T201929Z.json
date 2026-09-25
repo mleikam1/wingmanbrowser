@@ -1,0 +1,33 @@
+{
+  "startedUtc": "2026-09-25T20:19:29.281615+00:00",
+  "finishedUtc": "2026-09-25T20:19:53.158410+00:00",
+  "command": [
+    "/opt/homebrew/bin/flutter",
+    "build",
+    "ios",
+    "--simulator",
+    "--debug",
+    "--no-pub",
+    "--target",
+    "lib/main.dart"
+  ],
+  "exit": 0,
+  "elapsedSeconds": 23.87,
+  "log": "/Users/MattLeikam/Documents/Codex/2026-09-25/files-mentioned-by-the-user-wingman/outputs/wingman-browser/docs/ui/redesign/evidence/ios-simulator-stable-20260925T201929Z.log",
+  "sourceHashesBefore": {
+    "lib/presentation/home/home_screen.dart": "b2326df80fb2f4ca457efb5f761a9bbc949222ce1628884e37060e81a44c6e34",
+    "lib/presentation/browser_shell.dart": "30c87761dde4d657daac8d47b3df935406368ee7aefcc194dabd2faceb34cb67",
+    "lib/presentation/components/wingman_task_panel.dart": "0bf7875404d16bdf09da4a4a8563fc42ea15dd6cbfe69b77ec89c1fe2f6f7680"
+  },
+  "sourceHashesAfter": {
+    "lib/presentation/home/home_screen.dart": "b2326df80fb2f4ca457efb5f761a9bbc949222ce1628884e37060e81a44c6e34",
+    "lib/presentation/browser_shell.dart": "30c87761dde4d657daac8d47b3df935406368ee7aefcc194dabd2faceb34cb67",
+    "lib/presentation/components/wingman_task_panel.dart": "0bf7875404d16bdf09da4a4a8563fc42ea15dd6cbfe69b77ec89c1fe2f6f7680"
+  },
+  "sourcesStable": true,
+  "artifact": "/Users/MattLeikam/Documents/Codex/2026-09-25/files-mentioned-by-the-user-wingman/outputs/wingman-browser/artifacts/ios-simulator/Wingman-stable-20260925T201929Z.app",
+  "bundleIdentifier": "com.wingmanbrowser.app",
+  "version": "0.16.0",
+  "build": "19",
+  "testBundles": []
+}

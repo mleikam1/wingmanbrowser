@@ -1,0 +1,52 @@
+{
+  "date": "2026-09-25",
+  "logs": [
+    {
+      "path": "docs/ui/redesign/evidence/flutter-analyze-delivery-final.log",
+      "sha256": "f1fca666ba802b886963e979893542a5b329beffe0a250b7fa0755a2e2cc86b7",
+      "bytes": 96
+    },
+    {
+      "path": "docs/ui/redesign/evidence/preferences-state-captures-final-reviewed.log",
+      "sha256": "1b39c23b642eed3a66773264edbb4d7f3a3ee58e09e37ed670f3d37baab62f78",
+      "bytes": 612
+    },
+    {
+      "path": "docs/ui/redesign/evidence/android-native-final-integration.log",
+      "sha256": "d58408eb268f170370950fedd0f7ed3e3cbc304ee5c8c3c47713ea57cee5d704",
+      "bytes": 1622
+    },
+    {
+      "path": "docs/ui/redesign/evidence/android-release-final-build.log",
+      "sha256": "fed6b342776a2fa70b99bb86dcc94fbddb017d3b997bf7a47ce5c7f11b5aa4c5",
+      "bytes": 1462
+    },
+    {
+      "path": "docs/ui/redesign/evidence/web-accessibility-final-build.log",
+      "sha256": "2f5049099a5fcdacbdce624c13a842af703129e4e19608173cd0e6df2c95019e",
+      "bytes": 93
+    },
+    {
+      "path": "docs/ui/redesign/evidence/backend-tests.log",
+      "sha256": "1c10913bd06553991fe119cc5e996d755e63cd95ab8cec12f1f3145b10e1cb11",
+      "bytes": 287
+    }
+  ],
+  "capture_check": {
+    "passed": 5,
+    "exit_code": 0
+  },
+  "analyzer": {
+    "exit_code": 0,
+    "issues": 0,
+    "seconds": 4.9
+  },
+  "android_integration": {
+    "exit_code": 0,
+    "journeys_passed": 1
+  },
+  "backend": {
+    "exit_code": 0,
+    "passed": 186
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "artifact": "artifacts/android/Wingman-0.16.0+19-local-release.apk",
+  "bytes": 74406005,
+  "sha256": "ca3ae31469cf94a65768f6495ceb6842e384c7189680b72db6ffd42c6c856620",
+  "application_id": "com.wingmanbrowser.wingman_browser",
+  "version_name": "0.16.0",
+  "version_code": 19,
+  "command": "flutter --suppress-analytics build apk --release --target lib/main.dart",
+  "exit_code": 0,
+  "build_seconds": 46.6,
+  "signing": "Existing Android debug-key fallback; local release-mode QA, not store distribution",
+  "setup_correction": "Initial --no-pub release retained an integration-test plugin registrant. Normal Flutter package resolution regenerated it; no generated registrant or production dependency was manually altered."
+}

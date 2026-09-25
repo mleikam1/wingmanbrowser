@@ -1,0 +1,69 @@
+{
+  "startedUtc": "2026-09-25T20:13:05.681694+00:00",
+  "device": "01739195-2E55-4714-98D6-85598023A7D8",
+  "entrypoint": "lib/main.dart",
+  "resultBundle": "/Users/MattLeikam/Documents/Codex/2026-09-25/files-mentioned-by-the-user-wingman/outputs/wingman-browser/work/redesign/ios-native-final-20260925T201305Z-56581.xcresult",
+  "historicalTestsExcluded": [
+    "testWebKitBlocksUnreviewedResourcesAndResourceRedirects",
+    "testStrictSearchRulesAndNavigationRejectFramesAndRedirects"
+  ],
+  "commands": [
+    {
+      "name": "ios-native-final",
+      "command": [
+        "/Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild",
+        "test",
+        "-workspace",
+        "ios/Runner.xcworkspace",
+        "-scheme",
+        "Runner",
+        "-configuration",
+        "Debug",
+        "-sdk",
+        "iphonesimulator",
+        "-destination",
+        "id=01739195-2E55-4714-98D6-85598023A7D8",
+        "-parallel-testing-enabled",
+        "NO",
+        "-resultBundlePath",
+        "/Users/MattLeikam/Documents/Codex/2026-09-25/files-mentioned-by-the-user-wingman/outputs/wingman-browser/work/redesign/ios-native-final-20260925T201305Z-56581.xcresult",
+        "-only-testing:RunnerTests/RunnerTests/testConsumerNativePolicyUnknownStrictAndMixedPaths",
+        "-only-testing:RunnerTests/RunnerTests/testDialogReplyCompletesOnceAcrossDismissalAndLateAction",
+        "-only-testing:RunnerTests/RunnerTests/testExportPickerCannotResolvePendingUploadOrReplayAfterCancellation",
+        "-only-testing:RunnerTests/RunnerTests/testPopupLeaseRejectsChangedDocumentProfileRestrictionAndExpiry",
+        "-only-testing:RunnerTests/RunnerTests/testNativePopupAdoptionRetainsPostOpenerAndPrivateProfile",
+        "-only-testing:RunnerTests/RunnerTests/testHistoryAPIUpdatesNativeAddressWithoutReloadOrNewDocument",
+        "-only-testing:RunnerTests/RunnerTests/testHiddenWebActivityEndsCaptureAndReturnNeverRestartsCapture",
+        "-only-testing:RunnerTests/RunnerTests/testExpectedPolicyCancellationNeverSuppressesCertificateOrNetworkErrors",
+        "-only-testing:RunnerTests/RunnerTests/testConsumerSameCurrentRestorePreservesRollbackPredecessor",
+        "-only-testing:RunnerTests/RunnerTests/testConsumerSignedUpdateAuthenticityAndMetadata",
+        "-only-testing:RunnerTests/RunnerTests/testConsumerNativeRuleCompilerBlocksSyntheticAndAllowsNeutralResources",
+        "-only-testing:RunnerTests/RunnerTests/testConsumerConfigurationPreservesNormalCookiesSeparatesPrivateAndEnablesJavaScript",
+        "-only-testing:RunnerTests/RunnerTests/testConsumerPathResourceRulesRejectAlternateSpellingsWithPositiveControl",
+        "CODE_SIGNING_ALLOWED=NO",
+        "FLUTTER_TARGET=lib/main.dart"
+      ],
+      "exit": 0,
+      "seconds": 144.79,
+      "log": "/Users/MattLeikam/Documents/Codex/2026-09-25/files-mentioned-by-the-user-wingman/outputs/wingman-browser/docs/ui/redesign/evidence/ios-native-final-20260925T201305Z.log"
+    },
+    {
+      "name": "ios-simulator-final",
+      "command": [
+        "/opt/homebrew/bin/flutter",
+        "build",
+        "ios",
+        "--simulator",
+        "--debug",
+        "--no-pub",
+        "--target",
+        "lib/main.dart"
+      ],
+      "exit": 0,
+      "seconds": 74.29,
+      "log": "/Users/MattLeikam/Documents/Codex/2026-09-25/files-mentioned-by-the-user-wingman/outputs/wingman-browser/docs/ui/redesign/evidence/ios-simulator-final-20260925T201305Z.log"
+    }
+  ],
+  "artifact": "/Users/MattLeikam/Documents/Codex/2026-09-25/files-mentioned-by-the-user-wingman/outputs/wingman-browser/artifacts/ios-simulator/Wingman-20260925T201305Z.app",
+  "finishedUtc": "2026-09-25T20:16:45.117696+00:00"
+}

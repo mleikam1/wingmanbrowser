@@ -13,7 +13,7 @@ The dashboard distinguishes configured rules, actual observed activity and limit
 | Android | Actual policy-denied `shouldInterceptRequest` outcomes from this tab's current native page engine. Renderer lifetime only; resets on release/recreation. Retries of one address are separate outcomes. Count saturates at 100,000 and is labelled with a plus when saturated. |
 | iOS | Request-level blocking totals are not observable by this adapter; value remains unavailable, not zero. |
 | Web companion | Cannot observe or enforce unrelated host-browser traffic. No blocking total is invented. |
-| macOS | Separate native worktree pending; no completed adapter or counter claim in this UI candidate. |
+| macOS | Separate native worktree implements AppKit WKWebView; request-level totals remain explicitly unobservable. Native acceptance is recorded in its own ledger. |
 
 A dashboard reading is a snapshot at opening. An observable engine without a status value says no observation is available yet. Android counters exclude other renderers, main-frame decisions, TLS failures, downloads and traffic that does not pass the guarded interception callback. No URL metadata is required for the counter. Normal/private counters stay separate; obsolete native callbacks are rejected. See [NATIVE_AUDIT](NATIVE_AUDIT.md) for source and test evidence.
 

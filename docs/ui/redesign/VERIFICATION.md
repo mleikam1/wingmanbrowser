@@ -1,22 +1,31 @@
 # Verification ledger
 
-Date:2026-09-25. macOS15.7.4 arm64; Flutter3.44.4/Dart3.12.2; Xcode26.3; Java17. Commands ran from the UI worktree unless specified. Logs are local evidence; generated build output is not a release certification.
+2026-09-25. Host macOS15.7.4 arm64; Flutter3.44.4/Dart3.12.2; Xcode26.3; Java17. Commands below ran in the UI worktree unless identified as desktop. Full logs stay local under the stated paths; concise JSON summaries/hashes are committed. Build success is not distribution or security certification.
 
-| Check | Result at UI checkpoint | Log |
+| Check / exact command | Result | Evidence |
 |---|---|---|
-| `flutter analyze --no-pub` |0, no issues,3.9s; final rerun after lifecycle guard pending |`work/redesign/analyze-final.log`|
-| Baseline `flutter test --no-pub` |997 pass,6 skipped,2 pre-existing stale AppVersion failures |`work/redesign/baseline-tests.log`|
-| `flutter test --no-pub test/ui/home_navigation_test.dart test/ui/redesign_companion_test.dart --update-goldens --dart-define=WINGMAN_REDESIGN_CAPTURES=true` |0;10 pass; production Home/companion light/dark captures refreshed and inspected |`work/redesign/home-final.log`|
-| `flutter test --no-pub test/ui/clear_data_navigation_test.dart test/ui/focus_scope_integration_test.dart` |0;10 pass after disposed-notifier lifecycle fix |`work/redesign/ownership-final.log`|
-| Aggregate before final lifecycle guard |1039 pass,6 skipped,1 fail:confirmed clear after Shell teardown. Actual regression fixed; test retained |`work/redesign/full-tests-before-lifecycle-fix.log`|
-| Final aggregate/analyzer |Running at checkpoint; replace with actual final outcome |`work/redesign/full-tests-final.log`|
-| `PYTHONPATH=backend work/redesign/backend-venv/bin/python -m unittest discover -s backend/tests` |0;186 pass,11.285s. Production feeds unchanged; fixed clock only in one old cache test |`docs/ui/redesign/evidence/backend-tests.log`|
-| Android JVM |0;23 pass including5 actual-counter state/concurrency tests |`docs/ui/redesign/evidence/android-native-tests.log`|
-| Android native integration |Counter/private-store/reset journey passed; latest typed-event/additional-restriction assertions pending final rerun |`NATIVE_AUDIT.md`|
-| iOS ordinary build/runtime |Initial simulator build and ordinary page/back/forward/task flows passed. Latest native reason changes and13 XCTest cases pending final rerun |`NATIVE_AUDIT.md`|
-| Web |Baseline release build and ordinary first-run passed; final build/runtime pending |`work/redesign/baseline-web-build.log`|
-| macOS |Separate branch starts from completed shared UI checkpoint; no desktop pass claimed yet |`PLATFORM_MATRIX.md`|
+| Baseline `flutter test --no-pub` |997 passed,6 skipped,2 pre-existing stale AppVersion failures; constant corrected to existing pubspec0.16.0+19 | `work/redesign/baseline-tests.log` |
+| Final `flutter test --no-pub --reporter expanded` | Exit0; **1041 passed,6 existing opt-in skips**,2m10s after final UI and iOS ownership changes | `evidence/flutter-final-after-ios-20260925T204000Z.log` |
+| `flutter analyze --no-pub` | Exit0; no issues,4.9s after reviewed saving/failure capture hooks | `evidence/flutter-analyze-delivery-final.log` |
+| `flutter test --no-pub test/ui/home_navigation_test.dart test/ui/redesign_companion_test.dart --update-goldens --dart-define=WINGMAN_REDESIGN_CAPTURES=true` | Exit0;10 passed; production Home/companion light/dark captures inspected | `evidence/home-final.log` |
+| `flutter test --no-pub test/ui/clear_data_navigation_test.dart test/ui/focus_scope_integration_test.dart` | Exit0;10 passed after disposed-notifier lifecycle correction | `evidence/ownership-final.log` |
+| `flutter --suppress-analytics test --no-pub --dart-define=WINGMAN_REDESIGN_CAPTURES=true test/ui/preferences_reset_welcome_test.dart --reporter expanded` | Exit0;5 passed; pending-save and failed-first-run screenshots visually inspected with production theme | `evidence/preferences-state-captures-final-reviewed.log` |
+| Focused Home/companion runtime corrections | Exit0;18 passed including independent accessible Continue and captured-task routes | `evidence/final-runtime-fixes-tests.log` |
+| `PYTHONPATH=backend work/redesign/backend-venv/bin/python -m unittest discover -s backend/tests` | Exit0; **186 passed**,11.285s. Production feeds unchanged; one historical cache test clock repaired | `evidence/backend-tests.log` |
+| `cd android && ./gradlew testDebugUnitTest --console=plain` | Exit0; **23 passed**, including5 real-counter state/concurrency tests | `evidence/android-native-tests.log`; committed `evidence/android-junit/` |
+| `flutter --suppress-analytics test integration_test/observed_request_counters_test.dart -d emulator-5560 --reporter expanded` | Exit0; **1 native integration journey passed**,2m44 total; build26.9s/install8.8s. Actual interception, snapshot replay/reset, private storage and typed redaction | `evidence/android-native-final-integration.log` |
+| `flutter --suppress-analytics build apk --release --target lib/main.dart` | Exit0;46.6s; ordinary release APK copied and hashed. Existing debug signing fallback | `evidence/android-build-manifest.json` |
+| Ordinary Android install/launch | Install and expected resumed MainActivity verified. **Manual visual journey blocked** by Android System UI ANR and absent usable CUA surface | `evidence/android-ordinary-runtime-final.md` |
+| iOS selected current-consumer `xcodebuild test` | Exit0; **13 passed**,0 failures,27.355s tests /201.77s command, including mirrored native callback/restore/close fences. Exact selected method flags, target and source hashes in JSON | `evidence/ios-final-summary-20260925T203524Z.json`; `evidence/ios-ownership-xctest-summary-20260925T203524Z.json` |
+| `flutter build ios --simulator --debug --no-pub --target lib/main.dart` | Exit0;59.09s; source stable across tests/build, ordinary com.wingmanbrowser.app0.16.0+19, no XCTest bundles | `evidence/ios-final-summary-20260925T203524Z.json`; `artifacts/ios-simulator/Wingman-20260925T203524Z.app` |
+| Ordinary iOS runtime | Real permitted page/link/back/forward; persisted task/checklist/note;5 companion reopen cycles; real timer/background/paused restart; private task isolation and mandatory benign fixture boundary | `evidence/ios-ordinary-runtime-final.md`; latest ownership-patched artifact also restored state and rendered example.com: `evidence/ios-ownership-final-runtime.md` |
+| `flutter --suppress-analytics build web --no-pub --no-wasm-dry-run --no-web-resources-cdn --no-tree-shake-icons` | Exit0;39.7s; final ordinary web artifact copied,91 files hashed | `evidence/web-build-manifest.json`; `evidence/web-accessibility-final-build.log` |
+| `./scripts/run_redesign.sh web` | Exit0 build94.3s; ordinary loopback server served successfully. Stays running until stopped | `evidence/web-ordinary-runtime-final.md` |
+| Ordinary web runtime | Task/Space/note persistence, paused timer reload, accessible Continue, selected-task Finish, terms evidence, dark Settings and host-browser handoff verified | `evidence/web-ordinary-runtime-final.md` |
+| Native macOS worktree |1055 Flutter tests passed/6 existing skips;14 current-consumer native tests passed before final production resolver rerun; final native resolver rerun14/14 passed; ordinary foreground input is blocked by CUA activation, and cross-layer integration is running | [Desktop ledger](../../../../wingman-macos/docs/ui/redesign/macos/README.md) |
 
-Six default-suite skips are existing opt-ins:live editorial native network,live RSS,live content smoke,content snapshot capture,filter benchmark,catalog benchmark. No new test was disabled. Tests use benign fixtures; no live feed quota was consumed.
+The six shared-suite skips are pre-existing opt-ins: live editorial native network, live RSS, live content smoke, content snapshot capture, filter benchmark and catalog benchmark. No new test was disabled. Two historical iOS catalog-pilot tests are explicitly excluded from the current consumer selection; their names are retained in the JSON. They are not represented as passing consumer tests.
 
-Goldens changed because the Home design intentionally changed, after responsive/layout and semantic checks. Device/iOS screenshots and widget-harness screenshots are labeled separately in the visual index. No startup/jank/leak performance number is claimed without measurement. Existing native resource interception/redirect limits remain documented in the engine contract and coverage files.
+Earlier aggregate failures remain local history:1039/6/1 identified clear-after-disposal and was corrected, then1040/6 passed; the extra accessible-Continue regression brings the final total to1041. The initial Android `--no-pub` release attempt failed due a stale generated integration-test plugin registrant. Normal Flutter dependency resolution regenerated it without changing production dependencies or manually patching generated source.
+
+The visual index labels production-widget captures versus ordinary native/web screenshots and setup/blocker images. Six-width and200% text tests, semantic/control tests and contrast calculations do not certify complete VoiceOver/TalkBack behavior. Repeated ordinary panel use was exercised; no startup, frame-time, memory-leak or jank measurement is claimed. Native interception and redirect limitations remain in the engine contract and coverage documentation.

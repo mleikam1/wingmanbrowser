@@ -1,0 +1,466 @@
+{
+  "entrypoint": "lib/main.dart",
+  "source_ui_commit": "1a31bfd",
+  "copied_utc": "2026-09-25T20:36:36.386387+00:00",
+  "scope": "web companion, host navigation handoff",
+  "command": "flutter --suppress-analytics build web --no-pub --no-wasm-dry-run --no-web-resources-cdn --no-tree-shake-icons",
+  "exit_code": 0,
+  "build_seconds": 39.7,
+  "files": [
+    {
+      "path": ".last_build_id",
+      "bytes": 32,
+      "sha256": "aa00a3b9ca0b3ab5412156e8de398d148853ea004b421f681589552931eb4657"
+    },
+    {
+      "path": "assets/AssetManifest.bin",
+      "bytes": 4692,
+      "sha256": "23c122c6f24d4127e1ec8f66cc3cf4ea88547dd3aa3dfe88ac08e89dc441a52a"
+    },
+    {
+      "path": "assets/AssetManifest.bin.json",
+      "bytes": 6258,
+      "sha256": "c73dd52451da4d27e65bdfb76f41d634950fe98c69eb6a45f629df988cdb715f"
+    },
+    {
+      "path": "assets/FontManifest.json",
+      "bytes": 478,
+      "sha256": "418a6219390ce750b88242cc691ba0000a489e7cfa7aa883972fcb2349522180"
+    },
+    {
+      "path": "assets/NOTICES",
+      "bytes": 1378796,
+      "sha256": "68840d5412ab82348beef6d839ff4f1a1c7556131c640b20d28a585636cfc610"
+    },
+    {
+      "path": "assets/assets/brand/wingman-mark.png",
+      "bytes": 779296,
+      "sha256": "df8031a6e6653191ad33b0ab7d3adbd7b30521ea8863255551805847c8f9c0c2"
+    },
+    {
+      "path": "assets/assets/discovery/LICENSES.md",
+      "bytes": 4561,
+      "sha256": "43aca12bc2c86ab6fcf488ec13fdd4583756cfa73ba2c0e7889ebf8a9ca9a441"
+    },
+    {
+      "path": "assets/assets/discovery/creative.jpg",
+      "bytes": 59965,
+      "sha256": "b8b0d5b315f1c7bf40413676f163264bc2e384ca2e23ae05e09925a05659fd53"
+    },
+    {
+      "path": "assets/assets/discovery/earthrise.jpg",
+      "bytes": 33934,
+      "sha256": "24bdc93d337d5665ef22c5368cf933d53436593c83f4cd9cff943931409e89ee"
+    },
+    {
+      "path": "assets/assets/discovery/forest.jpg",
+      "bytes": 70920,
+      "sha256": "9f87899c066275c51d08654eb3cc505c126c5322c6b23db8c87af1174e84e054"
+    },
+    {
+      "path": "assets/assets/fonts/NotoSansSymbols.ttf",
+      "bytes": 372684,
+      "sha256": "f7e7e04b4a24b6c78893d50cbfd2b2f6cae49617ab047bfef668d252adb128f7"
+    },
+    {
+      "path": "assets/assets/fonts/NotoSansSymbols_OFL.txt",
+      "bytes": 4383,
+      "sha256": "b118dd41337806a5d4797052c77caf3bd096aed783e5eb21b4d11154351e1ac0"
+    },
+    {
+      "path": "assets/assets/fonts/Roboto-Bold.ttf",
+      "bytes": 170760,
+      "sha256": "7d0b991ee3e0be7af01ad7ea8cd2beea6c00a25e679a0226b6737f079aafff86"
+    },
+    {
+      "path": "assets/assets/fonts/Roboto-Medium.ttf",
+      "bytes": 172064,
+      "sha256": "f205cc511821ea56078a105557fcea6253129404d411c997e1866fbd006abb68"
+    },
+    {
+      "path": "assets/assets/fonts/Roboto-Regular.ttf",
+      "bytes": 171676,
+      "sha256": "79e851404657dac2106b3d22ad256d47824a9a5765458edb72c9102a45816d95"
+    },
+    {
+      "path": "assets/assets/fonts/Roboto_LICENSE.txt",
+      "bytes": 11358,
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    {
+      "path": "assets/assets/live_content/sources.json",
+      "bytes": 26805,
+      "sha256": "67b10cb496112ff73c39f18c24caa9d8480952948bca59664e8107bbf448cd42"
+    },
+    {
+      "path": "assets/assets/policy/articles/a-story-in-five-sentences.txt",
+      "bytes": 899,
+      "sha256": "cf7d04fd3de26959bf306efdf8f6991b9e3c8360be5bfffbf39f1394c9313d27"
+    },
+    {
+      "path": "assets/assets/policy/articles/accounts-have-more-than-one-lock.txt",
+      "bytes": 869,
+      "sha256": "d6d0dc0063ea22fd86ef6e58a6436d349433d12f4e2d9463c939351968299b3d"
+    },
+    {
+      "path": "assets/assets/policy/articles/ask-a-primary-source.txt",
+      "bytes": 884,
+      "sha256": "08a0b7ec01b89b104c69cdb11ab442a1796e1116db576ca32a434261d077a8fa"
+    },
+    {
+      "path": "assets/assets/policy/articles/break-a-project-into-steps.txt",
+      "bytes": 853,
+      "sha256": "1445655ef8fdb3e579a1d1b5690eaf2a4ef943268aeee5300ae606330d6472bf"
+    },
+    {
+      "path": "assets/assets/policy/articles/drawing-with-shapes.txt",
+      "bytes": 848,
+      "sha256": "33d8a3370b83396b5e12bf499c36e87faeb3f00353023b368cfa9d3f6aed5a17"
+    },
+    {
+      "path": "assets/assets/policy/articles/fair-play-and-focus.txt",
+      "bytes": 1523,
+      "sha256": "ff25b768ee2cd86ca134ca083055bb76e4fd953bd3e34d28153970a77dbe430b"
+    },
+    {
+      "path": "assets/assets/policy/articles/finding-support.txt",
+      "bytes": 914,
+      "sha256": "ae7ea9dd8af7d2d670bc4d1061403aea8cff21608a1e46f0f18b411cd473c2fb"
+    },
+    {
+      "path": "assets/assets/policy/articles/how-tides-work.txt",
+      "bytes": 883,
+      "sha256": "8c3db008d8c7ee8c1264ad4c1db18b462afba15ebafd689cc7f7c042cab4b143"
+    },
+    {
+      "path": "assets/assets/policy/articles/measure-before-you-plan.txt",
+      "bytes": 1464,
+      "sha256": "4bc4d458efc7f4b82be19d0a9f3e61298d8cbac29a5c798513b367c472542b4d"
+    },
+    {
+      "path": "assets/assets/policy/articles/measure-fairly.txt",
+      "bytes": 933,
+      "sha256": "ba1a3d0a19c85ca6d1710523439472a827669234a2df954d69971e586f148f85"
+    },
+    {
+      "path": "assets/assets/policy/articles/moon-phases.txt",
+      "bytes": 878,
+      "sha256": "a7906394956d392b188726eff0c5eeb3ec74e0a9d4127ad24642106444c195a5"
+    },
+    {
+      "path": "assets/assets/policy/articles/notice-nature.txt",
+      "bytes": 896,
+      "sha256": "143a24cb5599868beb965425a83057bb9ba000e183bf2f213aa939db6983f12d"
+    },
+    {
+      "path": "assets/assets/policy/articles/plan-a-small-project.txt",
+      "bytes": 1433,
+      "sha256": "cd72708a3015b514e1b318eb9492aa95cc5731648f42e1e4236bf6135cb115e0"
+    },
+    {
+      "path": "assets/assets/policy/articles/read-a-rock.txt",
+      "bytes": 894,
+      "sha256": "1898a1f36dbbcf1a60bc6b5639ff909f8350951521798ac0db39544aedb82731"
+    },
+    {
+      "path": "assets/assets/policy/articles/sports-notebook.txt",
+      "bytes": 1549,
+      "sha256": "f5cc412f0bb8c318b6c144c497c4185bbc915789562d0c4ed1d3f6fe133ef0f7"
+    },
+    {
+      "path": "assets/assets/policy/articles/spot-a-suspicious-message.txt",
+      "bytes": 980,
+      "sha256": "58915a18d7c7c5db10e660365454b02865e63355dd8695c95b573f9175b08816"
+    },
+    {
+      "path": "assets/assets/policy/articles/water-on-the-move.txt",
+      "bytes": 880,
+      "sha256": "dfbc180cec23e9111de7bccd693b0331e3bd68d21c3c980f1bc8714f5e223215"
+    },
+    {
+      "path": "assets/assets/policy/articles/why-seasons-change.txt",
+      "bytes": 892,
+      "sha256": "237727d8c46d20b28da8ef7168a88d88ce6b849cb238ce9fd67a5647e1aaf9ff"
+    },
+    {
+      "path": "assets/assets/policy/catalog.json",
+      "bytes": 11020,
+      "sha256": "d6f8e5c8e0bb9e6c2d6a6dca3c0dc0a7e626768f9e16958e53093328b9c6e038"
+    },
+    {
+      "path": "assets/assets/policy/consumer_protection.json",
+      "bytes": 6186863,
+      "sha256": "f397d8f87a02fbb7754ce9c77931f740ba10271370e1e09f8402607bef59098f"
+    },
+    {
+      "path": "assets/assets/policy/consumer_sources/GPL-3.0.txt",
+      "bytes": 35149,
+      "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
+    },
+    {
+      "path": "assets/assets/policy/consumer_sources/UPSTREAM_SOURCES.md",
+      "bytes": 23935,
+      "sha256": "6f6f73fbef34a00aef0d290aca2d0ecd0e67d8be7427f8c83b05fd15ddaaf180"
+    },
+    {
+      "path": "assets/assets/policy/consumer_sources/gambling-mini.txt",
+      "bytes": 1153441,
+      "sha256": "ce1d56a7e54cb05cbcb3ab4b4a307cb58608b6de19e35c8502d26b9cf08593aa"
+    },
+    {
+      "path": "assets/assets/policy/consumer_sources/nsfw.txt",
+      "bytes": 1152114,
+      "sha256": "7fe66a612d7fdcc8ca6fff56a1b04f14247bb163a49e265bf7b40a6a53da8e63"
+    },
+    {
+      "path": "assets/assets/policy/consumer_sources/threat-mini.txt",
+      "bytes": 3201303,
+      "sha256": "f2e5ceb8ef59ef6d342e7b7ce89dc246e0a6660513c9062f55dc03dd8e20e4e9"
+    },
+    {
+      "path": "assets/assets/policy/consumer_update_keys.json",
+      "bytes": 30,
+      "sha256": "c1f0be9390e05fa832511afaf5d3b04b0869bf194fab5b7580449cb9a52ee352"
+    },
+    {
+      "path": "assets/assets/policy/live_privacy_license.txt",
+      "bytes": 22240,
+      "sha256": "3f941b3b89cf7b8370ceb83cc76d2120d471b58735d8ca60238a751a48d7f72f"
+    },
+    {
+      "path": "assets/assets/policy/live_sites.json",
+      "bytes": 289663,
+      "sha256": "7937170f4c5605faff4e7fbfcc0ea4f27623b05a75c84e6adc8aba2243f965c1"
+    },
+    {
+      "path": "assets/assets/policy/manifest.json",
+      "bytes": 445,
+      "sha256": "60611aee73ea0bf93e88a0aeb406383fdc8dddc097664ee309b31ffad338e097"
+    },
+    {
+      "path": "assets/assets/policy/public_keys.json",
+      "bytes": 80,
+      "sha256": "96bd5d299d16d5478567b34f596287b7b452fc07919c5d218a536f7f6bb86bb0"
+    },
+    {
+      "path": "assets/assets/signature/official_routes.json",
+      "bytes": 22134,
+      "sha256": "959af34e4c7b0fbce33852247aff6e12e847eeb33ae9999b923646ec2e3e308c"
+    },
+    {
+      "path": "assets/assets/story_images/ARTICLE_LICENSES.md",
+      "bytes": 5989,
+      "sha256": "9f0009c26cb71a28a4f2e5a71775cc4b1ca8d2388ee122476bb6d9cd5f525e9c"
+    },
+    {
+      "path": "assets/assets/story_images/article_manifest.json",
+      "bytes": 7172,
+      "sha256": "ec49dae8ef6ed81c285bd4da9c7351609d1d4601eeec52103d86147dd3b0ac36"
+    },
+    {
+      "path": "assets/assets/story_images/story_garment_workers.webp",
+      "bytes": 81970,
+      "sha256": "2b35514e58fe85ae093380da651735d0d1771c046dd01cae1988877d059b1b1e"
+    },
+    {
+      "path": "assets/assets/story_images/story_krakatau.jpg",
+      "bytes": 56671,
+      "sha256": "eb9ae6263057b5680c2e5aec19cae6ae9ea85284ada745dfd7409c6c7bc1770e"
+    },
+    {
+      "path": "assets/assets/story_images/story_maunaiki.jpg",
+      "bytes": 281597,
+      "sha256": "74cbbfcabcf9d8db6d4944784209547f1bd7709ebaba4456e71a172e5fd2af9a"
+    },
+    {
+      "path": "assets/assets/story_images/story_zebra_mussels.jpg",
+      "bytes": 760401,
+      "sha256": "5145d1e50ad97df6bf9cbe84a6ae8eb1bc55ba07a3e28e7731991d5c364c16e3"
+    },
+    {
+      "path": "assets/fonts/MaterialIcons-Regular.otf",
+      "bytes": 1645184,
+      "sha256": "d9865b671a09d683d13a863089d8825e0f61a37696ce5d7d448bc8023aa62453"
+    },
+    {
+      "path": "assets/packages/cupertino_icons/assets/CupertinoIcons.ttf",
+      "bytes": 257628,
+      "sha256": "67c44fe9183b002e79dde7f6977e2988661c9a3e4a3c5fce968787efdbed823c"
+    },
+    {
+      "path": "assets/shaders/ink_sparkle.frag",
+      "bytes": 8890,
+      "sha256": "2dca5ab93d4ec29e963f996f3916320ba60825e9537dfb149a68008c7a16b026"
+    },
+    {
+      "path": "assets/shaders/stretch_effect.frag",
+      "bytes": 6737,
+      "sha256": "ab412f07a5b9b50b67a885b24dbe16929738ae28630407d6490c924caf0a3220"
+    },
+    {
+      "path": "canvaskit/canvaskit.js",
+      "bytes": 86859,
+      "sha256": "7361b744487f98262f77ac507006b3eae37830430048ab7811a626b79f34a52c"
+    },
+    {
+      "path": "canvaskit/canvaskit.js.symbols",
+      "bytes": 1357066,
+      "sha256": "43dd0e78dfb29b1e3826c4ff987e9c5c982e51e1d28f40753f693f412dd1b298"
+    },
+    {
+      "path": "canvaskit/canvaskit.wasm",
+      "bytes": 7229467,
+      "sha256": "6bdfaa51c76845c02ea90153d44f56f99da51de44a7ee0ea15ccaeb33ed8f476"
+    },
+    {
+      "path": "canvaskit/chromium/canvaskit.js",
+      "bytes": 86496,
+      "sha256": "d2aceb0e24ead163ab289a165ca0e26a36fa26d7118f5a295b8854d59d892896"
+    },
+    {
+      "path": "canvaskit/chromium/canvaskit.js.symbols",
+      "bytes": 1274971,
+      "sha256": "23a68c0f21677d699eaf86516fb2081556b313d1e429d61c4cb7fbfeb84d9986"
+    },
+    {
+      "path": "canvaskit/chromium/canvaskit.wasm",
+      "bytes": 5760502,
+      "sha256": "c2fc2864763540922c71d464e983bebf97b3a5312fd01c6a8988969747d13314"
+    },
+    {
+      "path": "canvaskit/experimental_webparagraph/canvaskit.js",
+      "bytes": 76497,
+      "sha256": "803f7bab5f280fb6793495573bc83e6f70110916f75878a79c41e30b86585df8"
+    },
+    {
+      "path": "canvaskit/experimental_webparagraph/canvaskit.js.symbols",
+      "bytes": 1004464,
+      "sha256": "5746d266932128f390441e40139649b186e2c80322be100867b0aef69b34db0e"
+    },
+    {
+      "path": "canvaskit/experimental_webparagraph/canvaskit.wasm",
+      "bytes": 4138344,
+      "sha256": "6b916e684369558b9a4fdd774fedf2717d7481cf0b7dffb28e084129512bbd3f"
+    },
+    {
+      "path": "canvaskit/skwasm.js",
+      "bytes": 63316,
+      "sha256": "e0316a798a929008cf9221d9ae0e8a4e0a5f07869ff2c0ad68a71f56ab9998a4"
+    },
+    {
+      "path": "canvaskit/skwasm.js.symbols",
+      "bytes": 1541208,
+      "sha256": "5e13d39db7315f06e6edd2cd3f4bf3a970bbf0cf33d128a38b6fccf4d25fec8b"
+    },
+    {
+      "path": "canvaskit/skwasm.wasm",
+      "bytes": 3580947,
+      "sha256": "084a99454e405ad9e396803f5c02369562c92210ad9ff83a053ca68a1047a8f4"
+    },
+    {
+      "path": "canvaskit/skwasm_heavy.js",
+      "bytes": 63429,
+      "sha256": "fbf1c3374cd28b38ea4c48f8189012263c40e78e0a55323a557443c97a58c58c"
+    },
+    {
+      "path": "canvaskit/skwasm_heavy.js.symbols",
+      "bytes": 1666301,
+      "sha256": "5dbcc8bc79d9af9aba141a682ac0378f17242ae62b2338be2b979361694c8ca2"
+    },
+    {
+      "path": "canvaskit/skwasm_heavy.wasm",
+      "bytes": 5172643,
+      "sha256": "8b8279650b1847d8259ad4591c5cb7cb635b513134ec7565f85b1aa4271d896c"
+    },
+    {
+      "path": "canvaskit/wimp.js",
+      "bytes": 58396,
+      "sha256": "3f2cc5ae040789508b6914897a9858389a496b3a7cadcc71ef120cca99f70586"
+    },
+    {
+      "path": "canvaskit/wimp.js.symbols",
+      "bytes": 1801445,
+      "sha256": "76ff1d41e82f50d8a9c49fe952b6859f7c59ed5e3afac60b4a7cca701ebec17d"
+    },
+    {
+      "path": "canvaskit/wimp.wasm",
+      "bytes": 3514508,
+      "sha256": "781cd10fd4a893f0c30529b5e2a58822f91082da2dc135e2be696dfff85c6a73"
+    },
+    {
+      "path": "favicon.png",
+      "bytes": 6465,
+      "sha256": "bfa244dd3cdea707b5f056642970b382b35c0434db4e81bf0977f591f1cfc272"
+    },
+    {
+      "path": "flutter.js",
+      "bytes": 9553,
+      "sha256": "a483fd28f51ed2fadd0da3fade5b672eba56310d549d736ce62eabf624a6a578"
+    },
+    {
+      "path": "flutter_bootstrap.js",
+      "bytes": 10379,
+      "sha256": "4e58add897c8cc652f25234172d1dcd9aec6b082e68b8cf60baf2bd95d9a7771"
+    },
+    {
+      "path": "flutter_service_worker.js",
+      "bytes": 784,
+      "sha256": "a131df5ca46154cc4eb79044f7f5a14029c2f8bfccf8cef34e3ec3b5a9f5a88c"
+    },
+    {
+      "path": "icons/Icon-192.png",
+      "bytes": 35013,
+      "sha256": "0e9238f2e367170cd4a9958f68d27d26c341ee3a84c8271204cb7bfb7f3ff52a"
+    },
+    {
+      "path": "icons/Icon-512.png",
+      "bytes": 197290,
+      "sha256": "fe707beb337c6d6909e342aed01a6c157c32c4eefd55cd1fe29c4466df81b298"
+    },
+    {
+      "path": "icons/Icon-maskable-192.png",
+      "bytes": 17830,
+      "sha256": "901c5eb7505f4c11af560dcac48a81fa5099b46210e07e052e2cdc15b3f8bf45"
+    },
+    {
+      "path": "icons/Icon-maskable-512.png",
+      "bytes": 98916,
+      "sha256": "92516c334baa15e0bbe55954a1f1ac6714f95e301251e0f457ee69287d109d5a"
+    },
+    {
+      "path": "icons/apple-touch-icon.png",
+      "bytes": 31581,
+      "sha256": "d747c047b835096efc9a271310fcc0fa803cf54887d8ba9a51014b4b006f57cb"
+    },
+    {
+      "path": "index.html",
+      "bytes": 1596,
+      "sha256": "d7df1180f896996abd1db6f4f8d5c4078f047403da50e7e5fb64457b0c28e6e7"
+    },
+    {
+      "path": "main.dart.js",
+      "bytes": 4131709,
+      "sha256": "4caddb8eadb6f31a2da6a81db38c4d775b7c2460d09e6b4270bbbfa671ab7fbb"
+    },
+    {
+      "path": "manifest.json",
+      "bytes": 940,
+      "sha256": "b056afb145cdd3767313e22b792894bab218d22bca602d8dc20bfb7fb4bc020f"
+    },
+    {
+      "path": "sqflite_sw.js",
+      "bytes": 264116,
+      "sha256": "d176dcaf947a7dd33f56ef91e739921dfc76be0026e07a5a9bf63bc7a7479311"
+    },
+    {
+      "path": "sqlite3.wasm",
+      "bytes": 733428,
+      "sha256": "8766db025f5d5b6f24c6a51cc9dec843ab7a7720e3dfa5b47d70d33db96d506b"
+    },
+    {
+      "path": "version.json",
+      "bytes": 102,
+      "sha256": "2ecc1e136abeb5775ed145332c02e85b662ab43b769e60de781b41a13bff6cb5"
+    }
+  ]
+}

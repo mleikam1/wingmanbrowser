@@ -8,8 +8,8 @@ The companion uses real captured task state and explicit page saving. Spaces add
 
 Production feeds and backend behavior are unchanged. No accounts, cloud assistant, page capture, feed polling or paid service was added. The About constant now matches the existing package version; this work does not imply a new store release.
 
-## Verification and outstanding work
+## Verification and scope
 
-Current test/build/device results belong to [IMPLEMENTATION_STATUS](IMPLEMENTATION_STATUS.md) and [PLATFORM_MATRIX](PLATFORM_MATRIX.md). Do not read earlier full-suite failures, earlier milestone totals or selected passing tests as final aggregate acceptance. The [visual index](VISUAL_INDEX.md) identifies widget renders versus ordinary running iOS simulator captures. macOS implementation and verification are pending a separate worktree; Windows/Linux native engines are unsupported here. Physical-device accessibility/performance and store distribution are not claimed.
+Current test/build/device results belong to [IMPLEMENTATION_STATUS](IMPLEMENTATION_STATUS.md) and [PLATFORM_MATRIX](PLATFORM_MATRIX.md). Do not read earlier full-suite failures, earlier milestone totals or selected passing tests as final aggregate acceptance. The [visual index](VISUAL_INDEX.md) identifies widget renders versus ordinary running iOS simulator captures. A separate `feat/wingman-macos` worktree implements the native AppKit WKWebView browser; its runtime/test ledger records actual desktop coverage. Windows/Linux native engines are unsupported here. Physical-device accessibility/performance and store distribution are not claimed.
 
 The original checkout is preserved. Changes are local; there has been no push, merge, deployment or store submission. Use [local run and rollback](LOCAL_RUN_AND_ROLLBACK.md) and the [privacy/capability note](PRIVACY_CAPABILITIES.md) when reviewing this candidate.
