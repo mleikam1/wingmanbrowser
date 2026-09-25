@@ -1,0 +1,29 @@
+{
+  "nativeManifest": "ios-final-summary-20260925T211144Z.json",
+  "checks": {
+    "dart": {
+      "command": "flutter test --no-pub --reporter expanded test/browser/protected_web_controller_test.dart test/browser/native_boundary_decision_test.dart test/ui/browser_back_popup_test.dart",
+      "passed": 22,
+      "skipped": 0,
+      "failed": 0,
+      "seconds": 2,
+      "log": "ios-history-dart-regressions-20260925T211144Z.log",
+      "exitCode": 0,
+      "logSha256": "cee7b3cc8f68b9e8cdccb5b19046b6da27f6824bb1e4d657c95b89595d9ad222"
+    },
+    "analyzer": {
+      "command": "flutter analyze --no-pub",
+      "issues": 0,
+      "seconds": 4.8,
+      "log": "ios-history-analyzer-20260925T211144Z.log",
+      "exitCode": 0,
+      "logSha256": "88a649ca2a9bbf6e3a5fb7e2145f3f1a658268f0bfec02f2bd8365f262c57463"
+    }
+  },
+  "changedSourceInputsSincePreviousArtifact": [
+    "ios/Runner/ProtectedWebBridge.swift",
+    "ios/RunnerTests/RunnerTests.swift"
+  ],
+  "productionDartUnchanged": true,
+  "previousFullFlutterRun": "flutter-final-after-ios-summary-20260925.json"
+}

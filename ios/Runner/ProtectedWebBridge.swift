@@ -500,11 +500,25 @@ private final class ProtectedWebView: NSObject, FlutterPlatformView, WKNavigatio
     consumerSetWebActivity(renderer, allowed: active && foreground)
     observations = [
       renderer.observe(\.estimatedProgress, options: [.new]) { [weak self] _, _ in self?.emit() },
-      renderer.observe(\.isLoading, options: [.new]) { [weak self] _, _ in self?.emit() },
+      // Completing a same-document history request can clear WebKit's pending
+      // load without a second URL notification. Publish after that transition.
+      renderer.observe(\.isLoading, options: [.new]) { [weak self] renderer, _ in self?.observedURL(renderer); self?.emit() },
       renderer.observe(\.title, options: [.new]) { [weak self] _, _ in self?.emit() },
-      renderer.observe(\.url, options: [.new]) { [weak self] renderer, _ in self?.observedURL(renderer) },
-      renderer.observe(\.canGoBack, options: [.new]) { [weak self] _, _ in self?.emit() },
-      renderer.observe(\.canGoForward, options: [.new]) { [weak self] _, _ in self?.emit() },
+      renderer.observe(\.url, options: [.new]) { [weak self] renderer, _ in
+        guard let self = self else { return }
+        let request = self.requestId, revision = self.lifecycleRevision
+        self.observedURL(renderer)
+        // WebKit can publish URL KVO before its current history item changes.
+        // Recheck only the same request/lifetime after that transaction;
+        // observedURL still fences renderer identity, committed history and policy.
+        DispatchQueue.main.async { [weak self, weak renderer] in
+          guard let self = self, let renderer = renderer,
+            self.requestId == request, self.lifecycleRevision == revision else { return }
+          self.observedURL(renderer)
+        }
+      },
+      renderer.observe(\.canGoBack, options: [.new]) { [weak self] renderer, _ in self?.observedURL(renderer); self?.emit() },
+      renderer.observe(\.canGoForward, options: [.new]) { [weak self] renderer, _ in self?.observedURL(renderer); self?.emit() },
     ]
     container.addSubview(renderer)
     return renderer

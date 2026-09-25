@@ -31,6 +31,8 @@ The expanded test passed after a source rebuild, alongside these existing owners
 
 ## Final verification
 
+The later [toolbar history follow-up](IOS_HISTORY_FOLLOWUP.md) records a newer 13-test run and replacement ordinary artifact containing both this ownership fix and the history-observation fix. Results below retain their original run identity.
+
 | Check | Result | Evidence |
 | --- | --- | --- |
 | iOS native XCTest, 13 selected methods | 13 passed; 0 failed; 0 skipped; 27.355 seconds of XCTest execution | [Native log](evidence/ios-native-final-20260925T203524Z.log), [xcresult summary](evidence/ios-ownership-xctest-summary-20260925T203524Z.json) |

@@ -1,0 +1,8 @@
+UTC start: 2026-09-25T21:13:14.122951+00:00
+Command: /opt/homebrew/bin/flutter build ios --simulator --debug --no-pub --target lib/main.dart
+Building com.wingmanbrowser.app for simulator (ios)...
+Running Xcode build...                                          
+Xcode build done.                                           18.5s
+✓ Built build/ios/iphonesimulator/Runner.app
+
+Exit: 0; elapsed seconds: 29.29
