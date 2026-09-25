@@ -10,10 +10,12 @@ class AppearanceScreen extends StatefulWidget {
     required this.state,
     required this.canContinue,
     this.accessibility = false,
+    this.isPrivate = false,
   });
   final BrowserState state;
   final bool Function() canContinue;
   final bool accessibility;
+  final bool isPrivate;
   @override
   State<AppearanceScreen> createState() => _AppearanceScreenState();
 }
@@ -22,7 +24,7 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
   bool _busy = false;
   String? _error;
   Future<void> _save({ThemeMode? themeMode, int? pageScale}) async {
-    if (_busy || !widget.canContinue()) return;
+    if (_busy || widget.isPrivate || !widget.canContinue()) return;
     setState(() {
       _busy = true;
       _error = null;
@@ -58,21 +60,12 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
               'Dark appearance changes colors. Private sessions have a separate label and data boundary.',
             ),
             const SizedBox(height: 16),
-            for (final mode in ThemeMode.values)
-              ListTile(
-                leading: Icon(
-                  widget.state.settings.themeMode == mode
-                      ? Icons.radio_button_checked
-                      : Icons.radio_button_unchecked,
-                ),
-                selected: widget.state.settings.themeMode == mode,
-                onTap: _busy ? null : () => _save(themeMode: mode),
-                title: Text(switch (mode) {
-                  ThemeMode.system => 'Use device setting',
-                  ThemeMode.light => 'Light',
-                  ThemeMode.dark => 'Dark',
-                }),
-              ),
+            ThemePreviewChoices(
+              value: widget.state.settings.themeMode,
+              onChanged: _busy || widget.isPrivate
+                  ? null
+                  : (mode) => _save(themeMode: mode),
+            ),
             const SizedBox(height: 24),
           ],
           const WingmanSection(title: 'Reading size'),
@@ -83,12 +76,20 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
             max: 200,
             divisions: 5,
             label: '${widget.state.settings.pageScale}%',
-            onChanged: _busy ? null : (v) => _save(pageScale: v.round()),
+            onChanged: _busy || widget.isPrivate
+                ? null
+                : (v) => _save(pageScale: v.round()),
           ),
           const Text(
             'This adjusts reviewed article text. Device accessibility text scaling still applies throughout Wingman.',
           ),
           const SizedBox(height: 24),
+          if (widget.isPrivate)
+            const WingmanStatus(
+              title: 'Owner preferences stay separate',
+              message:
+                  'Appearance and reading size are read-only in this private session. Change saved preferences from a normal session.',
+            ),
           const WingmanStatus(
             title: 'Device accessibility',
             message:
@@ -262,6 +263,173 @@ class _SearchSettingsScreenState extends State<SearchSettingsScreen> {
               ),
           ],
         ),
+      );
+    },
+  );
+}
+
+/// A real preference control with local, decorative previews of each theme.
+class ThemePreviewChoices extends StatelessWidget {
+  const ThemePreviewChoices({super.key, required this.value, this.onChanged});
+  final ThemeMode value;
+  final ValueChanged<ThemeMode>? onChanged;
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final count =
+          constraints.maxWidth >= 660 &&
+              MediaQuery.textScalerOf(context).scale(16) < 25
+          ? 3
+          : 1;
+      return Wrap(
+        spacing: 16,
+        runSpacing: 16,
+        children: [
+          for (final mode in [
+            ThemeMode.light,
+            ThemeMode.dark,
+            ThemeMode.system,
+          ])
+            SizedBox(
+              width: (constraints.maxWidth - 16 * (count - 1)) / count,
+              child: Semantics(
+                selected: value == mode,
+                button: true,
+                enabled: onChanged != null,
+                child: Material(
+                  color: WingmanTokens.of(context).surface,
+                  borderRadius: BorderRadius.circular(18),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(18),
+                    onTap: onChanged == null ? null : () => onChanged!(mode),
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                          color: value == mode
+                              ? WingmanTokens.of(context).action
+                              : WingmanTokens.of(context).divider,
+                          width: value == mode ? 2 : 1,
+                        ),
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          ExcludeSemantics(
+                            child: SizedBox(
+                              height: 90,
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(10),
+                                child: Stack(
+                                  children: [
+                                    Positioned.fill(
+                                      child: mode == ThemeMode.system
+                                          ? Row(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.stretch,
+                                              children: [
+                                                Expanded(
+                                                  child: ColoredBox(
+                                                    color: WingmanTokens
+                                                        .light
+                                                        .raised,
+                                                  ),
+                                                ),
+                                                Expanded(
+                                                  child: ColoredBox(
+                                                    color: WingmanTokens
+                                                        .dark
+                                                        .raised,
+                                                  ),
+                                                ),
+                                              ],
+                                            )
+                                          : ColoredBox(
+                                              color:
+                                                  (mode == ThemeMode.dark
+                                                          ? WingmanTokens.dark
+                                                          : WingmanTokens.light)
+                                                      .raised,
+                                            ),
+                                    ),
+                                    Positioned(
+                                      top: 0,
+                                      left: 0,
+                                      right: 0,
+                                      height: 15,
+                                      child: ColoredBox(
+                                        color:
+                                            (mode == ThemeMode.dark
+                                                    ? WingmanTokens.dark
+                                                    : WingmanTokens.light)
+                                                .divider,
+                                      ),
+                                    ),
+                                    Center(
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Container(
+                                            width: 90,
+                                            height: 9,
+                                            decoration: BoxDecoration(
+                                              color:
+                                                  (mode == ThemeMode.dark
+                                                          ? WingmanTokens.dark
+                                                          : WingmanTokens.light)
+                                                      .surface,
+                                              borderRadius:
+                                                  BorderRadius.circular(4),
+                                            ),
+                                          ),
+                                          const SizedBox(height: 10),
+                                          Container(
+                                            width: 45,
+                                            height: 21,
+                                            decoration: BoxDecoration(
+                                              color: WingmanTokens.light.action,
+                                              borderRadius:
+                                                  BorderRadius.circular(6),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  switch (mode) {
+                                    ThemeMode.light => 'Light',
+                                    ThemeMode.dark => 'Dark',
+                                    ThemeMode.system => 'Use device setting',
+                                  },
+                                  style: Theme.of(context).textTheme.titleSmall,
+                                ),
+                              ),
+                              if (value == mode)
+                                Icon(
+                                  Icons.check_circle_outline,
+                                  color: WingmanTokens.of(context).action,
+                                  size: 20,
+                                ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
       );
     },
   );

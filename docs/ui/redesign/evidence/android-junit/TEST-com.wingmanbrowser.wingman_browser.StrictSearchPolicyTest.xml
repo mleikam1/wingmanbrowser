@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.wingmanbrowser.wingman_browser.StrictSearchPolicyTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-09-25T19:37:39.422Z" hostname="Kathleens-MacBook-Pro.local" time="0.012">
+  <properties/>
+  <testcase name="shortcutsAndControlsCannotEscapeStrictProvider" classname="com.wingmanbrowser.wingman_browser.StrictSearchPolicyTest" time="0.01"/>
+  <testcase name="ordinaryPunctuationAndUnicodeRemainQueries" classname="com.wingmanbrowser.wingman_browser.StrictSearchPolicyTest" time="0.001"/>
+  <testcase name="limitsAreMeasuredBeforeEscaping" classname="com.wingmanbrowser.wingman_browser.StrictSearchPolicyTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

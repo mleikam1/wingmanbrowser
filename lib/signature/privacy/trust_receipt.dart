@@ -19,7 +19,8 @@ class TrustReceipt {
     'Optional sync: ${configuration.sync.name}.',
     'Cloud analysis: ${configuration.cloudAi.name}.',
     'Live website capability: ${configuration.liveWebContent.name}.',
-    'Mandatory policy version: ${configuration.policyVersion > 0 ? configuration.policyVersion : "unknown"}; freshness: ${configuration.policyFreshness.name}.',
+    'Mandatory policy version: ${configuration.policyVersion > 0 ? configuration.policyVersion : "unknown"}.',
+    'Offline article catalog freshness: ${configuration.policyFreshness.name}. This is separate from the installed consumer browsing baseline shown in Protection.',
   ];
 
   List<String> get limitations => [

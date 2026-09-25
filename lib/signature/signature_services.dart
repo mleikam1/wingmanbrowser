@@ -13,6 +13,7 @@ class SignatureServices extends ChangeNotifier {
     required SignatureDocumentStore store,
     required bool Function(String) eligible,
     LaunchpadEligibilityService? launchpadEligibility,
+    bool Function(Uri)? websiteEligible,
     this.isPrivate = false,
   }) : ephemeral = isPrivate || productEdition != ProductEdition.consumer,
        ui = UiPreferencesController(
@@ -32,6 +33,7 @@ class SignatureServices extends ChangeNotifier {
        ),
        workspaces = WorkspaceController(
          store: store,
+         websiteEligible: websiteEligible,
          eligible: eligible,
          ephemeral: isPrivate || productEdition != ProductEdition.consumer,
        ) {

@@ -27,10 +27,12 @@ class WingmanPageTransitions extends PageTransitionsBuilder {
 }
 
 class WingmanRoute<T> extends MaterialPageRoute<T> {
-  WingmanRoute({required super.builder, super.settings})
+  WingmanRoute({required super.builder, super.settings, this.reduceMotion})
     : super(allowSnapshotting: false);
+  final bool Function()? reduceMotion;
   @override
-  Duration get transitionDuration => WingmanTokens.route;
+  Duration get transitionDuration =>
+      reduceMotion?.call() == true ? Duration.zero : WingmanTokens.route;
   @override
-  Duration get reverseTransitionDuration => WingmanTokens.route;
+  Duration get reverseTransitionDuration => transitionDuration;
 }

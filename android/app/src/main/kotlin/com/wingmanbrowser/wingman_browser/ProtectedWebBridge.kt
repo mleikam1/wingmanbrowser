@@ -1,5 +1,6 @@
 package com.wingmanbrowser.wingman_browser
 
+import com.wingmanbrowser.wingman_browser.ConsumerProtectionPolicy.ReasonCode
 import android.Manifest
 import android.app.Activity
 import android.app.AlertDialog
@@ -194,7 +195,7 @@ class ProtectedWebBridge(private val context: Context, private val channel: Meth
         try {
             if (call.method == "capabilities") {
                 if (BuildConfig.DEBUG) android.util.Log.i("WingmanProtection", "baseline=${policy.diagnostic}; ready=$ready; cleanup=$cleanupPending; edition=${BuildConfig.WINGMAN_EDITION}")
-                result.success(mapOf("supported" to liveAvailable(), "privateAvailable" to (liveAvailable() && privateAvailable()), "strictSearchAvailable" to liveAvailable(), "mode" to "consumerWeb", "javascript" to true, "cookies" to true, "storage" to true, "history" to true, "findInPage" to true, "uploads" to true, "downloads" to true, "media" to true, "permissions" to true, "newWindows" to true, "defaultBrowserAvailable" to true, "engine" to "Android System WebView", "engineVersion" to WebViewCompat.getCurrentWebViewPackage(context)?.versionName, "reason" to if (liveAvailable()) null else "Mandatory protection needs recovery.")); return
+                result.success(mapOf("supported" to liveAvailable(), "privateAvailable" to (liveAvailable() && privateAvailable()), "strictSearchAvailable" to liveAvailable(), "mode" to "consumerWeb", "javascript" to true, "cookies" to true, "storage" to true, "history" to true, "findInPage" to true, "uploads" to true, "downloads" to true, "media" to true, "permissions" to true, "newWindows" to true, "defaultBrowserAvailable" to true, "resourceCountersObservable" to true, "resourceCounterScope" to "rendererLifetime", "engine" to "Android System WebView", "engineVersion" to WebViewCompat.getCurrentWebViewPackage(context)?.versionName, "reason" to if (liveAvailable()) null else "Mandatory protection needs recovery.")); return
             }
             when (call.method) {
                 "prepareConsumerPolicy" -> { result.success(policyUpdates.prepare(call.argument<ByteArray>("envelope") ?: throw IllegalArgumentException(), call.argument<ByteArray>("data") ?: throw IllegalArgumentException(), call.argument<Boolean>("restore") == true)); return }
@@ -205,7 +206,7 @@ class ProtectedWebBridge(private val context: Context, private val channel: Meth
             if (call.method == "configurePolicy") {
                 restrictionRevision++; cancelPendingWindows()
                 policy.setAdditional(call.argument<List<String>>("blockedDomains") ?: emptyList())
-                views.values.forEach { view -> if (view.currentUrl.isNotEmpty() && !policy.decide(view.currentUrl).allowed) view.block(view.currentUrl, "Blocked by an additional restriction.") }
+                views.values.forEach { view -> if (view.currentUrl.isNotEmpty() && !policy.decide(view.currentUrl).allowed) view.block(view.currentUrl, policy.decide(view.currentUrl)) }
                 result.success(null); return
             }
             if (call.method == "state" && call.argument<Number>("viewId") == null) {
@@ -215,7 +216,7 @@ class ProtectedWebBridge(private val context: Context, private val channel: Meth
             call.argument<Number>("requestId")?.toLong()?.let { view.acceptRequest(it) }
             when (call.method) {
                 "adoptWindow" -> { check(view.activateWindow(call.argument<String>("windowToken") ?: "")); result.success(null) }
-                "updateRestrictions" -> { applyRestrictions(call.arguments as? Map<*, *> ?: emptyMap<Any, Any>()); if (view.currentUrl.isNotEmpty() && !policy.decide(view.currentUrl).allowed) view.block(view.currentUrl, "Blocked by an additional restriction."); result.success(null) }
+                "updateRestrictions" -> { applyRestrictions(call.arguments as? Map<*, *> ?: emptyMap<Any, Any>()); if (view.currentUrl.isNotEmpty() && !policy.decide(view.currentUrl).allowed) view.block(view.currentUrl, policy.decide(view.currentUrl)); result.success(null) }
                 "open" -> { view.open(call.argument<String>("url") ?: ""); result.success(null) }
                 "openSearch" -> { view.open(strictSearchURL(call.argument<String>("query") ?: "") ?: throw IllegalArgumentException()); result.success(null) }
                 "reload" -> {
@@ -254,8 +255,7 @@ class ProtectedWebBridge(private val context: Context, private val channel: Meth
         private var progress = 0
         private var title = ""
         private var error: String? = null
-        private var blocked = 0
-        private var attempted = 0
+        private val observedRequests = ObservedRequestCounters()
         private var lastBlocked: String? = null
         val documentScope = BrowserDocumentScope()
         @Volatile var windowOpener: ProtectedView? = null
@@ -283,7 +283,7 @@ class ProtectedWebBridge(private val context: Context, private val channel: Meth
             if (!windowCurrent()) { mainHandler.post { release() }; return false }
             val decision = policy.decide(raw)
             if (!decision.allowed || decision.url != raw) {
-                mainHandler.post { windowOpener?.block(raw, decision.reason); release() }; return false
+                mainHandler.post { windowOpener?.block(raw, decision); release() }; return false
             }
             if (windowDelivered.compareAndSet(false, true)) {
                 currentUrl = raw
@@ -299,12 +299,25 @@ class ProtectedWebBridge(private val context: Context, private val channel: Meth
         override fun getView(): View = container
         override fun dispose() { release(); disposed = true; views.remove(id) }
         fun acceptRequest(value: Long) { check(value >= requestId); requestId = value }
-        fun state(): Map<String, Any?> = mapOf("viewId" to id, "requestId" to requestId, "url" to currentUrl, "title" to title, "progress" to progress, "isLoading" to loading, "error" to error, "blockedResources" to blocked, "requestAttempts" to attempted, "hasRenderer" to (web != null), "private" to privateMode, "javascript" to (web?.settings?.javaScriptEnabled ?: false), "engineNetworkBlocked" to false, "strictSearch" to currentUrl.startsWith("https://safe.duckduckgo.com/"), "canGoBack" to (web?.canGoBack() ?: false), "canGoForward" to (web?.canGoForward() ?: false))
+        fun state(): Map<String, Any?> {
+            val counts = observedRequests.snapshot()
+            return mapOf("viewId" to id, "requestId" to requestId, "url" to currentUrl, "title" to title, "progress" to progress, "isLoading" to loading, "error" to error,
+                "blockedResources" to if (web != null) counts.blocked else null, "requestAttempts" to if (web != null) counts.attempted else null,
+                "resourceCountersObservable" to (web != null), "resourceCounterScope" to "rendererLifetime", "resourceCounterSaturated" to counts.saturated,
+                "hasRenderer" to (web != null), "private" to privateMode, "javascript" to (web?.settings?.javaScriptEnabled ?: false), "engineNetworkBlocked" to false, "strictSearch" to currentUrl.startsWith("https://safe.duckduckgo.com/"), "canGoBack" to (web?.canGoBack() ?: false), "canGoForward" to (web?.canGoForward() ?: false))
+        }
         fun emit() { container.post { if (!disposed && !windowPending) channel.invokeMethod("pageState", state()) } }
-        fun block(url: String, reason: String?) {
+        fun block(url: String, decision: ConsumerProtectionPolicy.Decision) =
+            block(url, decision.reason,
+                if (!decision.allowed) decision.reasonCode else if (!liveAvailable()) ReasonCode.blockPolicyUnavailable else ReasonCode.blockUnsupportedCapability,
+                if (!decision.allowed) decision.category else null)
+        fun block(url: String, reason: String?, reasonCode: ReasonCode = ReasonCode.blockUnsupportedCapability, category: String? = null) {
             web?.stopLoading(); loading = false
-            // Retain the previous permitted committed page; the shell shows the denied destination separately.
-            if (lastBlocked != url) channel.invokeMethod("navigationBlocked", mapOf("viewId" to id, "requestId" to requestId, "url" to url, "reason" to (reason ?: "Blocked by protection.")))
+            // Retain only the prior permitted page. The UI receives a categorical
+            // explanation, never the attempted address/title for storage or display.
+            if (lastBlocked != url) channel.invokeMethod("navigationBlocked", mapOf(
+                "viewId" to id, "requestId" to requestId, "reason" to (reason ?: "This browser operation is unavailable."),
+                "reasonCode" to reasonCode.name, "category" to category))
             lastBlocked = url
             emit()
         }
@@ -319,12 +332,12 @@ class ProtectedWebBridge(private val context: Context, private val channel: Meth
             if (position !in 0 until list.size) return
             val destination = list.getItemAtIndex(position).url
             val decision = policy.decide(destination)
-            if (decision.allowed) w.goBackOrForward(offset) else block(destination, decision.reason)
+            if (decision.allowed) w.goBackOrForward(offset) else block(destination, decision)
         }
         fun open(raw: String) {
             check(!disposed && mayOpen() && tabId.isNotBlank() && tabId.length <= 100)
             val decision = policy.decide(raw)
-            if (!decision.allowed) { block(raw, decision.reason); throw IllegalArgumentException() }
+            if (!decision.allowed) { block(raw, decision); throw IllegalArgumentException() }
             if (web != null && currentUrl == decision.url && error == null) { setVisibilityActive(true); emit(); return }
             val w = web ?: createWeb()
             error = null; lastBlocked = null; currentUrl = decision.url; loading = true; progress = 0
@@ -338,6 +351,7 @@ class ProtectedWebBridge(private val context: Context, private val channel: Meth
                         if (privateMode && Build.VERSION.SDK_INT >= 26) outAttrs.imeOptions = outAttrs.imeOptions or EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING
                     }
             }
+            val observationToken = observedRequests.beginRenderer()
             web = w
             WebView.setWebContentsDebuggingEnabled(false)
             if (privateMode) {
@@ -410,18 +424,22 @@ class ProtectedWebBridge(private val context: Context, private val channel: Meth
                         if (!adopted) { mainHandler.post { release() }; return deniedResponse() }
                     }
                     val decision = policy.decide(request.url.toString(), request.isForMainFrame, currentUrl)
-                    synchronized(this@ProtectedView) { attempted++; if (!decision.allowed) blocked++ }
                     // A WebView POST can skip shouldOverrideUrlLoading. Never let a
                     // provider rewrite decision authorize the original non-strict endpoint.
                     val needsRewrite = request.isForMainFrame && decision.allowed && decision.url != request.url.toString()
                     val strictPost = request.method == "POST" && request.url.scheme == "https" && request.url.host == "safe.duckduckgo.com"
                     if (view !== web || !liveAvailable() || !decision.allowed || denied || cleanupPending || (needsRewrite && !strictPost)) {
+                        // Record the actual policy-denied response at this sole
+                        // observation point; navigation/bridge callbacks do not count.
+                        if (view === web && !decision.allowed && observedRequests.record(observationToken, true)) emit()
                         if (request.isForMainFrame) container.post {
                             if (view === web && ready && needsRewrite && request.method == "GET" && !denied && !cleanupPending) view.loadUrl(decision.url)
-                            else block(request.url.toString(), decision.reason ?: "This form cannot change the strict search endpoint.")
+                            else block(request.url.toString(), decision)
                         }
                         return deniedResponse()
                     }
+                    // Passing an interception callback is not proof of a successful load.
+                    observedRequests.record(observationToken, false)
                     // Chromium handles methods, request bodies, cookies, redirects, cache and TLS.
                     return null
                 }
@@ -429,7 +447,7 @@ class ProtectedWebBridge(private val context: Context, private val channel: Meth
                     if (view !== web) return true
                     if (windowPending && (!request.isForMainFrame || request.method !in setOf("GET", "POST") || !deliverWindow(request.url.toString()))) return true
                     val decision = policy.decide(request.url.toString(), request.isForMainFrame, currentUrl)
-                    if (!decision.allowed || !mayOpen()) { if (request.isForMainFrame) block(request.url.toString(), decision.reason); return true }
+                    if (!decision.allowed || !mayOpen()) { if (request.isForMainFrame) block(request.url.toString(), decision); return true }
                     if (request.isForMainFrame && decision.url != request.url.toString()) {
                         if (request.method != "GET") { block(request.url.toString(), "This form cannot change the strict search endpoint."); return true }
                         view.loadUrl(decision.url); return true
@@ -441,14 +459,14 @@ class ProtectedWebBridge(private val context: Context, private val channel: Meth
                     if (windowPending && !deliverWindow(url)) return
                     invalidateDocument()
                     val decision = policy.decide(url)
-                    if (!decision.allowed) { block(url, decision.reason); return }
+                    if (!decision.allowed) { block(url, decision); return }
                     if (decision.url != url) { view.stopLoading(); view.loadUrl(decision.url); return }
                     currentUrl = url; error = null; loading = true; progress = 0; lastBlocked = null; emit()
                 }
                 override fun doUpdateVisitedHistory(view: WebView, url: String, isReload: Boolean) {
                     if (view !== web || !ready) return
                     val decision = policy.decide(url)
-                    if (decision.allowed) { currentUrl = url; emit() } else block(url, decision.reason)
+                    if (decision.allowed) { currentUrl = url; emit() } else block(url, decision)
                 }
                 override fun onPageFinished(view: WebView, url: String) {
                     if (view !== web || !policy.decide(url).allowed) return
@@ -486,6 +504,7 @@ class ProtectedWebBridge(private val context: Context, private val channel: Meth
             if (download?.owner === this) download = null
             if (uploadOwner === this) cancelUpload()
             val retired = web
+            observedRequests.release()
             web = null; loading = false
             retired?.let { it.stopLoading(); it.visibility = View.INVISIBLE; container.removeView(it); it.destroy() }
             profileName?.let { name ->
@@ -615,7 +634,7 @@ class ProtectedWebBridge(private val context: Context, private val channel: Meth
     }
     private fun requestDownload(owner: ProtectedView, url: String, disposition: String?, mime: String?, userAgent: String?) {
         val decision = policy.decide(url)
-        if (!decision.allowed || !owner.active || !mayOpen()) { owner.block(url, decision.reason); return }
+        if (!decision.allowed || !owner.active || !mayOpen()) { owner.block(url, decision); return }
         val filename = URLUtil.guessFileName(url, disposition, mime).replace(Regex("[^A-Za-z0-9._ -]"), "_").take(160)
         if (filename.substringAfterLast('.', "").lowercase() in setOf("apk", "exe", "msi", "dmg", "pkg", "bat", "cmd", "sh", "ps1", "js", "jar")) { owner.block(url, "Executable downloads are not supported."); return }
         val pending = siteRequest(owner, Any()) {} ?: return

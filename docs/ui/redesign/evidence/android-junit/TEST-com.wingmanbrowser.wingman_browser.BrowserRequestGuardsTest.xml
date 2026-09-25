@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.wingmanbrowser.wingman_browser.BrowserRequestGuardsTest" tests="10" skipped="0" failures="0" errors="0" timestamp="2026-09-25T19:37:39.219Z" hostname="Kathleens-MacBook-Pro.local" time="0.066">
+  <properties/>
+  <testcase name="privateProfileOutlivesParentAndPurgesOnlyAfterLastAdoptedChild" classname="com.wingmanbrowser.wingman_browser.BrowserRequestGuardsTest" time="0.001"/>
+  <testcase name="popupLeaseRequiresClaimAndRejectsReplayChangedDocumentPolicyAndExpiry" classname="com.wingmanbrowser.wingman_browser.BrowserRequestGuardsTest" time="0.025"/>
+  <testcase name="reloadOrSameOriginNavigationInvalidatesPendingDocumentRequest" classname="com.wingmanbrowser.wingman_browser.BrowserRequestGuardsTest" time="0.0"/>
+  <testcase name="popupWorkerReleasesOriginalRequestOnlyAfterOneUseAdoption" classname="com.wingmanbrowser.wingman_browser.BrowserRequestGuardsTest" time="0.029"/>
+  <testcase name="originUsesBrowserDefaultPortSemantics" classname="com.wingmanbrowser.wingman_browser.BrowserRequestGuardsTest" time="0.003"/>
+  <testcase name="authenticationRequiresSameHostAndValidHttpsOrigin" classname="com.wingmanbrowser.wingman_browser.BrowserRequestGuardsTest" time="0.001"/>
+  <testcase name="untrustedHeaderValuesCannotInjectAnotherHeaderOrAllocateUnboundedCookies" classname="com.wingmanbrowser.wingman_browser.BrowserRequestGuardsTest" time="0.005"/>
+  <testcase name="downloadKeepsBrowserAgentAndOnlySameOriginCookies" classname="com.wingmanbrowser.wingman_browser.BrowserRequestGuardsTest" time="0.001"/>
+  <testcase name="backgroundPauseDoesNotInvalidateDocumentButOriginChangesDo" classname="com.wingmanbrowser.wingman_browser.BrowserRequestGuardsTest" time="0.0"/>
+  <testcase name="responseCookiesAreAdmittedOnlyForInitiatingOrigin" classname="com.wingmanbrowser.wingman_browser.BrowserRequestGuardsTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

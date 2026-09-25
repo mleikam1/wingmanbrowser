@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.wingmanbrowser.wingman_browser.ObservedRequestCountersTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-09-25T19:37:39.408Z" hostname="Kathleens-MacBook-Pro.local" time="0.013">
+  <properties/>
+  <testcase name="concurrentInterceptionDoesNotLoseOutcomes" classname="com.wingmanbrowser.wingman_browser.ObservedRequestCountersTest" time="0.011"/>
+  <testcase name="onlyReportedPolicyOutcomesIncreaseBlockedRequests" classname="com.wingmanbrowser.wingman_browser.ObservedRequestCountersTest" time="0.0"/>
+  <testcase name="closingAndReplacingRendererRejectsStaleCallbacksAndErasesCounts" classname="com.wingmanbrowser.wingman_browser.ObservedRequestCountersTest" time="0.0"/>
+  <testcase name="normalAndPrivateRenderersNeverShareCounters" classname="com.wingmanbrowser.wingman_browser.ObservedRequestCountersTest" time="0.0"/>
+  <testcase name="countersAreBoundedAndReportSaturation" classname="com.wingmanbrowser.wingman_browser.ObservedRequestCountersTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

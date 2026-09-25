@@ -14,6 +14,7 @@ class DiscoveryTab {
   final List<String?> trail = [null];
   int position = 0;
   String? taskId;
+  String? parkedForTaskId;
   // Bounded, memory-only positions; owner session survives isolated handoff UI.
   final Map<String, double> scrollOffsets = {};
   String? get currentEntry => trail[position];
@@ -155,6 +156,7 @@ class DiscoverySession {
   List<DiscoveryTab> _taskUndo = [];
   DiscoveryTab get current => tabs[active];
   List<DiscoveryTab> closeTaskTabs(String taskId, {required bool private}) {
+    unparkTabs(taskId, private: private);
     final selected = tabs
         .where((t) => t.taskId == taskId && t.isPrivate == private)
         .toList();
@@ -169,6 +171,24 @@ class DiscoverySession {
     final preserved = tabs.indexWhere((tab) => tab.id == activeId);
     active = preserved >= 0 ? preserved : active.clamp(0, tabs.length - 1);
     return selected;
+  }
+
+  /// Parking is reversible organization only: engines and forms stay alive.
+  List<DiscoveryTab> parkedTabs(String taskId, {required bool private}) => tabs
+      .where((tab) => tab.isPrivate == private && tab.parkedForTaskId == taskId)
+      .toList();
+  void parkOtherTabs(String taskId, {required bool private}) {
+    for (final tab in tabs.where((tab) => tab.isPrivate == private)) {
+      tab.parkedForTaskId = tab.taskId == taskId || identical(tab, current)
+          ? null
+          : taskId;
+    }
+  }
+
+  void unparkTabs(String taskId, {required bool private}) {
+    for (final tab in parkedTabs(taskId, private: private)) {
+      tab.parkedForTaskId = null;
+    }
   }
 
   bool get canUndoTaskClosure => _taskUndo.isNotEmpty;

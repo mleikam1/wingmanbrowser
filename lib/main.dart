@@ -126,6 +126,15 @@ class _SignatureApplicationRootState extends State<SignatureApplicationRoot> {
     await state.init();
     final signatures = SignatureServices(
       store: repository,
+      websiteEligible: (uri) =>
+          !kIsWeb &&
+          widget.policy.liveAvailable() &&
+          widget.policy.policy
+              .evaluate(
+                PolicyRequest.navigation(uri),
+                additional: state.protectedPreferences.additional,
+              )
+              .isAllowed,
       launchpadEligibility: LaunchpadEligibilityService(
         resourceEligible: (id) => widget.policy.policy
             .evaluate(

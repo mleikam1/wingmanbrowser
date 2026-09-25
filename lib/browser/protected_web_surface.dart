@@ -9,6 +9,7 @@ import '../presentation/app_route_observer.dart';
 import '../config/product_edition.dart';
 import 'browser_engine.dart' show BrowserEngine;
 import '../policy/strict_search_policy.dart';
+import '../policy/policy_models.dart';
 
 /// Native browser transport. Each adapter validates its mandatory baseline
 /// before allocating a renderer; pages have no privileged Dart/JS bridge.
@@ -27,6 +28,8 @@ abstract final class ProtectedWebBridge {
         supported:
             result?['supported'] == true && result?['mode'] == 'consumerWeb',
         privateAvailable: result?['privateAvailable'] == true,
+        resourceCountersObservable:
+            result?['resourceCountersObservable'] == true,
         downloads: result?['downloads'] == true,
         uploads: result?['uploads'] == true,
         defaultBrowser: result?['defaultBrowserAvailable'] == true,
@@ -65,9 +68,10 @@ class ProtectedWebCapabilities {
     this.uploads = false,
     this.downloads = false,
     this.defaultBrowser = false,
+    this.resourceCountersObservable = false,
   });
   final bool supported, privateAvailable, strictSearchAvailable;
-  final bool uploads, downloads, defaultBrowser;
+  final bool uploads, downloads, defaultBrowser, resourceCountersObservable;
 }
 
 class ProtectedWebStatus {
@@ -77,6 +81,7 @@ class ProtectedWebStatus {
     this.progress = 0,
     this.loading = false,
     this.blockedResources,
+    this.resourceCounterSaturated = false,
     this.loadedResources,
     this.error,
     this.canGoBack = false,
@@ -86,7 +91,7 @@ class ProtectedWebStatus {
   final String title;
   final int progress;
   final int? blockedResources, loadedResources;
-  final bool loading, canGoBack, canGoForward;
+  final bool loading, canGoBack, canGoForward, resourceCounterSaturated;
   final String? error;
   bool get committed =>
       url != null && !loading && error == null && progress == 100;
@@ -102,6 +107,7 @@ class ProtectedWebController extends ChangeNotifier implements BrowserEngine {
     this.onNewWindowWithToken,
     this.onCloseRequested,
     this.onBlocked,
+    this.onPolicyBlocked,
   });
   final bool Function(Uri) canOpen;
   final ValueChanged<Uri> onNavigation;
@@ -109,6 +115,7 @@ class ProtectedWebController extends ChangeNotifier implements BrowserEngine {
   final void Function(Uri, String?)? onNewWindowWithToken;
   final VoidCallback? onCloseRequested;
   final ValueChanged<String>? onBlocked;
+  final ValueChanged<PolicyDecision>? onPolicyBlocked;
   int? _viewId;
   int _requestId = 0;
   bool _disposed = false, _active = true;
@@ -301,7 +308,9 @@ class ProtectedWebController extends ChangeNotifier implements BrowserEngine {
     final raw = value['url'];
     final uri = raw is String && raw.length <= 4096 ? Uri.tryParse(raw) : null;
     if (method == 'navigationBlocked') {
-      if (_active) {
+      if (_active && onPolicyBlocked != null) {
+        onPolicyBlocked!(nativeBoundaryDecision(value));
+      } else if (_active) {
         onBlocked?.call(
           value['reason'] ==
                   "This site's encoded address cannot be checked safely. Use its standard address."
@@ -359,6 +368,7 @@ class ProtectedWebController extends ChangeNotifier implements BrowserEngine {
       loading: value['isLoading'] == true,
       canGoBack: value['canGoBack'] == true,
       canGoForward: value['canGoForward'] == true,
+      resourceCounterSaturated: value['resourceCounterSaturated'] == true,
       blockedResources: value['blockedResources'] is int
           ? count('blockedResources', 100000)
           : null,
@@ -414,6 +424,7 @@ class ProtectedWebSurface extends StatefulWidget {
     this.onCloseRequested,
     this.windowToken,
     this.onBlocked,
+    this.onPolicyBlocked,
     this.restrictions = const {},
   });
   final String tabId;
@@ -431,6 +442,7 @@ class ProtectedWebSurface extends StatefulWidget {
   final VoidCallback? onCloseRequested;
   final String? windowToken;
   final ValueChanged<String>? onBlocked;
+  final ValueChanged<PolicyDecision>? onPolicyBlocked;
   final Map<String, Object?> restrictions;
 
   @override
@@ -458,6 +470,9 @@ class _ProtectedWebSurfaceState extends State<ProtectedWebSurface>
       },
       onCloseRequested: () => widget.onCloseRequested?.call(),
       onBlocked: (message) => widget.onBlocked?.call(message),
+      onPolicyBlocked: widget.onPolicyBlocked == null
+          ? null
+          : (decision) => widget.onPolicyBlocked?.call(decision),
     )..addListener(_changed);
     WidgetsBinding.instance.addObserver(this);
     widget.policyChanges.addListener(_recheck);
@@ -641,4 +656,32 @@ class _ProtectedWebSurfaceState extends State<ProtectedWebSurface>
     _controller.dispose();
     super.dispose();
   }
+}
+
+/// Accept only a closed vocabulary from native enforcement. A missing or
+/// unknown reason never implies a sensitive category or a safety guarantee.
+@visibleForTesting
+PolicyDecision nativeBoundaryDecision(Map<dynamic, dynamic> event) {
+  final category = MandatoryCategory.values
+      .where((c) => c.id == event['category'])
+      .firstOrNull;
+  final code = switch (event['reasonCode']) {
+    'blockMandatoryCategory' when category != null =>
+      category == MandatoryCategory.securityThreat
+          ? PolicyDecisionCode.blockSecurityThreat
+          : PolicyDecisionCode.blockMandatoryCategory,
+    'blockSecurityThreat' => PolicyDecisionCode.blockSecurityThreat,
+    'blockAdditionalRestriction' =>
+      PolicyDecisionCode.blockAdditionalRestriction,
+    'blockPolicyUnavailable' => PolicyDecisionCode.blockPolicyUnavailable,
+    _ => PolicyDecisionCode.blockUnsupportedCapability,
+  };
+  return PolicyDecision(
+    code,
+    category:
+        code == PolicyDecisionCode.blockMandatoryCategory ||
+            code == PolicyDecisionCode.blockSecurityThreat
+        ? category
+        : null,
+  );
 }

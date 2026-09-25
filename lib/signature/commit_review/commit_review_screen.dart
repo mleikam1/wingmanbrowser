@@ -405,12 +405,18 @@ class _CommitReviewScreenState extends State<CommitReviewScreen>
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       Text(
-        saved ? 'Saved snapshot' : 'Findings from your selection',
+        saved ? 'Saved snapshot' : 'Here’s what the text says',
         style: Theme.of(context).textTheme.titleLarge,
       ),
       const SizedBox(height: 8),
-      Text('${report.sourceLabel} · ${report.sourceKind.name}'),
-      Text('Checked ${report.checkedAt.toLocal()}'),
+      Text(
+        '${report.sourceLabel} · ${report.sourceKind.name}',
+        style: Theme.of(context).textTheme.bodySmall,
+      ),
+      Text(
+        'Checked ${report.checkedAt.toLocal()}',
+        style: Theme.of(context).textTheme.bodySmall,
+      ),
       if (saved)
         const Text(
           'Historical excerpts. Paste the current terms to check again; this snapshot does not verify today’s page.',
@@ -422,57 +428,127 @@ class _CommitReviewScreenState extends State<CommitReviewScreen>
           padding: const EdgeInsets.only(top: 8),
           child: Text(warning, style: Theme.of(context).textTheme.bodySmall),
         ),
-      const SizedBox(height: 16),
-      for (final finding in report.findings)
-        Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    finding.field.label,
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 8),
-                  WingmanStatus(
-                    title: findingStatusLabel(finding.status),
-                    message: finding.status == FindingStatus.unavailable
-                        ? 'Missing wording is not an assurance.'
-                        : finding.status == FindingStatus.conflicting
-                        ? 'Compare the scope of each statement.'
-                        : 'Supported by the selected text below.',
-                    tone: finding.status == FindingStatus.stated
-                        ? WingmanTone.info
-                        : WingmanTone.caution,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(finding.explanation),
-                  for (final evidence in finding.evidence) ...[
-                    const SizedBox(height: 12),
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: WingmanTokens.of(context).raised,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text('“${evidence.excerpt}”'),
-                    ),
-                    Text(
-                      evidence.section,
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ),
-        ),
+      const SizedBox(height: 20),
+      for (final finding in report.findings) _EvidenceFinding(finding: finding),
+      const SizedBox(height: 8),
+      Text(
+        'Only this supplied text was checked. Seller wording is not identity verification. This evidence summary is not approval to buy or professional legal or financial advice.',
+        style: Theme.of(context).textTheme.bodySmall,
+      ),
     ],
   );
+
+  Widget _reviewPanel(Widget child) => Container(
+    padding: const EdgeInsets.all(24),
+    decoration: BoxDecoration(
+      color: WingmanTokens.of(context).surface,
+      border: Border.all(color: WingmanTokens.of(context).divider),
+      borderRadius: BorderRadius.circular(24),
+    ),
+    child: child,
+  );
+  Widget _selectionPanel() => _reviewPanel(
+    Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Your pasted selection',
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          'Only the text you choose. No page or form is read automatically.',
+        ),
+        const SizedBox(height: 20),
+        TextField(
+          controller: _label,
+          maxLength: 120,
+          autocorrect: false,
+          enableSuggestions: false,
+          enableIMEPersonalizedLearning: false,
+          contextMenuBuilder: _localMenu,
+          decoration: const InputDecoration(
+            labelText: 'Source label (not a web address)',
+          ),
+          onChanged: (_) => _invalidate(),
+        ),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          initialValue: _language,
+          isExpanded: true,
+          itemHeight: null,
+          decoration: const InputDecoration(labelText: 'Language of selection'),
+          items: const [
+            DropdownMenuItem(value: 'en', child: Text('English')),
+            DropdownMenuItem(
+              value: 'other',
+              child: Text('Other / unsure', softWrap: true),
+            ),
+          ],
+          onChanged: (value) {
+            if (value != null) {
+              _invalidate();
+              setState(() => _language = value);
+            }
+          },
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          key: const Key('commit-selection'),
+          controller: _text,
+          minLines: 7,
+          maxLines: 14,
+          maxLength: CommitReviewAnalyzer.maximumBytes,
+          autocorrect: false,
+          enableSuggestions: false,
+          enableIMEPersonalizedLearning: false,
+          contextMenuBuilder: _localMenu,
+          decoration: const InputDecoration(
+            labelText: 'Visible text to analyze',
+            alignLabelWithHint: true,
+          ),
+          onChanged: (_) => _edited(),
+        ),
+        Wrap(
+          spacing: 12,
+          runSpacing: 8,
+          children: [
+            FilledButton.icon(
+              onPressed: _busy ? null : _analyze,
+              icon: _busy
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.manage_search),
+              label: Text(_busy ? 'Checking locally…' : 'Check this selection'),
+            ),
+            if (_busy)
+              TextButton(
+                onPressed: _invalidate,
+                child: const Text('Cancel check'),
+              ),
+            TextButton(
+              onPressed: _busy ? null : _practice,
+              child: const Text('Use a practice example'),
+            ),
+          ],
+        ),
+        if (_error != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 16),
+            child: WingmanStatus(
+              key: const Key('commit-error'),
+              title: 'Check unavailable',
+              message: _error!,
+              tone: WingmanTone.caution,
+            ),
+          ),
+      ],
+    ),
+  );
+
   @override
   Widget build(BuildContext context) {
     if (!_visible || !(widget.canContinue?.call() ?? true)) {
@@ -488,17 +564,18 @@ class _CommitReviewScreenState extends State<CommitReviewScreen>
     final saved = _saved();
     return WingmanPage(
       title: 'Before You Commit',
+      maxWidth: 1480,
       scrollable: false,
       child: ListView(
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         children: [
           Text(
-            'A closer look at the details.',
+            'Know what you’re agreeing to.',
             style: Theme.of(context).textTheme.headlineMedium,
           ),
           const SizedBox(height: 8),
           const Text(
-            'Paste visible terms you choose. Wingman looks for directly stated wording locally, without visiting a website, using AI, or taking any action.',
+            'A local review of the text you choose. Wingman looks for directly stated wording without visiting a website or taking an action.',
           ),
           const SizedBox(height: 8),
           WingmanStatus(
@@ -509,114 +586,64 @@ class _CommitReviewScreenState extends State<CommitReviewScreen>
                 ? 'Private analysis stays temporary. Saving and saved analyses are unavailable. Clipboard export is an explicit action outside this private view.'
                 : 'Findings stay temporary until you explicitly save. Leave out passwords, payment details, tokens, and personal information.',
           ),
-          const WingmanSection(title: 'Choose the text to inspect'),
-          const SizedBox(height: 20),
-          TextField(
-            controller: _label,
-            maxLength: 120,
-            autocorrect: false,
-            enableSuggestions: false,
-            enableIMEPersonalizedLearning: false,
-            contextMenuBuilder: _localMenu,
-            decoration: const InputDecoration(
-              labelText: 'Source label (not a web address)',
-            ),
-            onChanged: (_) => _invalidate(),
-          ),
-          const SizedBox(height: 8),
-          DropdownButtonFormField<String>(
-            initialValue: _language,
-            decoration: const InputDecoration(
-              labelText: 'Language of selection',
-            ),
-            items: const [
-              DropdownMenuItem(value: 'en', child: Text('English')),
-              DropdownMenuItem(value: 'other', child: Text('Other / unsure')),
-            ],
-            onChanged: (value) {
-              if (value != null) {
-                _invalidate();
-                setState(() => _language = value);
+          const SizedBox(height: 24),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final input = _selectionPanel();
+              final findings = _reviewPanel(
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (report == null)
+                      const WingmanEmptyState(
+                        icon: Icons.fact_check_outlined,
+                        title: 'Evidence will appear here',
+                        message:
+                            'Check a supplied selection to find trial wording, charges, billing, cancellation, refunds, and seller wording. Missing or conflicting text stays explicit.',
+                      ),
+                    if (report != null) ...[
+                      if (_reportEligible(report)) ...[
+                        _findings(report),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          child: OutlinedButton.icon(
+                            onPressed: _copying
+                                ? null
+                                : () => _prepareExport(report),
+                            icon: const Icon(Icons.ios_share_outlined),
+                            label: const Text('Preview findings export'),
+                          ),
+                        ),
+                        if (!widget.isPrivate)
+                          FilledButton.tonal(
+                            onPressed: _saving ? null : _save,
+                            child: const Text('Save analysis locally'),
+                          ),
+                      ] else
+                        const Text(
+                          'This article is no longer eligible. Its saved excerpts are hidden.',
+                        ),
+                    ],
+                  ],
+                ),
+              );
+              if (constraints.maxWidth >= 900 &&
+                  MediaQuery.textScalerOf(context).scale(16) <= 24) {
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: input),
+                    const SizedBox(width: 24),
+                    Expanded(child: findings),
+                  ],
+                );
               }
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [input, const SizedBox(height: 20), findings],
+              );
             },
           ),
-          const SizedBox(height: 16),
-          TextField(
-            key: const Key('commit-selection'),
-            controller: _text,
-            minLines: 7,
-            maxLines: 14,
-            maxLength: CommitReviewAnalyzer.maximumBytes,
-            autocorrect: false,
-            enableSuggestions: false,
-            enableIMEPersonalizedLearning: false,
-            contextMenuBuilder: _localMenu,
-            decoration: const InputDecoration(
-              labelText: 'Visible text to analyze',
-              alignLabelWithHint: true,
-            ),
-            onChanged: (_) => _edited(),
-          ),
-          Wrap(
-            spacing: 12,
-            runSpacing: 8,
-            children: [
-              FilledButton.icon(
-                onPressed: _busy ? null : _analyze,
-                icon: _busy
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.manage_search),
-                label: Text(
-                  _busy ? 'Checking locally…' : 'Check this selection',
-                ),
-              ),
-              if (_busy)
-                TextButton(
-                  onPressed: _invalidate,
-                  child: const Text('Cancel check'),
-                ),
-              TextButton(
-                onPressed: _busy ? null : _practice,
-                child: const Text('Use a practice example'),
-              ),
-            ],
-          ),
-          if (_error != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 16),
-              child: WingmanStatus(
-                key: const Key('commit-error'),
-                title: 'Check unavailable',
-                message: _error!,
-                tone: WingmanTone.caution,
-              ),
-            ),
-          if (report != null) ...[
-            const Divider(height: 40),
-            if (_reportEligible(report)) ...[
-              _findings(report),
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                child: OutlinedButton.icon(
-                  onPressed: _copying ? null : () => _prepareExport(report),
-                  icon: const Icon(Icons.ios_share_outlined),
-                  label: const Text('Preview findings export'),
-                ),
-              ),
-              if (!widget.isPrivate)
-                FilledButton.tonal(
-                  onPressed: _saving ? null : _save,
-                  child: const Text('Save analysis locally'),
-                ),
-            ] else
-              const Text(
-                'This article is no longer eligible. Its saved excerpts are hidden.',
-              ),
-          ],
           if (!widget.isPrivate) ...[
             const Divider(height: 40),
             Text(
@@ -741,3 +768,101 @@ Widget _localMenu(BuildContext context, EditableTextState state) =>
           )
           .toList(),
     );
+
+class _EvidenceFinding extends StatelessWidget {
+  const _EvidenceFinding({required this.finding});
+  final CommitFinding finding;
+  @override
+  Widget build(BuildContext context) {
+    final t = WingmanTokens.of(context);
+    final stated = finding.status == FindingStatus.stated;
+    final icon = switch (finding.field) {
+      CommitField.trialDuration => Icons.calendar_month_outlined,
+      CommitField.recurringCharge => Icons.credit_card_outlined,
+      CommitField.billingInterval => Icons.event_repeat_outlined,
+      CommitField.cancellation => Icons.cancel_outlined,
+      CommitField.refund => Icons.assignment_return_outlined,
+      CommitField.seller => Icons.storefront_outlined,
+    };
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 20),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: t.divider)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: stated ? t.raised : t.cautionSurface,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(icon, color: stated ? t.action : t.caution),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      finding.field.label,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: stated ? t.successSurface : t.cautionSurface,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        findingStatusLabel(finding.status),
+                        style: Theme.of(context).textTheme.labelMedium
+                            ?.copyWith(color: stated ? t.success : t.caution),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            finding.explanation,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          for (final evidence in finding.evidence) ...[
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: t.raised,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: SelectableText(
+                '“${evidence.excerpt}”',
+                style: Theme.of(context).textTheme.bodyLarge,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              evidence.section,
+              style: Theme.of(
+                context,
+              ).textTheme.labelSmall?.copyWith(color: t.secondaryText),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}

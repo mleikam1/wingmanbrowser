@@ -34,6 +34,9 @@ class SettingsActions {
     this.onHelpNow,
     this.pendingDataClear,
     this.onClearDataScoped,
+    this.onFinishMode,
+    this.onCommitReview,
+    this.onUpdates,
   });
   final VoidCallback onHomeCustomization,
       onSpaces,
@@ -41,6 +44,7 @@ class SettingsActions {
       onReceipt,
       onCompatibility;
   final VoidCallback? onHelpNow;
+  final VoidCallback? onFinishMode, onCommitReview, onUpdates;
   final Future<DataClearOutcome>? Function()? pendingDataClear;
   final Future<DataClearOutcome> Function(
     Set<PrivacyDataCategory>,

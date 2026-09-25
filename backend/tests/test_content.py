@@ -465,7 +465,12 @@ class ServiceTests(unittest.TestCase):
         connection.close()
         return status, headers, body
 
-    def test_common_get_and_etag_304_never_ingest(self):
+    @patch('wingman_content.server.datetime')
+    def test_common_get_and_etag_304_never_ingest(self, server_clock):
+        # The fixture is deliberately dated. Match the serving clock to its
+        # ingestion time so this HTTP/ETag test does not become an expiry test
+        # as the calendar advances. Expiry filtering has separate coverage.
+        server_clock.now.return_value = NOW
         before = self.store.path.read_bytes()
         status, headers, body = self.request('/v1/snapshot.json')
         self.assertEqual(status, 200)

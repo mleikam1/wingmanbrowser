@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.wingmanbrowser.wingman_browser.ConsumerPolicyUpdateVerifierTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-09-25T19:37:39.289Z" hostname="Kathleens-MacBook-Pro.local" time="0.117">
+  <properties/>
+  <testcase name="signedMetadataCannotChangePurposeOrEscapeDirectory" classname="com.wingmanbrowser.wingman_browser.ConsumerPolicyUpdateVerifierTest" time="0.068"/>
+  <testcase name="verifiesSignedSyntheticReleaseAndReturnsCopies" classname="com.wingmanbrowser.wingman_browser.ConsumerPolicyUpdateVerifierTest" time="0.006"/>
+  <testcase name="unknownKeyAndChangedSignatureAreRejected" classname="com.wingmanbrowser.wingman_browser.ConsumerPolicyUpdateVerifierTest" time="0.007"/>
+  <testcase name="changedOrTruncatedBytesAreRejected" classname="com.wingmanbrowser.wingman_browser.ConsumerPolicyUpdateVerifierTest" time="0.007"/>
+  <testcase name="signedContentMustMatchManifestAndRetainEveryCategory" classname="com.wingmanbrowser.wingman_browser.ConsumerPolicyUpdateVerifierTest" time="0.029"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

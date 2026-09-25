@@ -33,7 +33,10 @@ void main() {
 
   Future<void> focusSearch(WidgetTester tester) async {
     if (find.byType(PolicyStateView).evaluate().isNotEmpty) {
-      await tapVisible(tester, find.widgetWithText(TextButton, 'Home'));
+      await tapVisible(
+        tester,
+        find.widgetWithText(FilledButton, 'Back to Home'),
+      );
     }
     if (find.byKey(const ValueKey('protected-search')).evaluate().isNotEmpty) {
       return;
@@ -218,7 +221,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Tabs (2)'));
       await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('Close tab 2'));
+      await tapVisible(tester, find.byTooltip('Close tab 2'));
       await tester.pumpAndSettle();
       await tapVisible(tester, find.text('Normal (1)'));
       await tapVisible(tester, find.text('Home'));

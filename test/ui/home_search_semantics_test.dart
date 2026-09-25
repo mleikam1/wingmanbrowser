@@ -1,12 +1,20 @@
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wingman_browser/presentation/design_system/ui_preferences.dart';
 import 'package:wingman_browser/presentation/home/home_screen.dart';
 import 'package:wingman_browser/presentation/theme.dart';
 
 void main() {
+  setUpAll(() async {
+    final font = FontLoader('Roboto');
+    for (final weight in ['Regular', 'Medium', 'Bold']) {
+      font.addFont(rootBundle.load('assets/fonts/Roboto-$weight.ttf'));
+    }
+    await font.load();
+  });
   for (final private in [false, true]) {
     testWidgets('Home search is an independently enabled semantic button '
         '${private ? 'private' : 'normal'}', (tester) async {
@@ -55,7 +63,7 @@ void main() {
         expect(data.flagsCollection.isEnabled, ui.Tristate.isTrue);
         expect(data.hasAction(ui.SemanticsAction.tap), isTrue);
         final heading = private
-            ? 'A little space to yourself.'
+            ? 'Your space.'
             : "We've got your back, not your data.";
         expect(
           find.bySemanticsLabel(RegExp(RegExp.escape(heading))),
@@ -89,13 +97,15 @@ void main() {
         await tester.tap(protection);
         await tester.pump();
         expect(openedProtection, 1);
+        // The selected redesign adds a compact hero; search still fits in the
+        // first half of a 390×844 phone, using production font metrics.
         if (!private) {
           expect(find.text('Where would you like to go?'), findsNothing);
           expect(
             tester
                 .getBottomRight(find.byKey(const ValueKey('home-search-entry')))
                 .dy,
-            lessThan(220),
+            lessThan(400),
           );
         }
         expect(tester.takeException(), isNull);

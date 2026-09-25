@@ -24,6 +24,17 @@ class WingmanTokens extends ThemeExtension<WingmanTokens> {
   final Color divider, controlOutline, success, successSurface;
   final Color caution, cautionSurface, danger, dangerSurface;
   static const navy = Color(0xff071b4d), cyan = Color(0xff20cff2);
+  // Owned surfaces only; never paint decorative artwork over website content.
+  Color get panel => surface;
+  Color get selectedTab => raised;
+  Color get focusRing => action;
+  Color get heroStart => canvas;
+  Color get heroEnd => Color.lerp(raised, cyan, .08)!;
+  Color get ribbonBlue => const Color(0xff2369f5);
+  Color get ribbonCyan => const Color(0xff56d9ec);
+  Color get heroInk => const Color(0xff102d54);
+  Color get onHeroInk => const Color(0xffedf5ff);
+  Color get heroMuted => const Color(0xffb5cbe5);
   static const compact = 600.0, expanded = 1024.0;
   static const press = Duration(milliseconds: 120);
   static const sheet = Duration(milliseconds: 200);

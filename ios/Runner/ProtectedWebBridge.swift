@@ -163,6 +163,7 @@ final class ProtectedWebBridge: NSObject, FlutterPlatformViewFactory {
     if call.method == "capabilities" {
       result(["supported": mayOpen, "privateAvailable": mayOpen, "strictSearchAvailable": mayOpen, "mode": "consumerWeb",
         "javascript": true, "forms": true, "cookies": true, "storage": true, "history": true, "uploads": true, "downloads": true,
+        "resourceCountersObservable": false, "resourceCounterScope": "unobservable",
         "findInPage": true, "media": true, "originPermissions": true, "policyUpdatesAvailable": !updateKeys.isEmpty, "defaultBrowserAvailable": BrowserNativeBridge.hasDefaultBrowserEntitlement,
         "reason": mayOpen ? NSNull() as Any : "Mandatory protection data is unavailable. Recovery is required." as Any]); return
     }
@@ -382,6 +383,7 @@ private final class ProtectedWebView: NSObject, FlutterPlatformView, WKNavigatio
     ["viewId": id, "requestId": requestId, "url": currentURL, "title": web?.title ?? "", "progress": Int((web?.estimatedProgress ?? 0) * 100),
      "isLoading": web?.isLoading ?? false, "error": errorText ?? NSNull() as Any, "canGoBack": web?.canGoBack ?? false,
      "canGoForward": web?.canGoForward ?? false, "blockedResources": NSNull(), "loadedResources": NSNull(), "bytesReceived": NSNull(),
+     "resourceCountersObservable": false, "resourceCounterScope": "unobservable",
      "hasRenderer": hasRenderer, "private": privateMode, "javascript": true, "resourceRulesInstalled": hasRenderer,
      "strictSearch": URL(string: currentURL)?.host == "safe.duckduckgo.com"]
   }
@@ -431,7 +433,7 @@ private final class ProtectedWebView: NSObject, FlutterPlatformView, WKNavigatio
   private func checked(_ raw: String) -> ConsumerNativeDecision {
     guard let decision = bridge?.checked(raw), let url = decision.url, let host = url.host else { return bridge?.checked(raw) ?? ConsumerNativeDecision() }
     if blockedURLs.contains(url.absoluteString.components(separatedBy: "#")[0]) || blockedDomains.contains(where: { host == $0 || host.hasSuffix("." + $0) }) || (blockedSearch && host == "safe.duckduckgo.com") {
-      return ConsumerNativeDecision(nil, "This destination is blocked by an additional restriction.")
+      return ConsumerNativeDecision(nil, "This destination is blocked by an additional restriction.", reasonCode: .blockAdditionalRestriction)
     }
     return decision
   }
@@ -515,7 +517,7 @@ private final class ProtectedWebView: NSObject, FlutterPlatformView, WKNavigatio
     guard bridge?.mayOpen == true, decision.url != nil else {
       // History APIs can expose a newly denied path without a network navigation
       // delegate callback. Retire that document instead of leaving it interactive.
-      renderer.stopLoading(); blocked(raw, decision.reason); release(); emit(); return
+      renderer.stopLoading(); blocked(raw, decision); release(); emit(); return
     }
     currentURL = raw
     committedURL = raw
@@ -531,7 +533,11 @@ private final class ProtectedWebView: NSObject, FlutterPlatformView, WKNavigatio
       }
       return
     }
-    guard !restrictionFailure, checked(url.absoluteString).url != nil else { blocked(url.absoluteString, "Additional restriction."); return }
+    guard !restrictionFailure else {
+      blocked(url.absoluteString, "Protection rules are unavailable.", reasonCode: .blockPolicyUnavailable); return
+    }
+    let decision = checked(url.absoluteString)
+    guard decision.url != nil else { blocked(url.absoluteString, decision); return }
     guard let renderer = ensureRenderer() else { errorText = "Consumer browsing is unavailable in this edition."; emit(); return }
     currentURL = url.absoluteString
     var request = URLRequest(url: url)
@@ -565,12 +571,17 @@ private final class ProtectedWebView: NSObject, FlutterPlatformView, WKNavigatio
     if let web = web { consumerSetWebActivity(web, allowed: false) }
     web?.stopLoading(); web?.navigationDelegate = nil; web?.uiDelegate = nil; web?.removeFromSuperview(); web = nil
   }
-  private func blocked(_ raw: String, _ reason: String) {
+  private func blocked(_ raw: String, _ decision: ConsumerNativeDecision) {
+    blocked(raw, decision.reason, reasonCode: decision.reasonCode, category: decision.category)
+  }
+  private func blocked(_ raw: String, _ reason: String, reasonCode: ConsumerNativeReasonCode = .blockUnsupportedCapability, category: String? = nil) {
     policyCancellationUntil = Date().addingTimeInterval(15)
     errorText = nil
     if !committedURL.isEmpty { currentURL = committedURL }
     emit()
-    bridge?.emit("navigationBlocked", ["viewId": id, "requestId": requestId, "url": raw, "reason": reason])
+    // Native policy sends only a typed explanation, never denied page metadata.
+    bridge?.emit("navigationBlocked", ["viewId": id, "requestId": requestId, "reason": reason,
+      "reasonCode": reasonCode.rawValue, "category": category ?? NSNull() as Any])
   }
   func find(_ query: String?, forward: Bool, result: @escaping FlutterResult) {
     if let query = query { findQuery = String(query.prefix(512)) }
@@ -609,7 +620,7 @@ private final class ProtectedWebView: NSObject, FlutterPlatformView, WKNavigatio
     // load a file:, data:, javascript: or arbitrary external scheme as a page.
     if action.targetFrame?.isMainFrame == false && (raw == "about:blank" || raw.hasPrefix("blob:")) { decisionHandler(.allow); return }
     let decision = checked(raw)
-    guard let target = decision.url else { decisionHandler(.cancel); if action.targetFrame?.isMainFrame != false { blocked(raw, decision.reason) }; return }
+    guard let target = decision.url else { decisionHandler(.cancel); if action.targetFrame?.isMainFrame != false { blocked(raw, decision) }; return }
     let userInitiated = action.navigationType == .linkActivated || action.navigationType == .formSubmitted || action.navigationType == .formResubmitted
     if userInitiated { downloadGestureUntil = Date().addingTimeInterval(15) }
     if action.targetFrame == nil {
@@ -644,7 +655,7 @@ private final class ProtectedWebView: NSObject, FlutterPlatformView, WKNavigatio
   func webView(_ webView: WKWebView, didReceiveServerRedirectForProvisionalNavigation navigation: WKNavigation!) {
     guard let raw = webView.url?.absoluteString else { return }
     let decision = checked(raw)
-    if decision.url == nil { webView.stopLoading(); blocked(raw, decision.reason) }
+    if decision.url == nil { webView.stopLoading(); blocked(raw, decision) }
   }
   func webView(_ webView: WKWebView, decidePolicyFor response: WKNavigationResponse, decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) {
     guard webView === web, bridge?.mayOpen == true, let raw = response.response.url?.absoluteString, checked(raw).url != nil else { decisionHandler(.cancel); return }
@@ -684,7 +695,7 @@ private final class ProtectedWebView: NSObject, FlutterPlatformView, WKNavigatio
     // javaScriptCanOpenWindowsAutomatically remains false on every renderer.
     guard webView === web, active, foreground, let raw = action.request.url?.absoluteString else { return nil }
     let decision = checked(raw)
-    guard let target = decision.url else { blocked(raw, decision.reason); return nil }
+    guard let target = decision.url else { blocked(raw, decision); return nil }
     guard target.absoluteString == raw, ["GET", "POST"].contains(action.request.httpMethod ?? "GET") else { return nil }
     return bridge?.stageWindow(from: self, configuration: configuration, target: target)
   }
@@ -952,10 +963,19 @@ private func consumerAppVersionSupported(_ minimum: String) -> Bool {
   return true
 }
 
+enum ConsumerNativeReasonCode: String {
+  case blockMandatoryCategory, blockSecurityThreat, blockAdditionalRestriction, blockPolicyUnavailable, blockUnsupportedCapability
+}
+
 struct ConsumerNativeDecision {
   let url: URL?
   let reason: String
-  init(_ url: URL? = nil, _ reason: String = "This destination is blocked by Wingman's protection policy.") { self.url = url; self.reason = reason }
+  let reasonCode: ConsumerNativeReasonCode
+  let category: String?
+  init(_ url: URL? = nil, _ reason: String = "This browser operation is unavailable.",
+    reasonCode: ConsumerNativeReasonCode = .blockUnsupportedCapability, category: String? = nil) {
+    self.url = url; self.reason = reason; self.reasonCode = reasonCode; self.category = category
+  }
 }
 
 /// Pinned baseline or independently verified signed update. Classification is
@@ -992,13 +1012,13 @@ final class ConsumerNativePolicy {
     valid = true
   }
   func check(_ input: String) -> ConsumerNativeDecision {
-    guard valid else { return ConsumerNativeDecision(nil, "Mandatory protection data is unavailable. Recovery is required.") }
+    guard valid else { return ConsumerNativeDecision(nil, "Mandatory protection data is unavailable. Recovery is required.", reasonCode: .blockPolicyUnavailable) }
     guard let url = consumerCheckedURL(input) else { return ConsumerNativeDecision(nil, "This address is unsupported or contains credentials.") }
     guard let target = consumerSearchDestination(url) else { return ConsumerNativeDecision(nil, "This search shortcut or provider address cannot enforce strict search.") }
     guard let host = target.host?.lowercased() else { return ConsumerNativeDecision() }
     var candidate = host
     while true {
-      if let category = domains[candidate] { return ConsumerNativeDecision(nil, "Blocked category: \(category).") }
+      if let category = domains[candidate] { return ConsumerNativeDecision(nil, "Blocked category: \(category).", reasonCode: category == "security-threat" ? .blockSecurityThreat : .blockMandatoryCategory, category: category) }
       guard let dot = candidate.firstIndex(of: ".") else { break }; candidate = String(candidate[candidate.index(after: dot)...])
     }
     var pathSegments: [String] = []
@@ -1009,7 +1029,7 @@ final class ConsumerNativePolicy {
     }
     let path = "/" + pathSegments.joined(separator: "/")
     for rule in pathRules where host == rule.host || host.hasSuffix("." + rule.host) {
-      if path == rule.path || path.hasPrefix(rule.path.hasSuffix("/") ? rule.path : rule.path + "/") { return ConsumerNativeDecision(nil, "Blocked category: \(rule.category).") }
+      if path == rule.path || path.hasPrefix(rule.path.hasSuffix("/") ? rule.path : rule.path + "/") { return ConsumerNativeDecision(nil, "Blocked category: \(rule.category).", reasonCode: rule.category == "security-threat" ? .blockSecurityThreat : .blockMandatoryCategory, category: rule.category) }
       if consumerHasAmbiguousPathEncoding(target) {
         return ConsumerNativeDecision(nil, "This site's encoded address cannot be checked safely. Use its standard address.")
       }

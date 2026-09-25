@@ -1,3 +1,5 @@
+> Historical 0.5 signature milestone below. The current app has Android/iOS consumer native engines; see [current acceptance matrix](ui/redesign/PLATFORM_MATRIX.md), [privacy/capability note](ui/redesign/PRIVACY_CAPABILITIES.md) and [engine contract](BROWSER_ENGINE_CONTRACT.md). The no-live-engine statements below apply only to the recorded older milestone.
+
 # Consumer signature platform capabilities
 
 0.5.0 development/review build, 2026-09-11. Android/iOS run Flutter's signed plaintext reader; live website engines remain disabled. Web is a companion application. No extension is present.

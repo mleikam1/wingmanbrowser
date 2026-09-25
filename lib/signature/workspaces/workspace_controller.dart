@@ -10,10 +10,17 @@ class WorkspaceController extends ChangeNotifier {
     required SignatureDocumentStore store,
     required this.eligible,
     this.ephemeral = false,
-  }) : _store = SessionSignatureDocumentStore(store, ephemeral: ephemeral);
+    this.websiteEligible,
+    Duration Function()? monotonicNow,
+  }) : _monotonicNow = monotonicNow ?? (Stopwatch()..start()).elapsedGetter,
+       _store = SessionSignatureDocumentStore(store, ephemeral: ephemeral);
   final SignatureDocumentStore _store;
   final bool Function(String id) eligible;
   final bool ephemeral;
+  final bool Function(Uri)? websiteEligible;
+  final Duration Function() _monotonicNow;
+  final Map<String, Duration> _timerAnchors = {};
+  final Set<String> _dismissedNudges = {};
   WorkspaceSnapshot _snapshot = WorkspaceSnapshot();
   WorkspaceSnapshot get snapshot => _snapshot;
   bool initialized = false;
@@ -27,7 +34,17 @@ class WorkspaceController extends ChangeNotifier {
   Future<void> initialize() async {
     try {
       final row = await _store.readDocument('workspace');
-      if (row != null) _snapshot = WorkspaceSnapshot.fromJson(row);
+      if (row != null) {
+        final restored = WorkspaceSnapshot.fromJson(row);
+        _snapshot = restored.copyWith(
+          tasks: [
+            for (final task in restored.tasks)
+              task.timer?.running == true
+                  ? task.copyWith(timer: task.timer!.copyWith(running: false))
+                  : task,
+          ],
+        );
+      }
     } catch (_) {
       storageError =
           'Saved workspace data could not be restored. Browsing remains available; the original local document has not been replaced.';
@@ -43,6 +60,8 @@ class WorkspaceController extends ChangeNotifier {
       if (!initialized || storageError != null || _disposed) {
         throw StateError('Workspace storage is unavailable.');
       }
+      final timerAnchor = _monotonicNow();
+      final previous = _snapshot;
       final proposed = transform(_snapshot);
       final document = proposed.toJson();
       WorkspaceSnapshot.fromJson(
@@ -50,6 +69,19 @@ class WorkspaceController extends ChangeNotifier {
       ); // Validate before durable replacement.
       await _store.writeDocument('workspace', document);
       _snapshot = proposed;
+      for (final task in proposed.tasks) {
+        if (task.timer?.running != true) {
+          _timerAnchors.remove(task.id);
+        } else if (!identical(
+          task.timer,
+          previous.tasks.where((item) => item.id == task.id).firstOrNull?.timer,
+        )) {
+          _timerAnchors[task.id] = timerAnchor;
+        }
+      }
+      _timerAnchors.removeWhere(
+        (id, _) => !proposed.tasks.any((task) => task.id == id),
+      );
       if (!_disposed) notifyListeners();
     });
     _writes = next.catchError((Object _) {});
@@ -134,13 +166,23 @@ class WorkspaceController extends ChangeNotifier {
     return s.copyWith(spaces: list);
   });
   Future<void> deleteSpace(String id) => _update(
-    (s) => s.copyWith(spaces: s.spaces.where((e) => e.id != id).toList()),
+    (s) => s.copyWith(
+      spaces: s.spaces.where((e) => e.id != id).toList(),
+      tasks: [
+        for (final task in s.tasks)
+          task.spaceId == id ? task.copyWith(clearSpace: true) : task,
+      ],
+    ),
   );
   Future<void> saveToSpace(
     String spaceId,
     String resourceId, {
     bool saved = true,
+    bool Function()? canContinue,
   }) => _update((s) {
+    if (canContinue?.call() == false) {
+      throw StateError('The originating page changed.');
+    }
     if (saved && !eligible(resourceId)) {
       throw StateError('This resource is not eligible.');
     }
@@ -157,10 +199,13 @@ class WorkspaceController extends ChangeNotifier {
     );
   });
 
-  Future<String> createTask(String goal) async {
+  Future<String> createTask(String goal, {String? spaceId}) async {
     final id = newId('task'), value = boundedText(goal, 160);
     if (value.isEmpty) throw const FormatException('Write a short goal.');
     await _update((s) {
+      if (spaceId != null && !s.spaces.any((space) => space.id == spaceId)) {
+        throw StateError('This Space is no longer available.');
+      }
       if (s.tasks.length >= 12) {
         throw StateError('The twelve-task limit is reached.');
       }
@@ -168,32 +213,67 @@ class WorkspaceController extends ChangeNotifier {
         tasks: [
           for (final task in s.tasks)
             task.status == FinishStatus.active
-                ? task.copyWith(status: FinishStatus.paused)
+                ? task.copyWith(
+                    status: FinishStatus.paused,
+                    timer: _pausedTimer(task),
+                  )
                 : task,
-          FinishWorkspace(id: id, goal: value),
+          FinishWorkspace(
+            id: id,
+            goal: value,
+            spaceId: spaceId,
+            checklist: spaceId == null ? const [] : space(spaceId)!.checklist,
+            notes: spaceId == null ? '' : space(spaceId)!.notes,
+          ),
         ],
       );
     });
     return id;
   }
 
-  Future<void> updateTask(String id, {String? notes, FinishStatus? status}) =>
-      _update((s) {
-        if (notes != null && notes.length > 4000) {
-          throw const FormatException('Notes limit reached.');
+  Future<void> updateTask(
+    String id, {
+    String? goal,
+    String? notes,
+    FinishStatus? status,
+    String? spaceId,
+    bool clearSpace = false,
+  }) => _update((s) {
+    if (goal != null && (goal.trim().isEmpty || goal.length > 160)) {
+      throw const FormatException('Write a short goal.');
+    }
+    if (spaceId != null && !s.spaces.any((space) => space.id == spaceId)) {
+      throw StateError('This Space is no longer available.');
+    }
+    if (notes != null && notes.length > 4000) {
+      throw const FormatException('Notes limit reached.');
+    }
+    return s.copyWith(
+      tasks: s.tasks.map((e) {
+        if (e.id == id) {
+          return e.copyWith(
+            goal: goal?.trim(),
+            notes: notes,
+            status: status,
+            spaceId: spaceId,
+            clearSpace: clearSpace,
+            timer: status != null && status != FinishStatus.active
+                ? _pausedTimer(e)
+                : null,
+          );
         }
-        return s.copyWith(
-          tasks: s.tasks.map((e) {
-            if (e.id == id) return e.copyWith(notes: notes, status: status);
-            return status == FinishStatus.active &&
-                    e.status == FinishStatus.active
-                ? e.copyWith(status: FinishStatus.paused)
-                : e;
-          }).toList(),
-        );
-      });
+        return status == FinishStatus.active && e.status == FinishStatus.active
+            ? e.copyWith(status: FinishStatus.paused, timer: _pausedTimer(e))
+            : e;
+      }).toList(),
+    );
+  });
   Future<void> associateTab(String taskId, String tabId, String? resourceId) =>
       _update((s) {
+        final target = s.tasks.where((task) => task.id == taskId).firstOrNull;
+        if (target == null || target.status == FinishStatus.finished) {
+          throw StateError('This task can no longer own tabs.');
+        }
         if (resourceId != null && !eligible(resourceId)) {
           throw StateError('This resource is not eligible.');
         }
@@ -213,6 +293,10 @@ class WorkspaceController extends ChangeNotifier {
     String newTabId,
     String? resourceId,
   ) => _update((s) {
+    final target = s.tasks.where((task) => task.id == taskId).firstOrNull;
+    if (target == null || target.status == FinishStatus.finished) {
+      throw StateError('This task can no longer restore tabs.');
+    }
     if (resourceId != null && !eligible(resourceId)) {
       throw StateError('This resource is not eligible.');
     }
@@ -252,7 +336,14 @@ class WorkspaceController extends ChangeNotifier {
     return result;
   }
 
-  Future<void> saveTaskResult(String taskId, String resourceId) => _update((s) {
+  Future<void> saveTaskResult(
+    String taskId,
+    String resourceId, {
+    bool Function()? canContinue,
+  }) => _update((s) {
+    if (canContinue?.call() == false) {
+      throw StateError('The originating page changed.');
+    }
     if (!eligible(resourceId)) {
       throw StateError('This resource is not eligible.');
     }
@@ -276,6 +367,7 @@ class WorkspaceController extends ChangeNotifier {
                 (e) => e.id == id
                     ? e.copyWith(
                         status: FinishStatus.finished,
+                        timer: _pausedTimer(e),
                         savedIds: saveTabResources
                             ? _boundedResults([
                                 ...e.savedIds,
@@ -357,6 +449,309 @@ class WorkspaceController extends ChangeNotifier {
                 .toList(),
           );
   });
+  Future<void> editChecklist(
+    String id,
+    String itemId,
+    String text, {
+    required bool isTask,
+  }) => _update((snapshot) {
+    final value = boundedText(text, 160);
+    if (value.isEmpty) throw const FormatException('Write a checklist item.');
+    List<ChecklistItem> edit(List<ChecklistItem> items) => [
+      for (final item in items)
+        item.id == itemId
+            ? ChecklistItem(item.id, value, done: item.done)
+            : item,
+    ];
+    return isTask
+        ? snapshot.copyWith(
+            tasks: [
+              for (final task in snapshot.tasks)
+                task.id == id
+                    ? task.copyWith(checklist: edit(task.checklist))
+                    : task,
+            ],
+          )
+        : snapshot.copyWith(
+            spaces: [
+              for (final space in snapshot.spaces)
+                space.id == id
+                    ? space.copyWith(checklist: edit(space.checklist))
+                    : space,
+            ],
+          );
+  });
+  Future<void> moveChecklist(
+    String id,
+    String itemId,
+    int delta, {
+    required bool isTask,
+  }) => _update((snapshot) {
+    List<ChecklistItem> move(List<ChecklistItem> items) {
+      final rows = [...items],
+          index = items.indexWhere((item) => item.id == itemId);
+      if (index < 0) return rows;
+      rows.insert(
+        (index + delta).clamp(0, rows.length - 1),
+        rows.removeAt(index),
+      );
+      return rows;
+    }
+
+    return isTask
+        ? snapshot.copyWith(
+            tasks: [
+              for (final task in snapshot.tasks)
+                task.id == id
+                    ? task.copyWith(checklist: move(task.checklist))
+                    : task,
+            ],
+          )
+        : snapshot.copyWith(
+            spaces: [
+              for (final space in snapshot.spaces)
+                space.id == id
+                    ? space.copyWith(checklist: move(space.checklist))
+                    : space,
+            ],
+          );
+  });
+
+  bool canOpenPage(SavedWorkspacePage page) {
+    try {
+      return normalizeWorkspaceUrl(page.uri) == page.url &&
+          websiteEligible?.call(page.uri) == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> savePageToSpace(
+    String id,
+    Uri uri, {
+    bool Function()? canContinue,
+  }) => _savePage(id, uri, isTask: false, canContinue: canContinue);
+  Future<void> savePageToTask(
+    String id,
+    Uri uri, {
+    bool Function()? canContinue,
+  }) => _savePage(id, uri, isTask: true, canContinue: canContinue);
+  Future<void> _savePage(
+    String id,
+    Uri uri, {
+    required bool isTask,
+    bool Function()? canContinue,
+  }) => _update((snapshot) {
+    if (canContinue?.call() == false) {
+      throw StateError('The originating page changed.');
+    }
+    if (ephemeral) {
+      throw StateError('Private pages cannot enter saved Spaces.');
+    }
+    final page = SavedWorkspacePage(
+      id: newId('page'),
+      url: normalizeWorkspaceUrl(uri),
+    );
+    if (!canOpenPage(page)) {
+      throw StateError('This page is not currently permitted.');
+    }
+    List<SavedWorkspacePage> add(List<SavedWorkspacePage> pages) {
+      if (pages.any((item) => item.url == page.url)) return pages;
+      if (pages.length >= 50) {
+        throw StateError('The fifty-page limit is reached.');
+      }
+      return [...pages, page];
+    }
+
+    if (isTask) {
+      if (!snapshot.tasks.any((task) => task.id == id)) {
+        throw StateError('Task unavailable.');
+      }
+      return snapshot.copyWith(
+        tasks: [
+          for (final task in snapshot.tasks)
+            task.id == id
+                ? task.copyWith(savedPages: add(task.savedPages))
+                : task,
+        ],
+      );
+    }
+    if (!snapshot.spaces.any((space) => space.id == id)) {
+      throw StateError('Space unavailable.');
+    }
+    return snapshot.copyWith(
+      spaces: [
+        for (final space in snapshot.spaces)
+          space.id == id
+              ? space.copyWith(savedPages: add(space.savedPages))
+              : space,
+      ],
+    );
+  });
+  Future<void> removeSavedPage(
+    String id,
+    String pageId, {
+    required bool isTask,
+  }) => _update(
+    (snapshot) => isTask
+        ? snapshot.copyWith(
+            tasks: [
+              for (final task in snapshot.tasks)
+                task.id == id
+                    ? task.copyWith(
+                        savedPages: task.savedPages
+                            .where((page) => page.id != pageId)
+                            .toList(),
+                      )
+                    : task,
+            ],
+          )
+        : snapshot.copyWith(
+            spaces: [
+              for (final space in snapshot.spaces)
+                space.id == id
+                    ? space.copyWith(
+                        savedPages: space.savedPages
+                            .where((page) => page.id != pageId)
+                            .toList(),
+                      )
+                    : space,
+            ],
+          ),
+  );
+
+  int timerRemainingSeconds(String taskId) {
+    final timer = task(taskId)?.timer;
+    if (timer == null) return 0;
+    final anchor = _timerAnchors[taskId];
+    final elapsed = timer.running && anchor != null
+        ? (_monotonicNow() - anchor).inSeconds.clamp(0, timer.durationSeconds)
+        : 0;
+    return (timer.remainingSeconds - elapsed).clamp(0, timer.durationSeconds);
+  }
+
+  FocusTimerState? _pausedTimer(FinishWorkspace task) => task.timer?.copyWith(
+    remainingSeconds: timerRemainingSeconds(task.id),
+    running: false,
+  );
+  Future<void> configureTimer(String taskId, {required int minutes}) =>
+      _update((snapshot) {
+        if (minutes < 1 || minutes > 180) {
+          throw const FormatException('Choose 1–180 minutes.');
+        }
+        return snapshot.copyWith(
+          tasks: [
+            for (final task in snapshot.tasks)
+              task.id == taskId
+                  ? task.copyWith(
+                      timer: FocusTimerState(
+                        durationSeconds: minutes * 60,
+                        remainingSeconds: minutes * 60,
+                      ),
+                    )
+                  : task,
+          ],
+        );
+      });
+  Future<void> setTimerRunning(String taskId, bool running) => _update(
+    (snapshot) => snapshot.copyWith(
+      tasks: [
+        for (final task in snapshot.tasks)
+          if (task.id == taskId && task.timer != null)
+            task.copyWith(
+              timer: task.timer!.copyWith(
+                remainingSeconds: timerRemainingSeconds(taskId),
+                running:
+                    running &&
+                    task.status == FinishStatus.active &&
+                    timerRemainingSeconds(taskId) > 0,
+              ),
+            )
+          else
+            task,
+      ],
+    ),
+  );
+  Future<void> resetTimer(String taskId) => _update(
+    (snapshot) => snapshot.copyWith(
+      tasks: [
+        for (final task in snapshot.tasks)
+          task.id == taskId && task.timer != null
+              ? task.copyWith(
+                  timer: task.timer!.copyWith(
+                    remainingSeconds: task.timer!.durationSeconds,
+                    running: false,
+                  ),
+                )
+              : task,
+      ],
+    ),
+  );
+  Future<void> removeTimer(String taskId) => _update(
+    (snapshot) => snapshot.copyWith(
+      tasks: [
+        for (final task in snapshot.tasks)
+          task.id == taskId ? task.copyWith(clearTimer: true) : task,
+      ],
+    ),
+  );
+
+  /// Lifecycle checkpoint: pause while away so device sleep and wall-clock
+  /// changes cannot consume or add focus time. Restart also restores paused.
+  Future<void> checkpointTimers() {
+    if (!_snapshot.tasks.any((task) => task.timer?.running == true)) {
+      return Future.value();
+    }
+    return _update(
+      (snapshot) => snapshot.copyWith(
+        tasks: [
+          for (final task in snapshot.tasks)
+            task.timer?.running == true
+                ? task.copyWith(
+                    timer: task.timer!.copyWith(
+                      remainingSeconds: timerRemainingSeconds(task.id),
+                      running: false,
+                    ),
+                  )
+                : task,
+        ],
+      ),
+    );
+  }
+
+  Future<void> setDistractionPreferences({
+    required bool enabled,
+    required List<String> sites,
+  }) => _update(
+    (snapshot) => snapshot.copyWith(
+      distractionPreferences: DistractionPreferences(
+        enabled: enabled,
+        sites: sites
+            .map((site) => site.trim().toLowerCase())
+            .where((site) => site.isNotEmpty)
+            .toSet(),
+      ),
+    ),
+  );
+
+  /// This is an optional nudge, never a permission decision. The caller must
+  /// evaluate mandatory policy before asking whether to show it.
+  FinishWorkspace? shouldNudge(Uri uri) {
+    final task = activeTask;
+    final prefs = snapshot.distractionPreferences;
+    if (task == null ||
+        !prefs.enabled ||
+        !prefs.sites.contains(uri.host.toLowerCase()) ||
+        _dismissedNudges.contains('${task.id}|${uri.host.toLowerCase()}')) {
+      return null;
+    }
+    return task;
+  }
+
+  /// Continue suppresses the exact chosen site for this task in this session.
+  void dismissNudge(String taskId, Uri uri) =>
+      _dismissedNudges.add('$taskId|${uri.host.toLowerCase()}');
+
   Future<void> saveAnalysis(Map<String, Object?> analysis) => _update((s) {
     if (ephemeral) throw StateError('Private analysis stays transient.');
     final id = boundedText(analysis['id'], 120);
@@ -378,4 +773,10 @@ class WorkspaceController extends ChangeNotifier {
     _disposed = true;
     super.dispose();
   }
+}
+
+// Retains the Stopwatch in the closure without sharing wall-clock state.
+extension _MonotonicClock on Stopwatch {
+  Duration Function() get elapsedGetter =>
+      () => elapsed;
 }

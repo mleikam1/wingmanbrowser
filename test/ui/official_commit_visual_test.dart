@@ -287,7 +287,7 @@ void main() {
       await shot('c01');
       await tap(tester, find.text('Use a practice example'));
       await tap(tester, find.text('Check this selection'));
-      await reveal(tester, find.text('Findings from your selection'));
+      await reveal(tester, find.text('Here’s what the text says'));
       await shot('c03-evidence');
       await reveal(tester, find.text('Cancellation'));
       await shot('c03-cancellation');
@@ -317,7 +317,7 @@ void main() {
       await tester.pump();
       pending.complete(report);
       await tester.pumpAndSettle();
-      expect(find.text('Findings from your selection'), findsNothing);
+      expect(find.text('Here’s what the text says'), findsNothing);
       await tester.pumpWidget(const SizedBox.shrink());
       journal.dispose();
       policy.dispose();

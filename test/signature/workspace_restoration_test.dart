@@ -71,7 +71,7 @@ void main() {
 
   final corruptions = <String, void Function(Map<String, Object?>)>{
     'unknown top-level field': (r) => r['allowUnknown'] = true,
-    'unsupported schema': (r) => r['schema'] = 2,
+    'unsupported schema': (r) => r['schema'] = 999,
     'wrong enabled type': (r) => r['spacesEnabled'] = 'false',
     'missing nested collection': (r) => spaceRow(r).remove('checklist'),
     'non-object nested row': (r) => (r['spaces'] as List).add('lost note'),

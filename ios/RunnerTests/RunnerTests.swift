@@ -32,6 +32,14 @@ final class RunnerTests: XCTestCase {
     let corrupt = ConsumerNativePolicy(path: "/missing", expectedDigest: "0")
     XCTAssertFalse(corrupt.valid)
     XCTAssertNil(corrupt.check("https://www.nasa.gov/").url)
+    XCTAssertEqual(corrupt.check("https://www.nasa.gov/").reasonCode, .blockPolicyUnavailable)
+    XCTAssertNil(corrupt.check("https://www.nasa.gov/").category)
+    XCTAssertEqual(policy.check("https://gambling.protection.test/").reasonCode, .blockMandatoryCategory)
+    XCTAssertEqual(policy.check("https://gambling.protection.test/").category, "gambling")
+    XCTAssertEqual(policy.check("https://security-threat.protection.test/").reasonCode, .blockSecurityThreat)
+    XCTAssertEqual(policy.check("https://security-threat.protection.test/").category, "security-threat")
+    XCTAssertEqual(policy.check("file:///unsupported").reasonCode, .blockUnsupportedCapability)
+    XCTAssertNil(policy.check("file:///unsupported").category)
   }
 
   func testDialogReplyCompletesOnceAcrossDismissalAndLateAction() {
@@ -171,9 +179,11 @@ final class RunnerTests: XCTestCase {
     let generation = try XCTUnwrap(bridge.testDocumentIdentity(810)).generation
     var publishedURLs: [String] = [], blocked: [String] = []
     messenger.onEvent = { call in
-      guard let event = call.arguments as? [String: Any], let url = event["url"] as? String else { return }
-      if call.method == "pageState" { publishedURLs.append(url) }
-      if call.method == "navigationBlocked" { blocked.append(url) }
+      guard let event = call.arguments as? [String: Any] else { return }
+      if call.method == "pageState", let url = event["url"] as? String { publishedURLs.append(url) }
+      if call.method == "navigationBlocked", let code = event["reasonCode"] as? String {
+        XCTAssertNil(event["url"]); XCTAssertNil(event["title"]); blocked.append(code)
+      }
     }
     func change(_ script: String, suffix: String) {
       let changed = expectation(description: "History mutation completes")
@@ -194,7 +204,10 @@ final class RunnerTests: XCTestCase {
     XCTAssertNil(server.counts["/history-results"], "History changes must not reload the document")
     let redirected = expectation(description: "Denied redirect preserves the committed document")
     messenger.onEvent = { call in
-      guard call.method == "navigationBlocked", let event = call.arguments as? [String: Any], event["url"] as? String == origin + "/denied-history" else { return }
+      guard call.method == "navigationBlocked", let event = call.arguments as? [String: Any] else { return }
+      XCTAssertEqual(event["reasonCode"] as? String, "blockAdditionalRestriction")
+      XCTAssertNil(event["url"]); XCTAssertNil(event["title"])
+      XCTAssertTrue(event["category"] is NSNull)
       redirected.fulfill()
     }
     messenger.invoke("open", ["viewId": 810, "requestId": 2, "url": origin + "/history-redirect"])
@@ -206,12 +219,14 @@ final class RunnerTests: XCTestCase {
     XCTAssertNil(server.counts["/denied-history"])
     let denied = expectation(description: "Denied same-document URL retires renderer")
     messenger.onEvent = { call in
-      guard call.method == "navigationBlocked", let event = call.arguments as? [String: Any], event["url"] as? String == origin + "/denied-history" else { return }
-      blocked.append(origin + "/denied-history"); denied.fulfill()
+      guard call.method == "navigationBlocked", let event = call.arguments as? [String: Any] else { return }
+      XCTAssertNil(event["url"]); XCTAssertNil(event["title"])
+      XCTAssertTrue(event["category"] is NSNull)
+      blocked.append(event["reasonCode"] as? String ?? "missing"); denied.fulfill()
     }
     web.evaluateJavaScript("history.pushState({}, '', '/denied-history')", completionHandler: nil)
     wait(for: [denied], timeout: 5)
-    XCTAssertEqual(blocked, [origin + "/denied-history"])
+    XCTAssertEqual(blocked, ["blockAdditionalRestriction"])
     XCTAssertTrue(view.view().subviews.isEmpty, "A denied history URL must not leave an interactive renderer")
     XCTAssertNil(server.counts["/denied-history"])
   }

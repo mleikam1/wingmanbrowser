@@ -15,7 +15,9 @@ import '../support/protected_test_support.dart';
 /// Widget-only captures of synthetic fixture content, not native screenshots.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  const capture = bool.fromEnvironment('WINGMAN_WORKSPACE_UI_CAPTURES');
+  const capture =
+      bool.fromEnvironment('WINGMAN_WORKSPACE_UI_CAPTURES') ||
+      bool.fromEnvironment('WINGMAN_REDESIGN_CAPTURES');
   setUpAll(() async {
     final font = FontLoader('Roboto');
     for (final weight in ['Regular', 'Medium', 'Bold']) {
@@ -108,7 +110,9 @@ void main() {
           final image = await boundary.toImage(pixelRatio: 1);
           final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
           final file = File(
-            'docs/ui/screenshots/workspace-$id-${brightness.name}.png',
+            id.startsWith('redesign-')
+                ? 'docs/ui/redesign/screenshots/${id.substring(9)}-${brightness.name}.png'
+                : 'docs/ui/screenshots/workspace-$id-${brightness.name}.png',
           );
           await file.parent.create(recursive: true);
           await file.writeAsBytes(bytes!.buffer.asUint8List());
@@ -128,6 +132,7 @@ void main() {
           SpaceKind.sports => 's05',
         });
       }
+      await tester.ensureVisible(find.text('Rename'));
       await tester.tap(find.text('Rename'));
       await snapshot('s02');
       await tester.tap(find.text('Cancel'));
@@ -139,6 +144,30 @@ void main() {
       await tester.tap(find.text('Keep working'));
       await tester.pumpAndSettle();
       expect(model.task(taskId)!.status, FinishStatus.active);
+      await model.updateSpace(
+        spaces[SpaceKind.homeProjects]!,
+        notes:
+            'Measure the room. Keep the window clear. Choose one useful next step.',
+      );
+      await model.addChecklist(
+        spaces[SpaceKind.homeProjects]!,
+        'Measure the room',
+        isTask: false,
+      );
+      await model.addChecklist(
+        spaces[SpaceKind.homeProjects]!,
+        'Compare lighting options',
+        isTask: false,
+      );
+      await model.updateTask(taskId, spaceId: spaces[SpaceKind.homeProjects]);
+      await model.configureTimer(taskId, minutes: 25);
+      for (final width in [320.0, 390.0, 430.0, 768.0, 1024.0, 1440.0]) {
+        tester.view.physicalSize = Size(width, width > 1000 ? 1080 : 844);
+        await mount(space: spaces[SpaceKind.homeProjects]);
+        await snapshot('redesign-03-spaces-${width.toInt()}');
+        await mount(task: taskId);
+        await snapshot('redesign-04-focus-${width.toInt()}');
+      }
       await tester.pumpWidget(const SizedBox());
       model.dispose();
       journal.dispose();

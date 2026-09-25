@@ -1,0 +1,28 @@
+{
+  "source": "Wingman_Codex_Implementation_Kit/Wingman_UI_Redesign",
+  "files": {
+    ".DS_Store": "706b152522d7319b46cbdbef20c59f2b18d07c5d2f144558392431c7aef7f3bc",
+    "START_HERE.txt": "e3089720d7e4056211cb4c9759d8ef16faae6364a74a1880ff21c55bb33fdbbc",
+    "Wingman_Design_Review_and_Handoff.md": "6aebea64d1271a9b779c5d6eed5e2e958d6a62dc601d9c8ce8ae29538fea5a67",
+    "Wingman_Visual_Concepts.html": "336eb86ca4a9a0308f8c03c9eba1214c8d31fbf03864ddf78d48c399fd239aaf",
+    "source/mobile-home.html": "d18bce1240541b0405ab76bca5e78f111da44ce5adadd9e9034e3b4bc7ef3ff1",
+    "source/mobile-boundary.html": "e6829239ce39cd0d10829ce060735819c47d67ef25638bd97e0152cbce814e6d",
+    "source/concept_styles.css": "7ff45192bab2f5ab0071e1b3bccc623f2c135b3c7d3778c26f18c47a7d8f9f2f",
+    "source/mobile-wingman.html": "7d1a93b4036dfd8a5f2efbdd8046782e630df4b22722cc18fc8b796ef9d75807",
+    "source/render_check.json": "e6b59f77d05ecfdb5490338a1dea8d06b5f200e9249ecdc0eaab052b0f2b1e15",
+    "source/manifest.json": "6cdcb973dc53c4dc9aa693eea72e4e8d60dd920ab433e6a6ea59c23586009f0f",
+    "source/build_concepts.py": "91f1a9883afd388d13bf29d17392666eff161cf3bd4db2bfc54bd9ef81c93bd9",
+    "screens/mobile-wingman.png": "01e391a23b69324d93a8558aaec1134b702e18345344ab294ff0c7298d5366e8",
+    "screens/01-home.png": "34644a4959495d09c67a0fdfe7336a0e2b40a6492e8419859f7c2ec905488798",
+    "screens/09-mobile.png": "277dc30ca145b2ff18320ad6b1b1bde086e5619f8bcc5a47acacd50792f7f4cf",
+    "screens/07-commit.png": "b5098ad382d04f59abecb466a6aabbbbff9a9a3da3cb3b868d1f160e619a75ea",
+    "screens/05-privacy.png": "c9f044237a3053c3614be587ad82cd5dfc407c84d40072c03c48fd0927e6ef2e",
+    "screens/03-spaces.png": "b51752c4d80567d21ec9da5a91f6dceb2c1fc92cb17b5cbb6d044558e8076fea",
+    "screens/04-focus.png": "5cc957c68cb2df5bf4457d8512dda2fdd67e6272d72648b0209a937d17d29ef4",
+    "screens/08-settings.png": "755c88ea0f81193997d46bfab6663d1bd0e6d6a59f04a3368372fc7fbf186cae",
+    "screens/mobile-boundary.png": "f66eb40006a44b4833006a1bcb10f39efa87f3391901e46af1788e5e9e14c5f4",
+    "screens/06-blocked.png": "7a5753e2f18853930ac50ccae2aeadfdcee88d30d499dd0ad4960ac43211a77a",
+    "screens/02-browse.png": "2ec017d33c50678b79f04c5ddd0a79349c13af5b228176e57bbd1bf563f2758e",
+    "screens/mobile-home.png": "77dcfb75301440f7c2fe3090ddee343a5af5181939b81e65dc0f2c7ccf2393a8"
+  }
+}

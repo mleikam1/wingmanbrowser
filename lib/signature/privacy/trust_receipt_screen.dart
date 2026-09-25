@@ -93,9 +93,32 @@ class _TrustReceiptScreenState extends State<TrustReceiptScreen>
     }
   }
 
+  Widget _section(String title, List<Widget> children) => Padding(
+    padding: const EdgeInsets.only(top: 20),
+    child: Material(
+      color: WingmanTokens.of(context).surface,
+      shape: RoundedRectangleBorder(
+        side: BorderSide(color: WingmanTokens.of(context).divider),
+        borderRadius: BorderRadius.circular(22),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 14),
+            ...children,
+          ],
+        ),
+      ),
+    ),
+  );
+
   @override
   Widget build(BuildContext context) => WingmanPage(
     title: 'Trust Receipt',
+    maxWidth: 1000,
     scrollable: false,
     child: _covered || !widget.canContinue()
         ? const SingleChildScrollView(
@@ -124,55 +147,58 @@ class _TrustReceiptScreenState extends State<TrustReceiptScreen>
                     message:
                         'Review before copying. This receipt contains activity categories and hourly times, never queries, page text or full addresses. Nothing is submitted by viewing it.',
                   ),
-                  const WingmanSection(title: 'Configured behavior'),
-                  const Text(
-                    'Settings describe intent. They do not prove that a request did or did not occur.',
-                  ),
-                  for (final line in receipt.configured)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: Text(line),
+                  _section('Configured behavior', [
+                    const Text(
+                      'Settings describe intent. They do not prove that a request did or did not occur.',
                     ),
-                  const WingmanSection(title: 'Observed activity'),
-                  if (receipt.events.isEmpty)
-                    const WingmanEmptyState(
-                      icon: Icons.receipt_long_outlined,
-                      title: 'No recorded feature events',
-                      message:
-                          'No feature events are recorded in this window. This does not establish that no network activity occurred.',
-                    ),
-                  for (final event in receipt.events.reversed)
-                    ExpansionTile(
-                      tilePadding: EdgeInsets.zero,
-                      title: Text(receipt.describe(event)),
-                      subtitle: Text(
-                        '${event.hour.toIso8601String()} · rounded UTC hour',
+                    for (final line in receipt.configured)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Text(line),
                       ),
-                      childrenPadding: const EdgeInsets.only(bottom: 16),
-                      expandedAlignment: Alignment.centerLeft,
-                      children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Purpose category: ${event.activity.label}'),
-                            Text(
-                              'Destination category: ${event.destination.label}',
-                            ),
-                            Text('Recorded outcome: ${event.outcome.name}'),
-                            const SizedBox(height: 8),
-                            const Text(
-                              'This observation does not contain the underlying text or address. It cannot establish complete network coverage or provider retention. Receipt export is optional and requires your action.',
-                            ),
-                          ],
+                  ]),
+                  _section('Observed activity', [
+                    if (receipt.events.isEmpty)
+                      const WingmanEmptyState(
+                        icon: Icons.receipt_long_outlined,
+                        title: 'No recorded feature events',
+                        message:
+                            'No feature events are recorded in this window. This does not establish that no network activity occurred.',
+                      ),
+                    for (final event in receipt.events.reversed)
+                      ExpansionTile(
+                        tilePadding: EdgeInsets.zero,
+                        title: Text(receipt.describe(event)),
+                        subtitle: Text(
+                          '${event.hour.toIso8601String()} · rounded UTC hour',
                         ),
-                      ],
-                    ),
-                  const WingmanSection(title: 'What this cannot observe'),
-                  for (final line in receipt.limitations)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: Text(line),
-                    ),
+                        childrenPadding: const EdgeInsets.only(bottom: 16),
+                        expandedAlignment: Alignment.centerLeft,
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Purpose category: ${event.activity.label}'),
+                              Text(
+                                'Destination category: ${event.destination.label}',
+                              ),
+                              Text('Recorded outcome: ${event.outcome.name}'),
+                              const SizedBox(height: 8),
+                              const Text(
+                                'This observation does not contain the underlying text or address. It cannot establish complete network coverage or provider retention. Receipt export is optional and requires your action.',
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                  ]),
+                  _section('What this cannot observe', [
+                    for (final line in receipt.limitations)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Text(line),
+                      ),
+                  ]),
                   const SizedBox(height: 12),
                   FilledButton.icon(
                     onPressed: _copying ? null : _copy,

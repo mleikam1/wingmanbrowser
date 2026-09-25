@@ -13,6 +13,7 @@ class BrowserDock extends StatelessWidget {
     required this.onLibrary,
     required this.onSpaces,
     this.onBack,
+    this.onCompanion,
     this.onForward,
     this.tabCount = 1,
     this.resourceTitle,
@@ -24,7 +25,7 @@ class BrowserDock extends StatelessWidget {
     this.isLoading = false,
   });
   final VoidCallback onHome, onTabs, onMenu, onLibrary, onSpaces;
-  final VoidCallback? onBack, onForward, onAddress, onPageInfo;
+  final VoidCallback? onBack, onForward, onAddress, onPageInfo, onCompanion;
   final int tabCount;
   final String? resourceTitle;
   final bool isPrivate;
@@ -40,7 +41,7 @@ class BrowserDock extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           const Divider(height: 1),
-          if (resourceTitle != null)
+          if (resourceTitle != null || onAddress != null)
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
               child: Row(
@@ -53,9 +54,18 @@ class BrowserDock extends StatelessWidget {
                   Expanded(
                     child: TextButton(
                       onPressed: onAddress,
-                      child: Text(resourceTitle!, textAlign: TextAlign.start),
+                      child: Text(
+                        resourceTitle ?? 'Address & search',
+                        textAlign: TextAlign.start,
+                      ),
                     ),
                   ),
+                  if (onCompanion != null)
+                    IconButton(
+                      tooltip: 'Your Wingman',
+                      onPressed: onCompanion,
+                      icon: const Icon(Icons.auto_awesome_outlined),
+                    ),
                   if (isLive)
                     IconButton(
                       tooltip: isLoading
@@ -64,7 +74,7 @@ class BrowserDock extends StatelessWidget {
                       onPressed: onReload,
                       icon: Icon(isLoading ? Icons.close : Icons.refresh),
                     )
-                  else
+                  else if (resourceTitle != null)
                     const Tooltip(
                       message: 'Installed text · no live page to reload',
                       child: Icon(Icons.offline_pin_outlined),

@@ -52,3 +52,6 @@ app.*.map.json
 android/.kotlin/
 work/
 *.log
+
+# Local distributable builds from the redesign task; source/evidence stay tracked.
+/artifacts/

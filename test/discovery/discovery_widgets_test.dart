@@ -196,7 +196,7 @@ void main() {
   );
 
   testWidgets(
-    'Home keeps live discovery after Launchpad and before offline collections with optional artwork separate',
+    'Home keeps chosen collections before secondary discovery with optional artwork separate',
     (tester) async {
       await tester.pumpWidget(
         _app(
@@ -232,8 +232,14 @@ void main() {
       final launchpad = tester.getTopLeft(find.text('Launchpad marker')).dy;
       final collections = tester.getTopLeft(find.text('Collections marker')).dy;
       final discovery = tester.getTopLeft(find.text('Discovery marker')).dy;
-      expect(launchpad, lessThan(discovery));
-      expect(discovery, lessThan(collections));
+      expect(UiPreferences().moduleOrder, [
+        'shortcuts',
+        'task',
+        'spaces',
+        'official',
+      ]);
+      expect(launchpad, lessThan(collections));
+      expect(collections, lessThan(discovery));
       expect(tester.takeException(), isNull);
     },
   );

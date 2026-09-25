@@ -1,3 +1,5 @@
+> Historical document below. Current redesign behavior and limitations are in [redesign privacy and capabilities](ui/redesign/PRIVACY_CAPABILITIES.md), [consumer browser recovery](CONSUMER_BROWSER_RECOVERY.md) and [protection coverage](PROTECTION_COVERAGE.md). Optional Guard/bypass and old storage descriptions below are not current product claims.
+
 > Historical Phase 1–3A document. Optional Guard, live browsing, external search, Reader and ad behavior described here is superseded by [permanent protection 0.4](RELEASE_READINESS.md). It is not a current capability or release claim.
 
 # Wingman privacy architecture

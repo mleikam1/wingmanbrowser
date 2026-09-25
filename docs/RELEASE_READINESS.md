@@ -1,3 +1,5 @@
+> Current candidate: the 2026-09-25 UI redesign is undergoing final verification; native macOS work remains separate. See [release notes](ui/redesign/RELEASE_NOTES.md), [implementation status](ui/redesign/IMPLEMENTATION_STATUS.md) and [platform matrix](ui/redesign/PLATFORM_MATRIX.md). Everything below is historical 0.5/0.4 milestone evidence, including test totals, disabled capabilities and packaging failures; it does not describe current release readiness.
+
 # Release readiness
 
 Status: **not release-ready**. Version 0.5 adds the consumer signature milestone locally on `signature-features/consumer`: 326 host tests pass, analysis is clean, Android debug/iOS simulator/web builds pass, and native static handoff start/restart checks pass. Official Routes remains identity-only and Compatibility Repair has a tested fixture/empty production registry. Live browsing and Android release packaging remain unavailable. The initial Android same-process root reopen timeout and slow iOS reopen require further hardening. See [current signature status](SIGNATURE_FEATURES_STATUS.md) for exact results, limits and runtime evidence.

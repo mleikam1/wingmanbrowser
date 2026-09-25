@@ -5,6 +5,9 @@ import '../../signature/storage/document_store.dart';
 /// Packaged artwork only. Values never contain paths or remote addresses.
 enum HomeArtwork { none, earthrise, forest, creative }
 
+/// Local copy tone only. Never changes permissions, protection or tools.
+enum CompanionTone { gary, wallace, betty }
+
 @immutable
 class UiPreferences {
   UiPreferences({
@@ -12,19 +15,25 @@ class UiPreferences {
     this.showTask = true,
     this.showSpaces = true,
     this.homeArtwork = HomeArtwork.none,
+    this.companionTone = CompanionTone.gary,
+    this.reduceMotion = false,
     Iterable<String> shortcutIds = const [],
     Iterable<String> moduleOrder = modules,
   }) : shortcutIds = List.unmodifiable(shortcutIds),
        moduleOrder = List.unmodifiable(moduleOrder);
-  static const modules = ['shortcuts', 'official', 'task', 'spaces'];
+  static const modules = ['shortcuts', 'task', 'spaces', 'official'];
   final bool showOfficial, showTask, showSpaces;
   final HomeArtwork homeArtwork;
+  final CompanionTone companionTone;
+  final bool reduceMotion;
   final List<String> shortcutIds, moduleOrder;
   UiPreferences copyWith({
     bool? showOfficial,
     bool? showTask,
     bool? showSpaces,
     HomeArtwork? homeArtwork,
+    CompanionTone? companionTone,
+    bool? reduceMotion,
     Iterable<String>? shortcutIds,
     Iterable<String>? moduleOrder,
   }) => UiPreferences(
@@ -32,15 +41,19 @@ class UiPreferences {
     showTask: showTask ?? this.showTask,
     showSpaces: showSpaces ?? this.showSpaces,
     homeArtwork: homeArtwork ?? this.homeArtwork,
+    companionTone: companionTone ?? this.companionTone,
+    reduceMotion: reduceMotion ?? this.reduceMotion,
     shortcutIds: shortcutIds ?? this.shortcutIds,
     moduleOrder: moduleOrder ?? this.moduleOrder,
   );
   Map<String, Object?> toJson() => {
-    'version': 1,
+    'version': 2,
     'showOfficial': showOfficial,
     'showTask': showTask,
     'showSpaces': showSpaces,
     'homeArtwork': homeArtwork.name,
+    'companionTone': companionTone.name,
+    'reduceMotion': reduceMotion,
     'shortcutIds': shortcutIds,
     'moduleOrder': moduleOrder,
   };
@@ -53,10 +66,18 @@ class UiPreferences {
       'shortcutIds',
       'moduleOrder',
     };
-    const keys = {...requiredKeys, 'homeArtwork'};
+    const keys = {
+      ...requiredKeys,
+      'homeArtwork',
+      'companionTone',
+      'reduceMotion',
+    };
     if (row.keys.toSet().difference(keys).isNotEmpty ||
         !row.keys.toSet().containsAll(requiredKeys) ||
-        row['version'] != 1 ||
+        (row['version'] != 1 && row['version'] != 2) ||
+        (row.containsKey('reduceMotion') && row['reduceMotion'] is! bool) ||
+        (row.containsKey('companionTone') &&
+            !CompanionTone.values.any((v) => v.name == row['companionTone'])) ||
         row['showOfficial'] is! bool ||
         row['showTask'] is! bool ||
         row['showSpaces'] is! bool ||
@@ -77,6 +98,11 @@ class UiPreferences {
       throw const FormatException('Invalid Home layout.');
     }
     return UiPreferences(
+      companionTone: CompanionTone.values.firstWhere(
+        (v) => v.name == row['companionTone'],
+        orElse: () => CompanionTone.gary,
+      ),
+      reduceMotion: row['reduceMotion'] == true,
       showOfficial: row['showOfficial'] as bool,
       showTask: row['showTask'] as bool,
       showSpaces: row['showSpaces'] as bool,

@@ -61,7 +61,7 @@ void main() {
       );
       expect(find.textContaining('freshness: expired'), findsOneWidget);
       expect(copied, isNull);
-      await tester.scrollUntilVisible(find.text('Copy reviewed receipt'), 400);
+      await show(tester, find.text('Copy reviewed receipt'));
       await tester.tap(find.text('Copy reviewed receipt'));
       await tester.pumpAndSettle();
       expect(copied, contains('freshness: expired'));
@@ -88,7 +88,7 @@ void main() {
           ),
         ),
       );
-      await tester.scrollUntilVisible(find.text('Copy reviewed receipt'), 400);
+      await show(tester, find.text('Copy reviewed receipt'));
       await tester.tap(find.text('Copy reviewed receipt'));
       await tester.pumpAndSettle();
       expect(data.events.single.outcome, PrivacyOutcome.failed);
@@ -118,7 +118,7 @@ void main() {
           ),
         ),
       );
-      await tester.scrollUntilVisible(find.text('Copy reviewed receipt'), 400);
+      await show(tester, find.text('Copy reviewed receipt'));
       available = false;
       await tester.tap(find.text('Copy reviewed receipt'));
       await tester.pump();

@@ -1,3 +1,5 @@
+> Historical platform evidence below. Use the [redesign acceptance matrix](ui/redesign/PLATFORM_MATRIX.md) and [native audit](ui/redesign/NATIVE_AUDIT.md) for the current candidate. Earlier disabled-engine status and device combinations below are not current acceptance claims.
+
 # Platform capability matrix — Phase 3A
 
 > Historical Phase 1–3A evidence. The mandatory bundled-content milestone removes live browsing, WebView plugins, live Reader extraction, authentication and downloads. The current boundary and tests are in [SECURITY_TEST_MATRIX.md](SECURITY_TEST_MATRIX.md); capabilities described below are retired, not available product features.

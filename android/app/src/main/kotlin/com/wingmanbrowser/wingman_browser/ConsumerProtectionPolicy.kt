@@ -17,7 +17,9 @@ internal class ConsumerProtectionPolicy(context: Context) {
         private val DOMAIN_LABEL = Regex("^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$")
         val REQUIRED = setOf("sexual-explicit", "gambling", "alcohol-promotion", "recreational-drug-promotion", "tobacco-nicotine", "security-threat")
     }
-    data class Decision(val allowed: Boolean, val url: String, val reason: String? = null)
+    enum class ReasonCode { blockMandatoryCategory, blockSecurityThreat, blockAdditionalRestriction, blockPolicyUnavailable, blockUnsupportedCapability }
+    data class Decision(val allowed: Boolean, val url: String, val reason: String? = null,
+                        val reasonCode: ReasonCode = ReasonCode.blockUnsupportedCapability, val category: String? = null)
     internal data class PathRule(val host: String, val path: String, val category: String)
     internal data class Snapshot(val sequence: Long, val sha256: String, val domains: Map<String, String>, val paths: List<PathRule>, val trackers: Set<String>)
     private val context = context
@@ -85,25 +87,25 @@ internal class ConsumerProtectionPolicy(context: Context) {
     }
     private fun suffixes(host: String): Sequence<String> = generateSequence(host) { value -> value.substringAfter('.', "").ifEmpty { null } }
     fun decide(raw: String, topLevel: Boolean = true, initiator: String? = null, normalizeSearch: Boolean = true): Decision {
-        fun deny(reason: String) = Decision(false, raw, reason)
-        if (!valid()) return deny("Mandatory protection needs recovery.")
+        fun deny(reason: String, code: ReasonCode = ReasonCode.blockUnsupportedCapability, category: String? = null) = Decision(false, raw, reason, code, category)
+        if (!valid()) return deny("Mandatory protection needs recovery.", ReasonCode.blockPolicyUnavailable)
         val uri = canonicalWeb(raw) ?: return deny("This address is not a supported web destination.")
         val host = uri.host!!.lowercase(Locale.ROOT).trimEnd('.')
-        val baseline = snapshot ?: return deny("Mandatory protection needs recovery.")
+        val baseline = snapshot ?: return deny("Mandatory protection needs recovery.", ReasonCode.blockPolicyUnavailable)
         val limits = restrictions
-        if (topLevel && uri.buildUpon().fragment(null).build().toString() in limits.urls) return deny("Blocked by an additional restriction.")
-        if (limits.searchBlocked && (host == "duckduckgo.com" || host.endsWith(".duckduckgo.com") || host in setOf("duck.com", "ddg.gg", "google.com", "www.google.com", "bing.com", "www.bing.com", "search.brave.com"))) return deny("Web search is restricted.")
+        if (topLevel && uri.buildUpon().fragment(null).build().toString() in limits.urls) return deny("Blocked by an additional restriction.", ReasonCode.blockAdditionalRestriction)
+        if (limits.searchBlocked && (host == "duckduckgo.com" || host.endsWith(".duckduckgo.com") || host in setOf("duck.com", "ddg.gg", "google.com", "www.google.com", "bing.com", "www.bing.com", "search.brave.com"))) return deny("Web search is restricted.", ReasonCode.blockAdditionalRestriction)
         if ((host == "duckduckgo.com" || host.endsWith(".duckduckgo.com")) && (uri.path == "/ac" || uri.path.orEmpty().startsWith("/ac/"))) return deny("Search suggestions are disabled.")
         if (topLevel && normalizeSearch) {
             val normalized = normalizeSearch(uri) ?: return deny("Use a supported strict search without shortcut redirects.")
             if (normalized != uri.toString()) return decide(normalized, true, initiator, false)
         }
         suffixes(host).forEach { suffix ->
-            baseline.domains[suffix]?.let { return deny("Blocked by mandatory ${it.replace('-', ' ')} protection.") }
-            if (suffix in limits.domains) return deny("Blocked by an additional restriction.")
+            baseline.domains[suffix]?.let { return deny("Blocked by mandatory ${it.replace('-', ' ')} protection.", if (it == "security-threat") ReasonCode.blockSecurityThreat else ReasonCode.blockMandatoryCategory, it) }
+            if (suffix in limits.domains) return deny("Blocked by an additional restriction.", ReasonCode.blockAdditionalRestriction)
         }
         val path = try { URI(null, null, URI(uri.toString()).path, null).normalize().path.lowercase(Locale.ROOT).trimEnd('/') } catch (_: Exception) { return deny("Invalid destination path.") }
-        baseline.paths.firstOrNull { (host == it.host || host.endsWith(".${it.host}")) && (path == it.path || path.startsWith("${it.path}/")) }?.let { return deny("Blocked by mandatory ${it.category.replace('-', ' ')} protection.") }
+        baseline.paths.firstOrNull { (host == it.host || host.endsWith(".${it.host}")) && (path == it.path || path.startsWith("${it.path}/")) }?.let { return deny("Blocked by mandatory ${it.category.replace('-', ' ')} protection.", if (it.category == "security-threat") ReasonCode.blockSecurityThreat else ReasonCode.blockMandatoryCategory, it.category) }
         if (!topLevel && host != canonicalWeb(initiator.orEmpty())?.host && suffixes(host).any { it in baseline.trackers }) return deny("Known tracking resource blocked.")
         return Decision(true, uri.toString())
     }

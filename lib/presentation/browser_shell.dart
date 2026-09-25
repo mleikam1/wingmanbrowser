@@ -27,6 +27,9 @@ import '../signature/handoff/handoff_gate.dart';
 import '../signature/official_routes/review_request_screen.dart';
 import 'components/wingman_components.dart';
 import 'components/browser_chrome.dart';
+import 'components/expanded_browser_chrome.dart';
+import 'components/wingman_task_panel.dart';
+import 'components/focus_nudge.dart';
 import 'components/wingman_route.dart';
 import 'app_route_observer.dart';
 import 'home/home_screen.dart';
@@ -90,7 +93,9 @@ class _BrowserShellState extends State<BrowserShell>
   List<DiscoveryTab> get _tabs => _session.tabs;
   int get _activeTab => _session.active;
   set _activeTab(int v) {
+    _companion = null;
     _session.active = v;
+    if (mounted) _originChanges.value++;
     _syncLiveContentContext();
   }
 
@@ -118,6 +123,9 @@ class _BrowserShellState extends State<BrowserShell>
   // Four live renderers; other tabs restore their last address on selection.
   static const _maximumLiveTabs = 4;
   DateTime? _lastFeedAttempt;
+  final _originChanges = ValueNotifier<int>(0);
+  _CompanionCapture? _companion;
+  bool _focusNudgeOpen = false;
 
   int _featureRouteDepth = 0;
   int _feedOwnerEpoch = 0;
@@ -240,6 +248,7 @@ class _BrowserShellState extends State<BrowserShell>
     if (_session.privateServices == null) {
       final service = SignatureServices(
         store: MemorySignatureDocumentStore(),
+        websiteEligible: (_) => false,
         eligible: (id) => _eligibleId(id, private: true),
         isPrivate: true,
         launchpadEligibility: LaunchpadEligibilityService(
@@ -268,7 +277,25 @@ class _BrowserShellState extends State<BrowserShell>
     ValueChanged<Route<void>>? onRoute,
   }) async {
     FocusScope.of(context).unfocus();
-    final route = WingmanRoute<void>(builder: (_) => page);
+    final ui = _features?.ui;
+    final route = WingmanRoute<void>(
+      reduceMotion: () =>
+          ui?.snapshot.reduceMotion == true ||
+          MediaQuery.disableAnimationsOf(context),
+      builder: (routeContext) => ui == null
+          ? page
+          : ListenableBuilder(
+              listenable: ui,
+              builder: (context, _) => MediaQuery(
+                data: MediaQuery.of(context).copyWith(
+                  disableAnimations:
+                      MediaQuery.disableAnimationsOf(context) ||
+                      ui.snapshot.reduceMotion,
+                ),
+                child: page,
+              ),
+            ),
+    );
     onRoute?.call(route);
     setState(() => _featureRouteDepth++);
     try {
@@ -479,6 +506,7 @@ class _BrowserShellState extends State<BrowserShell>
     }
     final service = _features!;
     final origin = _tab;
+    final pageCapture = _CompanionCapture(origin, service, origin.currentEntry);
     var active = true;
     Route<void>? originatingRoute;
     bool currentIntent() =>
@@ -496,7 +524,33 @@ class _BrowserShellState extends State<BrowserShell>
           readingIds: () => _ephemeral
               ? const []
               : widget.state.protectedPreferences.readingIds.toList(),
-          onOpenResource: _openFeatureResource,
+          onOpenResource: (id) {
+            if (currentIntent() && _validOrigin(origin)) {
+              _openFeatureResource(id);
+            }
+          },
+          onOpenSavedPage: (page) async {
+            if (!currentIntent() ||
+                !_validOrigin(origin) ||
+                !service.workspaces.canOpenPage(page)) {
+              return;
+            }
+            _navigateWebsite(page.uri);
+          },
+          onSaveCurrentPage: (id, isTask) =>
+              _saveCapturedPage(pageCapture, id, isTask: isTask),
+          onParkOtherTabs: (taskId, park) async {
+            if (!currentIntent() || !_validOrigin(origin)) return;
+            setState(() {
+              if (park) {
+                _session.parkOtherTabs(taskId, private: origin.isPrivate);
+              } else {
+                _session.unparkTabs(taskId, private: origin.isPrivate);
+              }
+            });
+          },
+          parkedTabCount: (taskId) =>
+              _session.parkedTabs(taskId, private: origin.isPrivate).length,
           onResumeTask: (task) =>
               _resumeTask(task, service, origin, currentIntent),
           onAssociateCurrentTab: (id) => _associateTask(id, service, origin),
@@ -530,6 +584,7 @@ class _BrowserShellState extends State<BrowserShell>
     SignatureServices service,
     DiscoveryTab origin,
   ) async {
+    if (!_validOrigin(origin)) return;
     final model = service.workspaces;
     if (origin.taskId != null && origin.taskId != taskId) {
       throw StateError('Detach this tab from its other task first.');
@@ -542,7 +597,15 @@ class _BrowserShellState extends State<BrowserShell>
           ? resource
           : null,
     );
-    if (_tabs.contains(origin)) origin.taskId = taskId;
+    if (mounted &&
+        _tabs.contains(origin) &&
+        model.task(taskId)?.status != FinishStatus.finished &&
+        model.task(taskId)?.tabs.any((t) => t.tabId == origin.id) == true &&
+        (origin.isPrivate
+            ? identical(_session.privateServices, service)
+            : identical(widget.signatures, service))) {
+      origin.taskId = taskId;
+    }
     if (mounted) setState(() {});
   }
 
@@ -608,6 +671,7 @@ class _BrowserShellState extends State<BrowserShell>
     bool private,
   ) async {
     await service.workspaces.deleteTask(taskId);
+    _session.unparkTabs(taskId, private: private);
     for (final tab in _tabs.where(
       (t) => t.taskId == taskId && t.isPrivate == private,
     )) {
@@ -634,6 +698,7 @@ class _BrowserShellState extends State<BrowserShell>
     bool closeTabs, {
     required bool private,
   }) async {
+    _session.unparkTabs(task.id, private: private);
     if (closeTabs) {
       _session.closeTaskTabs(task.id, private: private);
       if (mounted) {
@@ -674,6 +739,7 @@ class _BrowserShellState extends State<BrowserShell>
   }
 
   void _recordTaskNavigation() {
+    if (mounted) _originChanges.value++;
     _persistSession();
     final task = _tab.taskId, service = _features;
     if (task != null && service?.initialized == true) {
@@ -733,6 +799,7 @@ class _BrowserShellState extends State<BrowserShell>
     if (widget.session == null) _session.dispose();
     _compatibility?.dispose();
     _native.dispose();
+    _originChanges.dispose();
     _queryController.dispose();
     for (final controller in _scrolls.values) {
       controller.dispose();
@@ -782,7 +849,10 @@ class _BrowserShellState extends State<BrowserShell>
   }
 
   void _changed() {
-    if (mounted) setState(() {});
+    if (mounted) {
+      _originChanges.value++;
+      setState(() {});
+    }
   }
 
   void _pruneScrolls() {
@@ -809,8 +879,18 @@ class _BrowserShellState extends State<BrowserShell>
     if (state == AppLifecycleState.resumed) {
       unawaited(_refreshNativeCapabilities());
     }
-    if (state != AppLifecycleState.resumed) unawaited(_session.flush());
+    if (state != AppLifecycleState.resumed) {
+      unawaited(_session.flush());
+      for (final service in [widget.signatures, _session.privateServices]) {
+        if (service?.initialized == true) {
+          unawaited(
+            service!.workspaces.checkpointTimers().catchError((Object _) {}),
+          );
+        }
+      }
+    }
     if (mounted) setState(() => _covered = state != AppLifecycleState.resumed);
+    if (mounted) _originChanges.value++;
     _syncLiveContentContext();
   }
 
@@ -884,6 +964,7 @@ class _BrowserShellState extends State<BrowserShell>
     String? openerTabId,
     _LiveFeedLocation? returnToFeed,
     bool companionArticle = false,
+    bool focusChecked = false,
   }) {
     if (!_validOrigin(_tab)) return;
     try {
@@ -921,6 +1002,11 @@ class _BrowserShellState extends State<BrowserShell>
     final decision = _websiteDecision(uri);
     if (!decision.isAllowed) {
       _deny(decision);
+      return;
+    }
+    if (!focusChecked &&
+        windowToken == null &&
+        _maybeFocusNudge(uri, newTab: newTab, returnToFeed: returnToFeed)) {
       return;
     }
     if (newTab && _tabs.length >= 12) {
@@ -965,6 +1051,61 @@ class _BrowserShellState extends State<BrowserShell>
       _notice = null;
     });
     _recordTaskNavigation();
+  }
+
+  bool _maybeFocusNudge(
+    Uri uri, {
+    required bool newTab,
+    _LiveFeedLocation? returnToFeed,
+  }) {
+    final service = _features;
+    if (service?.initialized != true) return false;
+    final task = service!.workspaces.shouldNudge(uri);
+    if (task == null) return false;
+    if (_focusNudgeOpen) return true;
+    final owner = _tab;
+    final capture = _CompanionCapture(owner, service, owner.currentEntry);
+    _focusNudgeOpen = true;
+    unawaited(() async {
+      try {
+        final answer = await showFocusNudge(
+          context,
+          goal: task.goal,
+          changes: _originChanges,
+          canContinue: () => _validCompanion(capture),
+          site: uri.host,
+          canSave:
+              !owner.isPrivate && productEdition == ProductEdition.consumer,
+        );
+        if (!_validCompanion(capture) ||
+            service.workspaces.task(task.id)?.status != FinishStatus.active) {
+          return;
+        }
+        service.workspaces.dismissNudge(task.id, uri);
+        if (answer == 'continue') {
+          // Re-enter the mandatory policy gate immediately before navigation.
+          _navigateWebsite(
+            uri,
+            newTab: newTab,
+            returnToFeed: returnToFeed,
+            focusChecked: true,
+          );
+        } else if (answer == 'save') {
+          await _run(
+            () => service.workspaces.savePageToTask(
+              task.id,
+              uri,
+              canContinue: () => _validCompanion(capture),
+            ),
+          );
+        } else if (answer == 'task') {
+          _workspaces(taskId: task.id);
+        }
+      } finally {
+        _focusNudgeOpen = false;
+      }
+    }());
+    return true;
   }
 
   Widget _websiteView(DiscoveryTab owner, Uri request, {required bool active}) {
@@ -1018,6 +1159,9 @@ class _BrowserShellState extends State<BrowserShell>
         if (wasActive && openerIndex >= 0) {
           setState(() => _activeTab = openerIndex);
         }
+      },
+      onPolicyBlocked: (decision) {
+        if (_validOrigin(owner)) _deny(decision);
       },
       onBlocked: (message) {
         if (_validOrigin(owner)) {
@@ -1166,6 +1310,13 @@ class _BrowserShellState extends State<BrowserShell>
   }
 
   void _deny([PolicyDecision? rejected]) {
+    final owner = _tab, service = _features;
+    final task = service?.workspaces.task(owner.taskId ?? '');
+    void capturedHome() {
+      if (!_validOrigin(owner)) return;
+      _returnHome();
+    }
+
     FocusScope.of(context).unfocus();
     setState(() {
       _destination = 0;
@@ -1188,14 +1339,35 @@ class _BrowserShellState extends State<BrowserShell>
     _pushFeature(
       PolicyStateView(
         decision: decision,
-        onHome: _returnHome,
+        taskTitle: task?.goal,
+        taskNextStep: task?.checklist.where((s) => !s.done).firstOrNull?.text,
+        taskProgress: task == null
+            ? null
+            : '${task.checklist.where((s) => s.done).length} of ${task.checklist.length} steps complete',
+        onResumeTask: task == null
+            ? null
+            : () {
+                if (!_validOrigin(owner) ||
+                    service!.workspaces.task(task.id) == null) {
+                  return;
+                }
+                Navigator.of(context).popUntil((r) => r.isFirst);
+                _workspaces(taskId: task.id);
+              },
+        onHome: capturedHome,
         onExplore: () {
           Navigator.of(context).popUntil((r) => r.isFirst);
           _explore();
         },
-        onBack: () => Navigator.pop(context),
-        onRequestReview: _review,
-        onHelpNow: _helpNow,
+        onBack: () {
+          if (_validOrigin(owner)) Navigator.pop(context);
+        },
+        onRequestReview: () {
+          if (_validOrigin(owner)) _review();
+        },
+        onHelpNow: () {
+          if (_validOrigin(owner)) _helpNow();
+        },
       ),
     );
   }
@@ -1295,9 +1467,161 @@ class _BrowserShellState extends State<BrowserShell>
 
   bool _validOrigin(DiscoveryTab origin) =>
       mounted &&
+      _tabs.contains(origin) &&
       !_covered &&
       _tab.id == origin.id &&
       !(widget.handoff?.blocksOwner ?? false);
+
+  void _addNativeTab() {
+    if (_tabs.length >= 12) {
+      _showTabs();
+      return;
+    }
+    setState(() {
+      _tabs.add(DiscoveryTab(isPrivate: _tab.isPrivate));
+      _activeTab = _tabs.length - 1;
+      _destination = 0;
+      _query = '';
+    });
+    _persistSession();
+  }
+
+  Future<void> _confirmCloseTab(DiscoveryTab owner) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialog) => AlertDialog(
+        title: const Text('Close this tab?'),
+        content: const Text('Unsaved page forms may be lost.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialog, false),
+            child: const Text('Keep tab'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialog, true),
+            child: const Text('Close tab'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && mounted && _tabs.contains(owner) && !_covered) {
+      _removeTabs([owner]);
+    }
+  }
+
+  bool _validCompanion(_CompanionCapture capture) =>
+      _validOrigin(capture.tab) &&
+      identical(_features, capture.service) &&
+      capture.tab.currentEntry == capture.entry;
+
+  Future<void> _saveCapturedPage(
+    _CompanionCapture capture,
+    String id, {
+    bool isTask = true,
+  }) async {
+    if (!_validCompanion(capture)) {
+      throw StateError('The originating page has changed.');
+    }
+    final page = capture.tab.website, resource = capture.tab.resourceId;
+    final model = capture.service.workspaces;
+    if (page != null) {
+      final status = _webStatuses[capture.tab.id];
+      if (capture.tab.isPrivate ||
+          kIsWeb ||
+          status?.committed != true ||
+          status?.url != page ||
+          !_websiteDecision(page, isPrivate: capture.tab.isPrivate).isAllowed) {
+        throw StateError(
+          'Only committed permitted pages in a normal native session can be saved.',
+        );
+      }
+      if (isTask) {
+        await model.savePageToTask(
+          id,
+          page,
+          canContinue: () => _validCompanion(capture),
+        );
+      } else {
+        await model.savePageToSpace(
+          id,
+          page,
+          canContinue: () => _validCompanion(capture),
+        );
+      }
+    } else if (resource != null &&
+        _eligibleId(resource, private: capture.tab.isPrivate)) {
+      if (isTask) {
+        await model.saveTaskResult(
+          id,
+          resource,
+          canContinue: () => _validCompanion(capture),
+        );
+      } else {
+        await model.saveToSpace(
+          id,
+          resource,
+          canContinue: () => _validCompanion(capture),
+        );
+      }
+    } else {
+      throw StateError('Open a permitted page before saving.');
+    }
+  }
+
+  void _showCompanion() {
+    if (!_toolsReady) {
+      _toolsUnavailable();
+      return;
+    }
+    final captured = _CompanionCapture(_tab, _features!, _tab.currentEntry);
+    if (MediaQuery.sizeOf(context).width >= 1280 &&
+        MediaQuery.textScalerOf(context).scale(16) < 24) {
+      setState(() => _companion = _companion == null ? captured : null);
+    } else {
+      showWingmanSheet<void>(
+        context: context,
+        builder: (sheet) =>
+            _companionPanel(captured, () => Navigator.pop(sheet)),
+      );
+    }
+  }
+
+  Widget _companionPanel(_CompanionCapture capture, VoidCallback close) =>
+      ListenableBuilder(
+        listenable: Listenable.merge([
+          _originChanges,
+          widget.state,
+          widget.policy,
+          capture.service.ui,
+        ]),
+        builder: (context, _) => WingmanTaskPanel(
+          key: ValueKey('wingman-${capture.tab.id}-${capture.entry}'),
+          controller: capture.service.workspaces,
+          canContinue: () => _validCompanion(capture),
+          initialTaskId:
+              capture.tab.taskId ?? capture.service.workspaces.activeTask?.id,
+          tone: capture.service.ui.snapshot.companionTone,
+          isPrivate: capture.tab.isPrivate,
+          onClose: close,
+          onSave: (id) => _saveCapturedPage(capture, id),
+          onAssociate: (id) => _associateTask(id, capture.service, capture.tab),
+          onFinishMode: () {
+            if (!_validCompanion(capture)) return;
+            close();
+            _workspaces(taskId: capture.tab.taskId, tasks: true);
+          },
+          onReviewTerms: () {
+            if (!_validCompanion(capture)) return;
+            close();
+            _commitReview();
+          },
+          onSpaces: () {
+            if (!_validCompanion(capture)) return;
+            close();
+            _workspaces();
+          },
+        ),
+      );
 
   Future<void> _focusedSearch() async {
     final origin = _tab;
@@ -1335,11 +1659,31 @@ class _BrowserShellState extends State<BrowserShell>
     final website = _tab.website;
     final websiteAllowed =
         website != null && _websiteDecision(website).isAllowed;
+    final nativeExpanded =
+        !kIsWeb &&
+        _capabilities.supported &&
+        MediaQuery.sizeOf(context).width >= 1024 &&
+        MediaQuery.sizeOf(context).height >= 640 &&
+        MediaQuery.textScalerOf(context).scale(16) < 24;
     final wide =
-        kIsWeb &&
+        (kIsWeb || nativeExpanded) &&
         MediaQuery.sizeOf(context).width >= WingmanTokens.compact &&
         MediaQuery.sizeOf(context).height >= 640 &&
         MediaQuery.textScalerOf(context).scale(16) < 28;
+    void reload() {
+      if (website == null || !websiteAllowed) return;
+      final engine = _webControllers[_tab.id];
+      if (engine == null) {
+        _navigateWebsite(website);
+        return;
+      }
+      unawaited(
+        _webStatuses[_tab.id]?.loading == true
+            ? engine.stop()
+            : engine.reload(),
+      );
+    }
+
     final body = Column(
       children: [
         if (!kIsWeb &&
@@ -1354,7 +1698,25 @@ class _BrowserShellState extends State<BrowserShell>
                 ? 'Private session · Same protection, no saved activity'
                 : 'Student experience · No account required',
           ),
-        Expanded(child: _contentBody(resource, website)),
+        Expanded(
+          child: Row(
+            children: [
+              Expanded(child: _contentBody(resource, website)),
+              if (_companion != null &&
+                  MediaQuery.sizeOf(context).width >= 1280 &&
+                  MediaQuery.textScalerOf(context).scale(16) < 24) ...[
+                const VerticalDivider(width: 1),
+                SizedBox(
+                  width: 360,
+                  child: _companionPanel(
+                    _companion!,
+                    () => setState(() => _companion = null),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
       ],
     );
     // The main route consumes Back only when browser history can move. A
@@ -1368,97 +1730,180 @@ class _BrowserShellState extends State<BrowserShell>
           _historyStep(false);
         }
       },
-      child: Scaffold(
-        body: SafeArea(
-          bottom: false,
-          child: wide
-              ? Row(
-                  children: [
-                    NavigationRail(
-                      selectedIndex: null,
-                      labelType: NavigationRailLabelType.all,
-                      leading: const Padding(
-                        padding: EdgeInsets.all(12),
-                        child: WingmanBrand(wordmark: false),
-                      ),
-                      onDestinationSelected: (value) => switch (value) {
-                        0 => _home(),
-                        1 => _library(),
-                        2 => _workspaces(),
-                        3 => _showTabs(),
-                        _ => _menu(),
-                      },
-                      destinations: const [
-                        NavigationRailDestination(
-                          icon: Icon(Icons.home_outlined),
-                          label: Text('Home'),
+      child: CallbackShortcuts(
+        bindings: {
+          const SingleActivator(LogicalKeyboardKey.keyL, meta: true):
+              _focusedSearch,
+          const SingleActivator(LogicalKeyboardKey.keyL, control: true):
+              _focusedSearch,
+        },
+        child: Scaffold(
+          body: SafeArea(
+            bottom: false,
+            child: Column(
+              children: [
+                if (nativeExpanded)
+                  ExpandedBrowserChrome(
+                    tabs: [
+                      for (final tab in _tabs.where(
+                        (t) =>
+                            t.isPrivate == _tab.isPrivate &&
+                            t.parkedForTaskId == null,
+                      ))
+                        BrowserTabChip(
+                          id: tab.id,
+                          label: tab.isPrivate
+                              ? 'Private tab'
+                              : tab.website?.host ??
+                                    widget.policy
+                                        .resource(tab.resourceId ?? '')
+                                        ?.title ??
+                                    'New tab',
+                          selected: tab == _tab,
+                          isPrivate: tab.isPrivate,
+                          onSelect: () =>
+                              setState(() => _activeTab = _tabs.indexOf(tab)),
+                          onClose: () => _confirmCloseTab(tab),
                         ),
-                        NavigationRailDestination(
-                          icon: Icon(Icons.bookmark_border),
-                          label: Text('Library'),
-                        ),
-                        NavigationRailDestination(
-                          icon: Icon(Icons.dashboard_outlined),
-                          label: Text('Spaces'),
-                        ),
-                        NavigationRailDestination(
-                          icon: Icon(Icons.tab_outlined),
-                          label: Text('Sessions'),
-                        ),
-                        NavigationRailDestination(
-                          icon: Icon(Icons.menu),
-                          label: Text('Menu'),
-                        ),
-                      ],
-                    ),
-                    const VerticalDivider(width: 1),
-                    Expanded(child: body),
-                  ],
-                )
-              : body,
-        ),
-        bottomNavigationBar: wide && kIsWeb
-            ? null
-            : BrowserDock(
-                onHome: _home,
-                onTabs: _showTabs,
-                onMenu: _menu,
-                onLibrary: _library,
-                onSpaces: () => _workspaces(),
-                tabCount: _tabs.length,
-                isPrivate: _tab.isPrivate,
-                resourceTitle: website != null
-                    ? websiteAllowed
-                          ? website.host
-                          : 'Unavailable website'
-                    : resource == null
-                    ? null
-                    : 'Reviewed offline article',
-                isLive: website != null,
-                isLoading: _webStatuses[_tab.id]?.loading == true,
-                onReload: websiteAllowed
-                    ? () {
-                        final engine = _webControllers[_tab.id];
-                        if (engine == null) {
-                          _navigateWebsite(website);
-                          return;
+                    ],
+                    address: websiteAllowed
+                        ? website.toString()
+                        : resource?.title ?? 'Search or enter address',
+                    onAddress: _focusedSearch,
+                    onNewTab: _addNativeTab,
+                    onTabs: _showTabs,
+                    onMenu: _menu,
+                    onCompanion: _showCompanion,
+                    onProtection: _protection,
+                    onBack: canGoBack ? () => _historyStep(false) : null,
+                    onForward:
+                        _tab.position + 1 < _tab.trail.length ||
+                            _webStatuses[_tab.id]?.canGoForward == true
+                        ? () => _historyStep(true)
+                        : null,
+                    onReload: websiteAllowed ? reload : null,
+                    loading: _webStatuses[_tab.id]?.loading == true,
+                    isPrivate: _tab.isPrivate,
+                  ),
+                Expanded(
+                  child: wide
+                      ? Row(
+                          children: [
+                            LayoutBuilder(
+                              builder: (context, constraints) =>
+                                  SingleChildScrollView(
+                                    child: SizedBox(
+                                      height: constraints.maxHeight < 720
+                                          ? 720
+                                          : constraints.maxHeight,
+                                      child: NavigationRail(
+                                        selectedIndex: null,
+                                        labelType: NavigationRailLabelType.all,
+                                        leading: const Padding(
+                                          padding: EdgeInsets.all(12),
+                                          child: WingmanBrand(wordmark: false),
+                                        ),
+                                        onDestinationSelected: (value) =>
+                                            switch (value) {
+                                              0 => _home(),
+                                              1 => _workspaces(),
+                                              2 => _workspaces(tasks: true),
+                                              3 => _protection(),
+                                              4 => _showCompanion(),
+                                              5 => _library(),
+                                              _ => _menu(),
+                                            },
+                                        destinations: const [
+                                          NavigationRailDestination(
+                                            icon: Icon(Icons.home_outlined),
+                                            label: Text('Home'),
+                                          ),
+                                          NavigationRailDestination(
+                                            icon: Icon(
+                                              Icons.dashboard_outlined,
+                                            ),
+                                            label: Text('Spaces'),
+                                          ),
+                                          NavigationRailDestination(
+                                            icon: Icon(Icons.track_changes),
+                                            label: Text('Finish'),
+                                          ),
+                                          NavigationRailDestination(
+                                            icon: Icon(Icons.shield_outlined),
+                                            label: Text('Privacy'),
+                                          ),
+                                          NavigationRailDestination(
+                                            icon: Icon(
+                                              Icons.auto_awesome_outlined,
+                                            ),
+                                            label: Text('Wingman'),
+                                          ),
+                                          NavigationRailDestination(
+                                            icon: Icon(Icons.bookmark_border),
+                                            label: Text('Library'),
+                                          ),
+                                          NavigationRailDestination(
+                                            icon: Icon(Icons.menu),
+                                            label: Text('Menu'),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                            ),
+                            const VerticalDivider(width: 1),
+                            Expanded(child: body),
+                          ],
+                        )
+                      : body,
+                ),
+              ],
+            ),
+          ),
+          bottomNavigationBar: wide
+              ? null
+              : BrowserDock(
+                  onHome: _home,
+                  onTabs: _showTabs,
+                  onMenu: _menu,
+                  onLibrary: _library,
+                  onSpaces: () => _workspaces(),
+                  onCompanion: _showCompanion,
+                  tabCount: _tabs.length,
+                  isPrivate: _tab.isPrivate,
+                  resourceTitle: website != null
+                      ? websiteAllowed
+                            ? website.host
+                            : 'Unavailable website'
+                      : resource == null
+                      ? null
+                      : 'Reviewed offline article',
+                  isLive: website != null,
+                  isLoading: _webStatuses[_tab.id]?.loading == true,
+                  onReload: websiteAllowed
+                      ? () {
+                          final engine = _webControllers[_tab.id];
+                          if (engine == null) {
+                            _navigateWebsite(website);
+                            return;
+                          }
+                          unawaited(
+                            _webStatuses[_tab.id]?.loading == true
+                                ? engine.stop()
+                                : engine.reload(),
+                          );
                         }
-                        unawaited(
-                          _webStatuses[_tab.id]?.loading == true
-                              ? engine.stop()
-                              : engine.reload(),
-                        );
-                      }
-                    : null,
-                onAddress: _focusedSearch,
-                onPageInfo: () => _pageInfo(resource),
-                onBack: canGoBack ? () => _historyStep(false) : null,
-                onForward:
-                    _tab.position + 1 < _tab.trail.length ||
-                        _webStatuses[_tab.id]?.canGoForward == true
-                    ? () => _historyStep(true)
-                    : null,
-              ),
+                      : null,
+                  onAddress: _focusedSearch,
+                  onPageInfo: () => _pageInfo(resource),
+                  onBack: canGoBack ? () => _historyStep(false) : null,
+                  onForward:
+                      _tab.position + 1 < _tab.trail.length ||
+                          _webStatuses[_tab.id]?.canGoForward == true
+                      ? () => _historyStep(true)
+                      : null,
+                ),
+        ),
       ),
     );
   }
@@ -1486,6 +1931,7 @@ class _BrowserShellState extends State<BrowserShell>
     final launchpadActions = _launchpadActions();
     final homeOrigin = _tab;
     return HomeScreen(
+      key: ValueKey('home-${homeOrigin.id}'),
       launchpad: service?.initialized == true
           ? LaunchpadSection(
               controller: service!.launchpad,
@@ -1540,41 +1986,26 @@ class _BrowserShellState extends State<BrowserShell>
       onOpen: _openFeatureResource,
       onSpaces: () => _workspaces(),
       onTask: (id) => _workspaces(taskId: id),
+      onStartTask: () => _workspaces(tasks: true),
       task: model?.snapshot.tasks
           .where((t) => t.status == FinishStatus.active)
           .firstOrNull,
       spaceCards: model?.snapshot.spacesEnabled == true
           ? [
               for (final space in model!.snapshot.spaces.take(3))
-                Card(
-                  child: InkWell(
-                    onTap: () => _workspaces(spaceId: space.id),
-                    borderRadius: BorderRadius.circular(20),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Icon(switch (space.kind) {
-                            SpaceKind.homeProjects => Icons.home_work_outlined,
-                            SpaceKind.learning => Icons.school_outlined,
-                            SpaceKind.sports =>
-                              Icons.sports_basketball_outlined,
-                          }, color: WingmanTokens.of(context).action),
-                          const SizedBox(height: 12),
-                          Text(
-                            space.name,
-                            style: Theme.of(context).textTheme.titleSmall,
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '${space.savedIds.length} saved resources',
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                        ],
-                      ),
-                    ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(switch (space.kind) {
+                    SpaceKind.homeProjects => Icons.home_work_outlined,
+                    SpaceKind.learning => Icons.school_outlined,
+                    SpaceKind.sports => Icons.sports_basketball_outlined,
+                  }, color: WingmanTokens.of(context).action),
+                  title: Text(space.name),
+                  subtitle: Text(
+                    '${space.savedIds.length + space.savedPages.length} saved resources',
                   ),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => _workspaces(spaceId: space.id),
                 ),
             ]
           : const [],
@@ -2746,6 +3177,17 @@ class _BrowserShellState extends State<BrowserShell>
     final origin = _tab;
     _pushFeature(
       ProtectionScreen(
+        liveContent: widget.liveContent,
+        requestCountersObservable: _capabilities.resourceCountersObservable,
+        observedBlockedRequests:
+            _capabilities.resourceCountersObservable &&
+                _webControllers.containsKey(origin.id)
+            ? _webStatuses[origin.id]?.blockedResources
+            : null,
+        observedCounterSaturated:
+            _webStatuses[origin.id]?.resourceCounterSaturated == true,
+        observationScope:
+            'This tab’s page engine. Counts reset when its renderer is released or recreated. Each blocked request is one outcome; repeated requests may share a destination. This is not a count of unique trackers or all network traffic.',
         state: widget.state,
         policy: widget.policy,
         isPrivate: _ephemeral,
@@ -2801,7 +3243,13 @@ class _BrowserShellState extends State<BrowserShell>
         isPrivate: _ephemeral,
         canContinue: () => _validOrigin(origin),
         buildInfo: AppBuildInfo.current,
+        uiPreferences: service?.ui,
         actions: SettingsActions(
+          onFinishMode: () => _workspaces(tasks: true),
+          onCommitReview: () => _commitReview(),
+          onUpdates: !_ephemeral && widget.liveContent != null
+              ? _liveContentPreferences
+              : null,
           onHomeCustomization: _customize,
           onSpaces: () => _workspaces(),
           onProtection: _protection,
@@ -3140,6 +3588,7 @@ class _BrowserShellState extends State<BrowserShell>
     final liveRevision = _webRevisions[origin.id] ?? 0;
     final groups = <String, List<MenuAction>>{
       'Page': [
+        MenuAction('Your Wingman', Icons.auto_awesome_outlined, _showCompanion),
         MenuAction(
           'Page information',
           Icons.info_outline,
@@ -3410,3 +3859,10 @@ Widget safeTextContextMenu(BuildContext context, EditableTextState editable) =>
           )
           .toList(),
     );
+
+class _CompanionCapture {
+  const _CompanionCapture(this.tab, this.service, this.entry);
+  final DiscoveryTab tab;
+  final SignatureServices service;
+  final String? entry;
+}

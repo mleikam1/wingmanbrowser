@@ -192,8 +192,8 @@ void main() {
       },
     );
     await tapVisible(tester, find.text('Check this selection'));
-    await ensureVisible(tester, find.text('Findings from your selection'));
-    expect(find.text('Findings from your selection'), findsOneWidget);
+    await ensureVisible(tester, find.text('Here’s what the text says'));
+    expect(find.text('Here’s what the text says'), findsOneWidget);
     expect(find.text('Save analysis locally'), findsNothing);
     expect(find.text('Saved analyses'), findsNothing);
     expect(calls, 0);
@@ -290,7 +290,7 @@ void main() {
       await tester.pump();
       pending.complete(report);
       await tester.pumpAndSettle();
-      expect(find.text('Findings from your selection'), findsNothing);
+      expect(find.text('Here’s what the text says'), findsNothing);
       expect(journal.events.single.outcome, PrivacyOutcome.canceled);
       expect(
         tester
@@ -332,7 +332,7 @@ void main() {
       await tester.pump();
       pending.complete(report);
       await tester.pumpAndSettle();
-      expect(find.text('Findings from your selection'), findsNothing);
+      expect(find.text('Here’s what the text says'), findsNothing);
       expect(journal.events.single.outcome, PrivacyOutcome.canceled);
     },
   );
@@ -359,7 +359,7 @@ void main() {
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
     pending.complete(report);
     await tester.pumpAndSettle();
-    expect(find.text('Findings from your selection'), findsNothing);
+    expect(find.text('Here’s what the text says'), findsNothing);
     expect(journal.events.single.outcome, PrivacyOutcome.canceled);
   });
   screenTest(

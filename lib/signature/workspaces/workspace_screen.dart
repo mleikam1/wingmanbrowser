@@ -4,6 +4,7 @@ import '../../presentation/components/wingman_components.dart';
 import '../privacy/privacy_journal.dart';
 import 'workspace_controller.dart';
 import 'measurement.dart';
+import 'focus_timer_panel.dart';
 
 class WorkspaceScreen extends StatefulWidget {
   const WorkspaceScreen({
@@ -21,6 +22,10 @@ class WorkspaceScreen extends StatefulWidget {
     required this.onDeleteTask,
     this.readingIds,
     this.onHandoff,
+    this.onOpenSavedPage,
+    this.onSaveCurrentPage,
+    this.onParkOtherTabs,
+    this.parkedTabCount,
     this.initialSpaceId,
     this.initialTaskId,
     this.initialTasks = false,
@@ -40,6 +45,10 @@ class WorkspaceScreen extends StatefulWidget {
   final Future<void> Function(String taskId) onDeleteTask;
   final ValueChanged<String> onOfficialSearch;
   final ValueChanged<List<String>>? onHandoff;
+  final Future<void> Function(SavedWorkspacePage)? onOpenSavedPage;
+  final Future<void> Function(String id, bool isTask)? onSaveCurrentPage;
+  final Future<void> Function(String taskId, bool park)? onParkOtherTabs;
+  final int Function(String taskId)? parkedTabCount;
   final String? initialSpaceId, initialTaskId;
   final ContentContext contentContext;
   final bool isPrivate, initialTasks;
@@ -179,7 +188,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
         title:
             space?.name ??
             (task != null || _tasks ? 'Finish Mode' : 'Your Spaces'),
-        maxWidth: space != null || task != null ? 720 : 1120,
+        maxWidth: 1440,
         backTooltip: space != null || task != null ? 'Workspaces' : null,
         onBack: space != null || task != null
             ? () => setState(() {
@@ -240,9 +249,12 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     ),
     const SizedBox(height: 20),
     if (!_tasks) ...[
-      const Text(
-        'Useful places you choose. No profile is inferred from your browsing.',
+      Text(
+        'A place for every good idea.',
+        style: Theme.of(context).textTheme.headlineLarge,
       ),
+      const SizedBox(height: 12),
+      const Text('Keep pages, notes, and a clear next step together.'),
       const SizedBox(height: 20),
       OutlinedButton.icon(
         onPressed: _busy || model.snapshot.spaces.length >= 8
@@ -357,7 +369,13 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
   Widget _responsiveCards(List<Widget> children) => LayoutBuilder(
     builder: (context, constraints) {
       final scale = MediaQuery.textScalerOf(context).scale(16) / 16;
-      final columns = constraints.maxWidth >= 840 && scale <= 1.4 ? 2 : 1;
+      final columns = scale > 1.4
+          ? 1
+          : constraints.maxWidth >= 1080
+          ? 3
+          : constraints.maxWidth >= 700
+          ? 2
+          : 1;
       final width = (constraints.maxWidth - 16 * (columns - 1)) / columns;
       return Wrap(
         spacing: 16,
@@ -375,10 +393,10 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
   };
   Widget _spaceCard(UserSpace space, int index) => _WorkspaceCard(
     icon: _spaceIcon(space.kind),
-    compact: true,
+    selected: _spaceId == space.id,
     title: space.name,
     subtitle:
-        '${space.kind.label} · ${space.savedIds.where(_eligible).length} eligible saved items',
+        '${space.savedIds.where(_eligible).length + space.savedPages.where(model.canOpenPage).length} saved pages · ${model.snapshot.tasks.where((task) => task.spaceId == space.id && task.status != FinishStatus.finished).length} open tasks',
     onTap: () => setState(() => _spaceId = space.id),
     actionLabel: 'Open Space',
     actions: [
@@ -405,48 +423,211 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
   };
 
   List<Widget> _space(UserSpace space) => [
-    Text(space.name, style: Theme.of(context).textTheme.headlineMedium),
-    const SizedBox(height: 16),
     Text(
-      'Shown because you chose ${space.kind.label}.',
-      style: Theme.of(context).textTheme.bodySmall,
+      'A place for every good idea.',
+      style: Theme.of(context).textTheme.headlineLarge,
     ),
     const SizedBox(height: 12),
-    Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: [
-        OutlinedButton.icon(
-          onPressed: () async {
-            final name = await _edit(
-              'Rename Space',
-              space.name,
-              limit: 80,
-              multiline: false,
-            );
-            if (name != null && mounted) {
-              await _run(() => model.updateSpace(space.id, name: name));
-            }
-          },
-          icon: const Icon(Icons.edit_outlined),
-          label: const Text('Rename'),
-        ),
-        OutlinedButton.icon(
-          onPressed: () => _pickResource(space.id),
-          icon: const Icon(Icons.add),
-          label: const Text('Add item'),
-        ),
-        if (widget.onHandoff != null && space.savedIds.any(_eligible))
-          OutlinedButton.icon(
-            onPressed: () => widget.onHandoff!(
-              space.savedIds.where(_eligible).take(8).toList(),
-            ),
-            icon: const Icon(Icons.present_to_all),
-            label: const Text('Hand It Over'),
+    const Text('Keep pages, notes, and a clear next step together.'),
+    const SizedBox(height: 28),
+    if (model.snapshot.spaces.length > 1)
+      LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxWidth < 840 ||
+              MediaQuery.textScalerOf(context).scale(16) > 24) {
+            return const SizedBox.shrink();
+          }
+          return Column(
+            children: [
+              _responsiveCards([
+                for (var i = 0; i < model.snapshot.spaces.length; i++)
+                  _spaceCard(model.snapshot.spaces[i], i),
+              ]),
+              const SizedBox(height: 28),
+            ],
+          );
+        },
+      ),
+    _panel(
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            spacing: 20,
+            runSpacing: 16,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _iconBadge(_spaceIcon(space.kind)),
+                  const SizedBox(width: 14),
+                  Flexible(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          space.name,
+                          style: Theme.of(context).textTheme.headlineSmall,
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Shown because you chose ${space.kind.label}.',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              FilledButton.icon(
+                onPressed: _busy
+                    ? null
+                    : () async {
+                        final goal = await _edit(
+                          'What do you want to finish?',
+                          '',
+                          limit: 160,
+                          multiline: false,
+                        );
+                        if (goal == null || goal.isEmpty || !mounted) return;
+                        await _run(() async {
+                          final id = await model.createTask(
+                            goal,
+                            spaceId: space.id,
+                          );
+                          if (mounted) {
+                            setState(() {
+                              _spaceId = null;
+                              _taskId = id;
+                              _tasks = true;
+                            });
+                          }
+                        }, task: true);
+                      },
+                icon: const Icon(Icons.my_location),
+                label: const Text('Start focusing'),
+              ),
+            ],
           ),
-      ],
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              TextButton.icon(
+                onPressed: () async {
+                  final name = await _edit(
+                    'Rename Space',
+                    space.name,
+                    limit: 80,
+                    multiline: false,
+                  );
+                  if (name != null && mounted) {
+                    await _run(() => model.updateSpace(space.id, name: name));
+                  }
+                },
+                icon: const Icon(Icons.edit_outlined),
+                label: const Text('Rename'),
+              ),
+              TextButton.icon(
+                onPressed: () => _pickResource(space.id),
+                icon: const Icon(Icons.add),
+                label: const Text('Add item'),
+              ),
+              if (widget.onSaveCurrentPage != null && !model.ephemeral)
+                TextButton.icon(
+                  onPressed: () =>
+                      _run(() => widget.onSaveCurrentPage!(space.id, false)),
+                  icon: const Icon(Icons.bookmark_add_outlined),
+                  label: const Text('Save current page'),
+                ),
+              if (widget.onHandoff != null && space.savedIds.any(_eligible))
+                TextButton.icon(
+                  onPressed: () => widget.onHandoff!(
+                    space.savedIds.where(_eligible).take(8).toList(),
+                  ),
+                  icon: const Icon(Icons.present_to_all),
+                  label: const Text('Hand It Over'),
+                ),
+            ],
+          ),
+          const Divider(height: 36),
+          _twoColumns(
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'Pages for this project',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 16),
+                _responsiveCards([
+                  for (final id in space.savedIds)
+                    if (_resource(id) case final resource?)
+                      _resourceTile(
+                        resource,
+                        trailing: IconButton(
+                          tooltip: 'Remove ${resource.title} from Space',
+                          icon: const Icon(Icons.close),
+                          onPressed: () => _run(
+                            () => model.saveToSpace(space.id, id, saved: false),
+                          ),
+                        ),
+                      )
+                    else
+                      _unavailableResource(),
+                  for (final page in space.savedPages)
+                    _savedPage(page, space.id, false),
+                ]),
+                if (space.savedIds.isEmpty && space.savedPages.isEmpty)
+                  const WingmanEmptyState(
+                    icon: Icons.bookmark_border,
+                    title: 'Keep something useful',
+                    message:
+                        'Save a permitted page or add a reviewed guide. Only what you choose is saved.',
+                  ),
+                const SizedBox(height: 20),
+                _panel(
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: _notes(space.id, space.notes, false),
+                  ),
+                  raised: true,
+                ),
+              ],
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                ..._checklist(space.id, space.checklist, false),
+                const SizedBox(height: 16),
+                for (final task in model.snapshot.tasks.where(
+                  (task) => task.spaceId == space.id,
+                ))
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.my_location),
+                    title: Text(task.goal),
+                    subtitle: Text(_statusLabel(task.status)),
+                    onTap: () => setState(() {
+                      _spaceId = null;
+                      _taskId = task.id;
+                      _tasks = true;
+                    }),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
     ),
-    const SizedBox(height: 20),
+    const SizedBox(height: 24),
+    const Text(
+      'Spaces organize your work. They are not separate browser identities or security containers.',
+    ),
+    const SizedBox(height: 24),
     if (space.kind != SpaceKind.homeProjects) ...[
       Text(
         space.kind == SpaceKind.sports
@@ -514,27 +695,6 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
       ],
       const SizedBox(height: 24),
     ],
-    Text('Saved resources', style: Theme.of(context).textTheme.titleLarge),
-    const SizedBox(height: 8),
-    for (final id in space.savedIds)
-      if (_resource(id) case final r?)
-        _resourceTile(
-          r,
-          trailing: IconButton(
-            tooltip: 'Remove ${r.title} from Space',
-            icon: const Icon(Icons.close),
-            onPressed: () =>
-                _run(() => model.saveToSpace(space.id, r.id, saved: false)),
-          ),
-        ),
-    if (!space.savedIds.any(_eligible))
-      const Text(
-        'No eligible items here yet. Add a reviewed resource from the library.',
-      ),
-    const SizedBox(height: 20),
-    ..._notes(space.id, space.notes, false),
-    const SizedBox(height: 20),
-    ..._checklist(space.id, space.checklist, false),
     if (space.kind == SpaceKind.learning &&
         !widget.isPrivate &&
         !model.ephemeral &&
@@ -577,85 +737,301 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     ),
   ];
   List<Widget> _task(FinishWorkspace task) => [
-    Text(task.goal, style: Theme.of(context).textTheme.headlineSmall),
-    const SizedBox(height: 8),
-    Text('${_statusLabel(task.status)} · Your goal stays on this device.'),
-    const SizedBox(height: 16),
-    _TaskProgress(task: task),
-    const SizedBox(height: 16),
-    Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: [
-        if (task.status != FinishStatus.finished) ...[
-          FilledButton.icon(
-            onPressed: () => _run(() async {
-              await model.updateTask(task.id, status: FinishStatus.active);
-              await widget.onResumeTask(model.task(task.id)!);
-            }, task: true),
-            icon: const Icon(Icons.play_arrow),
-            label: const Text('Resume task tabs'),
-          ),
-          OutlinedButton(
-            onPressed: task.status != FinishStatus.active
-                ? null
-                : () => _run(
-                    () =>
-                        model.updateTask(task.id, status: FinishStatus.paused),
-                    task: true,
+    Text(
+      'One thing at a time.',
+      style: Theme.of(context).textTheme.headlineLarge,
+    ),
+    const SizedBox(height: 12),
+    const Text('Everything you need. A little less of everything else.'),
+    const SizedBox(height: 28),
+    _twoColumns(
+      _panel(
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            FocusTimerPanel(
+              controller: model,
+              task: task,
+              busy: _busy,
+              run: (action) => _run(action, task: true),
+              onCustom: () async {
+                final value = await _edit(
+                  'Focus minutes (1–180)',
+                  '',
+                  limit: 3,
+                  multiline: false,
+                );
+                if (!mounted || value == null) return;
+                await _run(
+                  () => model.configureTimer(
+                    task.id,
+                    minutes: int.tryParse(value) ?? 0,
                   ),
-            child: const Text('Pause'),
-          ),
-          OutlinedButton(
-            onPressed: () =>
-                _run(() => widget.onAssociateCurrentTab(task.id), task: true),
-            child: const Text('Associate current tab'),
-          ),
-          OutlinedButton(
-            onPressed: () => _finish(task),
-            child: const Text('Finish'),
-          ),
-        ],
-      ],
-    ),
-    const SizedBox(height: 16),
-    const Text(
-      'Only this task’s explicitly associated tabs are eligible for its Finish action. Other tabs stay open.',
-    ),
-    const SizedBox(height: 8),
-    for (final tab in task.tabs)
-      ListTile(
-        contentPadding: EdgeInsets.zero,
-        leading: const Icon(Icons.tab_outlined),
-        title: Text(
-          tab.resourceId == null
-              ? 'Library tab'
-              : _resource(tab.resourceId!)?.title ?? 'Resource unavailable',
-        ),
-        trailing: task.status == FinishStatus.finished
-            ? null
-            : IconButton(
-                tooltip: 'Detach task tab',
-                icon: const Icon(Icons.link_off),
-                onPressed: () => _run(
-                  () => widget.onDetachTab(task.id, tab.tabId),
                   task: true,
+                );
+              },
+            ),
+            const SizedBox(height: 20),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              alignment: WrapAlignment.center,
+              children: [
+                if (task.status != FinishStatus.finished) ...[
+                  OutlinedButton.icon(
+                    onPressed: () => _run(
+                      () => model.updateTask(
+                        task.id,
+                        status: task.status == FinishStatus.active
+                            ? FinishStatus.paused
+                            : FinishStatus.active,
+                      ),
+                      task: true,
+                    ),
+                    icon: Icon(
+                      task.status == FinishStatus.active
+                          ? Icons.pause
+                          : Icons.play_arrow,
+                    ),
+                    label: Text(
+                      task.status == FinishStatus.active
+                          ? 'Pause'
+                          : 'Resume focus',
+                    ),
+                  ),
+                  FilledButton.icon(
+                    onPressed: () => _finish(task),
+                    icon: const Icon(Icons.check),
+                    label: const Text('Finish'),
+                  ),
+                ],
+              ],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              '${_statusLabel(task.status)} · Timer and checklist stay on this device.',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+        ),
+      ),
+      _panel(
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'YOUR ONE THING',
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                color: WingmanTokens.of(context).secondaryText,
+                letterSpacing: 2,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(task.goal, style: Theme.of(context).textTheme.headlineMedium),
+            const SizedBox(height: 12),
+            Text(
+              task.checklist.any((item) => !item.done)
+                  ? 'Next: ${task.checklist.firstWhere((item) => !item.done).text}'
+                  : task.checklist.isEmpty
+                  ? 'Choose your next small step.'
+                  : 'Every step checked. Finish when you are ready.',
+            ),
+            const SizedBox(height: 24),
+            ..._checklist(task.id, task.checklist, true),
+            const SizedBox(height: 20),
+            _TaskProgress(task: task),
+            TextButton.icon(
+              onPressed: () async {
+                final goal = await _edit(
+                  'Edit task',
+                  task.goal,
+                  limit: 160,
+                  multiline: false,
+                );
+                if (mounted && goal != null) {
+                  await _run(
+                    () => model.updateTask(task.id, goal: goal),
+                    task: true,
+                  );
+                }
+              },
+              icon: const Icon(Icons.edit_outlined),
+              label: const Text('Edit task'),
+            ),
+            TextButton.icon(
+              onPressed: () => _chooseTaskSpace(task),
+              icon: const Icon(Icons.folder_outlined),
+              label: Text(
+                task.spaceId == null
+                    ? 'Associate with a Space'
+                    : model.space(task.spaceId!)?.name ?? 'Choose a Space',
+              ),
+            ),
+          ],
+        ),
+      ),
+      leadingFlex: 2,
+      trailingFlex: 3,
+    ),
+    const SizedBox(height: 24),
+    _twoColumns(
+      _panel(
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Keep these close',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 12),
+            if (task.status != FinishStatus.finished)
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  FilledButton.icon(
+                    onPressed: () => _run(() async {
+                      await model.updateTask(
+                        task.id,
+                        status: FinishStatus.active,
+                      );
+                      await widget.onResumeTask(model.task(task.id)!);
+                    }, task: true),
+                    icon: const Icon(Icons.play_arrow),
+                    label: const Text('Resume task tabs'),
+                  ),
+                  OutlinedButton(
+                    onPressed: () => _run(
+                      () => widget.onAssociateCurrentTab(task.id),
+                      task: true,
+                    ),
+                    child: const Text('Associate current tab'),
+                  ),
+                ],
+              ),
+            for (final tab in task.tabs)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.tab_outlined),
+                title: Text(
+                  tab.resourceId == null
+                      ? 'Associated browser tab'
+                      : _resource(tab.resourceId!)?.title ??
+                            'Resource unavailable',
+                ),
+                subtitle: const Text(
+                  'Only this task’s owned tabs can close when you finish.',
+                ),
+                trailing: task.status == FinishStatus.finished
+                    ? null
+                    : IconButton(
+                        tooltip: 'Detach task tab',
+                        icon: const Icon(Icons.link_off),
+                        onPressed: () => _run(
+                          () => widget.onDetachTab(task.id, tab.tabId),
+                          task: true,
+                        ),
+                      ),
+              ),
+            if (task.tabs.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 16),
+                child: Text(
+                  'Associate a current tab or resume to open a fresh task tab.',
                 ),
               ),
+            if (widget.onParkOtherTabs != null &&
+                task.status != FinishStatus.finished) ...[
+              const Divider(height: 24),
+              Text(
+                '${widget.parkedTabCount?.call(task.id) ?? 0} other tabs parked for later',
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Parking organizes open tabs; nothing is closed or unloaded. Native history and forms cannot be promised after engine eviction or restart.',
+              ),
+              Wrap(
+                spacing: 8,
+                children: [
+                  TextButton.icon(
+                    onPressed: () => _run(
+                      () => widget.onParkOtherTabs!(task.id, true),
+                      task: true,
+                    ),
+                    icon: const Icon(Icons.inventory_2_outlined),
+                    label: const Text('Park other tabs'),
+                  ),
+                  TextButton(
+                    onPressed: (widget.parkedTabCount?.call(task.id) ?? 0) == 0
+                        ? null
+                        : () => _run(
+                            () => widget.onParkOtherTabs!(task.id, false),
+                            task: true,
+                          ),
+                    child: const Text('Unpark tabs'),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
       ),
-    if (task.tabs.isEmpty)
-      const Text('Associate a current tab or resume to open a fresh task tab.'),
-    const SizedBox(height: 20),
-    ..._notes(task.id, task.notes, true),
-    const SizedBox(height: 20),
-    ..._checklist(task.id, task.checklist, true),
-    const SizedBox(height: 20),
+      _panel(
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _iconBadge(Icons.shield_outlined),
+            const SizedBox(height: 16),
+            Text(
+              'Your boundaries stay in place.',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 12),
+            const Text('Focus is optional. Core content protection is not.'),
+            TextButton.icon(
+              onPressed: _editDistractions,
+              icon: const Icon(Icons.tune),
+              label: const Text('Choose focus distractions'),
+            ),
+            Text(
+              model.snapshot.distractionPreferences.enabled
+                  ? '${model.snapshot.distractionPreferences.sites.length} sites chosen by you. Continue dismisses a site for this task and session.'
+                  : 'Optional nudges are off. No sites are inferred from browsing.',
+            ),
+          ],
+        ),
+      ),
+      leadingFlex: 3,
+      trailingFlex: 2,
+    ),
+    const SizedBox(height: 24),
+    _panel(
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: _notes(task.id, task.notes, true),
+      ),
+    ),
+    const SizedBox(height: 24),
     Text('Saved results', style: Theme.of(context).textTheme.titleLarge),
-    for (final id in task.savedIds)
-      if (_resource(id) case final r?) _resourceTile(r),
-    if (task.savedIds.where(_eligible).isEmpty)
+    if (widget.onSaveCurrentPage != null && !model.ephemeral)
+      TextButton.icon(
+        onPressed: () =>
+            _run(() => widget.onSaveCurrentPage!(task.id, true), task: true),
+        icon: const Icon(Icons.bookmark_add_outlined),
+        label: const Text('Save current page'),
+      ),
+    _responsiveCards([
+      for (final id in task.savedIds)
+        if (_resource(id) case final resource?)
+          _resourceTile(resource)
+        else
+          _unavailableResource(),
+      for (final page in task.savedPages) _savedPage(page, task.id, true),
+    ]),
+    if (task.savedIds.isEmpty && task.savedPages.isEmpty)
       const Text(
-        'Eligible task pages can be saved when you finish. Notes and checklist remain in this task.',
+        'Explicitly saved pages stay with your task. Notes and checklist remain when you finish.',
       ),
     const SizedBox(height: 24),
     TextButton(
@@ -673,6 +1049,197 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
       child: const Text('Delete task'),
     ),
   ];
+
+  Widget _panel(Widget child, {bool raised = false}) => Material(
+    color: raised
+        ? WingmanTokens.of(context).raised
+        : WingmanTokens.of(context).surface,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(24),
+      side: BorderSide(color: WingmanTokens.of(context).divider),
+    ),
+    child: Padding(padding: const EdgeInsets.all(24), child: child),
+  );
+  Widget _iconBadge(IconData icon) => Container(
+    width: 52,
+    height: 52,
+    decoration: BoxDecoration(
+      color: WingmanTokens.of(context).raised,
+      borderRadius: BorderRadius.circular(16),
+    ),
+    child: Icon(icon, color: WingmanTokens.of(context).action),
+  );
+  Widget _twoColumns(
+    Widget leading,
+    Widget trailing, {
+    int leadingFlex = 3,
+    int trailingFlex = 2,
+  }) => LayoutBuilder(
+    builder: (context, constraints) =>
+        constraints.maxWidth >= 840 &&
+            MediaQuery.textScalerOf(context).scale(16) <= 24
+        ? Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(flex: leadingFlex, child: leading),
+              const SizedBox(width: 28),
+              Expanded(flex: trailingFlex, child: trailing),
+            ],
+          )
+        : Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [leading, const SizedBox(height: 24), trailing],
+          ),
+  );
+  Widget _unavailableResource() => const WingmanStatus(
+    title: 'Resource unavailable',
+    message:
+        'This saved item is no longer permitted or available. Saving never grants access.',
+  );
+  Widget _savedPage(SavedWorkspacePage page, String ownerId, bool task) {
+    final available = model.canOpenPage(page) && widget.onOpenSavedPage != null;
+    return _WorkspaceCard(
+      icon: Icons.public,
+      compact: true,
+      title: available ? page.label : 'Saved page unavailable',
+      subtitle: available
+          ? 'Saved by you · Current destination rules apply'
+          : 'This page cannot currently be opened. Saving never grants permission.',
+      actionLabel: 'Open saved page',
+      onTap: !available
+          ? null
+          : () => _run(() async {
+              if (model.canOpenPage(page)) await widget.onOpenSavedPage!(page);
+            }, task: task),
+      actions: [
+        IconButton(
+          tooltip: 'Remove saved page',
+          icon: const Icon(Icons.close),
+          onPressed: () => _run(
+            () => model.removeSavedPage(ownerId, page.id, isTask: task),
+            task: task,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _chooseTaskSpace(FinishWorkspace task) async {
+    final id = await showWingmanSheet<String>(
+      context: context,
+      builder: (context) => ListView(
+        shrinkWrap: true,
+        padding: const EdgeInsets.all(24),
+        children: [
+          Text(
+            'Keep this task in a Space',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const ListTile(
+            title: Text(
+              'Choose a Space you created. Notes and steps stay with the task.',
+            ),
+          ),
+          for (final space in model.snapshot.spaces)
+            ListTile(
+              leading: Icon(_spaceIcon(space.kind)),
+              title: Text(space.name),
+              onTap: () => Navigator.pop(context, space.id),
+            ),
+          if (task.spaceId != null)
+            TextButton(
+              onPressed: () => Navigator.pop(context, ''),
+              child: const Text('Remove association'),
+            ),
+        ],
+      ),
+    );
+    if (mounted && id != null) {
+      await _run(
+        () => model.updateTask(
+          task.id,
+          spaceId: id.isEmpty ? null : id,
+          clearSpace: id.isEmpty,
+        ),
+        task: true,
+      );
+    }
+  }
+
+  Future<void> _editDistractions() async {
+    final preferences = model.snapshot.distractionPreferences;
+    final input = TextEditingController(text: preferences.sites.join('\n'));
+    var enabled = preferences.enabled;
+    final route = DialogRoute<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, update) => AlertDialog(
+          title: const Text('Optional focus distractions'),
+          scrollable: true,
+          content: SizedBox(
+            width: 480,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SwitchListTile.adaptive(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Show a gentle nudge'),
+                  value: enabled,
+                  onChanged: (value) => update(() => enabled = value),
+                ),
+                const Text(
+                  'Choose exact website hostnames, one per line (for example, example.com). No sites are inferred. Continue dismisses that site for this task and session. Core protection always applies first.',
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: input,
+                  maxLength: 4000,
+                  minLines: 3,
+                  maxLines: 6,
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  enableIMEPersonalizedLearning: false,
+                  autofillHints: const [],
+                  contextMenuBuilder: _localMenu,
+                  decoration: const InputDecoration(
+                    labelText: 'Your chosen sites',
+                    helperText:
+                        'Up to 20 exact hostnames. No addresses or search terms.',
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+    final saved = await Navigator.of(context).push<bool>(route);
+    await route.completed;
+    final text = input.text;
+    input.dispose();
+    if (!mounted || saved != true) return;
+    await _run(
+      () => model.setDistractionPreferences(
+        enabled: enabled,
+        sites: text
+            .split(RegExp(r'[\s,]+'))
+            .where((site) => site.isNotEmpty)
+            .toList(),
+      ),
+      task: true,
+    );
+  }
+
   List<Widget> _notes(String id, String notes, bool task) => [
     Wrap(
       spacing: 16,
@@ -712,12 +1279,62 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
               contentPadding: EdgeInsets.zero,
               controlAffinity: ListTileControlAffinity.leading,
               value: item.done,
-              title: Text(item.text),
+              title: Text(
+                item.text,
+                style: TextStyle(
+                  decoration: item.done ? TextDecoration.lineThrough : null,
+                  color: item.done
+                      ? WingmanTokens.of(context).secondaryText
+                      : null,
+                ),
+              ),
               onChanged: (_) => _run(
                 () => model.changeChecklist(id, item.id, isTask: task),
                 task: task,
               ),
             ),
+          ),
+          PopupMenuButton<String>(
+            tooltip: 'Edit checklist item',
+            onSelected: (action) async {
+              if (action == 'edit') {
+                final value = await _edit(
+                  'Edit checklist item',
+                  item.text,
+                  limit: 160,
+                  multiline: false,
+                );
+                if (mounted && value != null) {
+                  await _run(
+                    () => model.editChecklist(id, item.id, value, isTask: task),
+                    task: task,
+                  );
+                }
+              } else {
+                await _run(
+                  () => model.moveChecklist(
+                    id,
+                    item.id,
+                    action == 'up' ? -1 : 1,
+                    isTask: task,
+                  ),
+                  task: task,
+                );
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(value: 'edit', child: Text('Edit step')),
+              PopupMenuItem(
+                value: 'up',
+                enabled: rows.first.id != item.id,
+                child: const Text('Move up'),
+              ),
+              PopupMenuItem(
+                value: 'down',
+                enabled: rows.last.id != item.id,
+                child: const Text('Move down'),
+              ),
+            ],
           ),
           IconButton(
             tooltip: 'Remove checklist item',
@@ -1076,14 +1693,24 @@ class _WorkspaceCard extends StatelessWidget {
     required this.actionLabel,
     this.actions = const [],
     this.compact = false,
+    this.selected = false,
   });
   final IconData icon;
   final String title, subtitle, actionLabel;
   final VoidCallback? onTap;
   final List<Widget> actions;
-  final bool compact;
+  final bool compact, selected;
   @override
   Widget build(BuildContext context) => Card(
+    color: selected ? WingmanTokens.of(context).raised : null,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(24),
+      side: BorderSide(
+        color: selected
+            ? WingmanTokens.of(context).action
+            : WingmanTokens.of(context).divider,
+      ),
+    ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
