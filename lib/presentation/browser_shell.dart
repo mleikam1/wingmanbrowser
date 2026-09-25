@@ -1605,10 +1605,10 @@ class _BrowserShellState extends State<BrowserShell>
           onClose: close,
           onSave: (id) => _saveCapturedPage(capture, id),
           onAssociate: (id) => _associateTask(id, capture.service, capture.tab),
-          onFinishMode: () {
+          onFinishMode: (taskId) {
             if (!_validCompanion(capture)) return;
             close();
-            _workspaces(taskId: capture.tab.taskId, tasks: true);
+            _workspaces(taskId: taskId, tasks: true);
           },
           onReviewTerms: () {
             if (!_validCompanion(capture)) return;

@@ -5,8 +5,8 @@ cd "$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 target=${1:-web}
 case "$target" in
   web)
-    flutter pub get
-    flutter build web --no-web-resources-cdn --no-tree-shake-icons
+    flutter --suppress-analytics pub get
+    flutter --suppress-analytics build web --no-web-resources-cdn --no-tree-shake-icons
     exec python3 -m http.server 8799 --bind 127.0.0.1 --directory build/web
     ;;
   macos)
@@ -14,7 +14,7 @@ case "$target" in
       echo 'Use the feat/wingman-macos worktree for the separate native desktop adapter.'
       exit 2
     fi
-    exec flutter run -d macos -t lib/main.dart
+    exec flutter --suppress-analytics run -d macos -t lib/main.dart
     ;;
-  *) exec flutter run -d "$target" -t lib/main.dart ;;
+  *) exec flutter --suppress-analytics run -d "$target" -t lib/main.dart ;;
 esac
