@@ -1,0 +1,13 @@
+COMMAND: ['/Users/MattLeikam/Library/Android/sdk/platform-tools/adb', '-s', 'emulator-5560', 'wait-for-device']
+COMMAND: ['/Users/MattLeikam/Library/Android/sdk/platform-tools/adb', '-s', 'emulator-5560', 'shell', 'getprop', 'sys.boot_completed']
+
+COMMAND: ['/Users/MattLeikam/Library/Android/sdk/platform-tools/adb', '-s', 'emulator-5560', 'install', '-r', 'artifacts/android/Wingman-0.16.0+19-local-release.apk']
+Performing Streamed Install
+adb: failed to install artifacts/android/Wingman-0.16.0+19-local-release.apk: cmd: Can't find service: package
+
+Dedicated emulator boot completed before install retry
+COMMAND: ['/Users/MattLeikam/Library/Android/sdk/platform-tools/adb', '-s', 'emulator-5560', 'install', '-r', 'artifacts/android/Wingman-0.16.0+19-local-release.apk']
+Performing Streamed Install
+Success
+COMMAND: ['/Users/MattLeikam/Library/Android/sdk/platform-tools/adb', '-s', 'emulator-5560', 'shell', 'am', 'start', '-n', 'com.wingmanbrowser.wingman_browser/.MainActivity']
+Starting: Intent { cmp=com.wingmanbrowser.wingman_browser/.MainActivity }

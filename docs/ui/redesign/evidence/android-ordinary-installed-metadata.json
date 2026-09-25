@@ -1,0 +1,16 @@
+{
+  "package": [
+    "versionCode=19 minSdk=24 targetSdk=36",
+    "versionName=0.16.0",
+    "lastUpdateTime=2026-09-25 15:40:15",
+    "firstInstallTime=2026-09-25 15:40:15"
+  ],
+  "activity": [
+    "topResumedActivity=ActivityRecord{252528761 u0 com.wingmanbrowser.wingman_browser/.MainActivity t6}"
+  ],
+  "apkSha256": "ca3ae31469cf94a65768f6495ceb6842e384c7189680b72db6ffd42c6c856620",
+  "device": "emulator-5560",
+  "app": "com.wingmanbrowser.wingman_browser",
+  "capture": "docs/ui/redesign/screenshots/android-release-launch-blocked-system-ui.png",
+  "captureObservation": "Android System UI is not responding overlay; ordinary Wingman Home not visually verified."
+}
