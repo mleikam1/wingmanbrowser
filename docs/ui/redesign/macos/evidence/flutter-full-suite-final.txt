@@ -1,0 +1,5 @@
+2026-09-25 | macOS arm64 | Flutter3.44.4
+Command: flutter test --reporter expanded
+Exit: 0
+1055 passed;6 existing opt-in tests skipped;2m06
+Source includes macOS AppKit/storage plumbing and UI follow-up33c1cc0.

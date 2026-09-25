@@ -1,0 +1,14 @@
+Command: FLUTTER_SUPPRESS_ANALYTICS=true flutter build macos --release --target lib/main.dart
+Result: exit0; ordinary release application built (74.3MB).
+Normal pub resolution ran; ordinary GeneratedPluginRegistrant contains no integration_test.
+Copied via ditto; ZIP created with ditto -c -k --sequesterRsrc --keepParent.
+Copied bundle passes codesign --verify --deep --strict.
+No XCTest / integration_test artifact exists in the release bundle.
+Executable architectures: x86_64 arm64. Runtime tested: arm64 only.
+Version:0.16.0(19). Minimum macOS:13.0.
+Bundle identifier: com.wingmanbrowser.redesign.macos (new local preview target).
+ZIP: artifacts/macos/Wingman-Browser-Preview-macOS.zip
+Bytes:32138440
+SHA256:22c05cd53eb26a67e45bfe661de81f926c652b88b5f5f321110f72d340c862da
+Final analyzer: No issues found,4.4s,exit0.
+Build warnings: existing objective_c/sqlite3 native-asset hooks emit inconsistent framework-name warnings between architecture slices; packaged chosen frameworks pass signature validation.

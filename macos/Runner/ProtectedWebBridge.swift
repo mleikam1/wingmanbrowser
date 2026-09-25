@@ -32,10 +32,8 @@ final class ProtectedWebBridge: NSObject, FlutterPlatformViewFactory {
 
   init(registrar: FlutterPluginRegistrar) {
     channel = FlutterMethodChannel(name: "wingman/protected-browser", binaryMessenger: registrar.messenger)
-    let key = registrar.lookupKey(forAsset: Self.protectionAsset)
-    baseline = ConsumerNativePolicy(path: Bundle.main.path(forResource: key, ofType: nil), expectedDigest: Self.protectionSHA256)
-    let updateKeyAsset = registrar.lookupKey(forAsset: "assets/policy/consumer_update_keys.json")
-    if let path = Bundle.main.path(forResource: updateKeyAsset, ofType: nil), let data = try? Data(contentsOf: URL(fileURLWithPath: path)),
+    baseline = ConsumerNativePolicy(path: consumerBundledAsset(Self.protectionAsset), expectedDigest: Self.protectionSHA256)
+    if let path = consumerBundledAsset("assets/policy/consumer_update_keys.json"), let data = try? Data(contentsOf: URL(fileURLWithPath: path)),
       let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any], json["schemaVersion"] as? Int == 1 {
       updateKeys = json["keys"] as? [String: String] ?? [:]
     } else { updateKeys = [:] }
@@ -497,11 +495,25 @@ private final class ProtectedWebView: NSObject, WKNavigationDelegate, WKUIDelega
     consumerSetWebActivity(renderer, allowed: active && foreground)
     observations = [
       renderer.observe(\.estimatedProgress, options: [.new]) { [weak self] _, _ in self?.emit() },
-      renderer.observe(\.isLoading, options: [.new]) { [weak self] _, _ in self?.emit() },
+      // Completing a same-document history request can clear WebKit's pending
+      // load without a second URL notification. Publish after that transition.
+      renderer.observe(\.isLoading, options: [.new]) { [weak self] renderer, _ in self?.observedURL(renderer); self?.emit() },
       renderer.observe(\.title, options: [.new]) { [weak self] _, _ in self?.emit() },
-      renderer.observe(\.url, options: [.new]) { [weak self] renderer, _ in self?.observedURL(renderer) },
-      renderer.observe(\.canGoBack, options: [.new]) { [weak self] _, _ in self?.emit() },
-      renderer.observe(\.canGoForward, options: [.new]) { [weak self] _, _ in self?.emit() },
+      renderer.observe(\.url, options: [.new]) { [weak self] renderer, _ in
+        guard let self = self else { return }
+        let request = self.requestId, revision = self.lifecycleRevision
+        self.observedURL(renderer)
+        // WebKit can publish URL KVO before its current history item changes.
+        // Recheck only the same request/lifetime after that transaction;
+        // observedURL still fences renderer identity, committed history and policy.
+        DispatchQueue.main.async { [weak self, weak renderer] in
+          guard let self = self, let renderer = renderer,
+            self.requestId == request, self.lifecycleRevision == revision else { return }
+          self.observedURL(renderer)
+        }
+      },
+      renderer.observe(\.canGoBack, options: [.new]) { [weak self] renderer, _ in self?.observedURL(renderer); self?.emit() },
+      renderer.observe(\.canGoForward, options: [.new]) { [weak self] renderer, _ in self?.observedURL(renderer); self?.emit() },
     ]
     container.addSubview(renderer)
     return renderer
@@ -831,4 +843,12 @@ private final class ProtectedWebView: NSObject, WKNavigationDelegate, WKUIDelega
     guard current else { return }
     bridge?.emit("downloadFailed", ["viewId": id, "requestId": requestId, "reason": "The download could not finish."])
   }
+}
+
+/// Flutter macOS bundles application assets in App.framework's Resources.
+/// Use the same sealed-bundle resolver in production and native acceptance.
+func consumerBundledAsset(_ asset: String) -> String? {
+  guard let frameworks = Bundle.main.privateFrameworksURL,
+    let app = Bundle(url: frameworks.appendingPathComponent("App.framework")) else { return nil }
+  return app.path(forResource: asset, ofType: nil, inDirectory: "flutter_assets")
 }

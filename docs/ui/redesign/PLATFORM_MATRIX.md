@@ -1,3 +1,5 @@
+> **Native macOS branch addendum (2026-09-25).** This branch starts from the completed UI checkpoint and adds the native macOS target. The current shared UI/mobile/web evidence is maintained in the [sibling UI implementation status](../../../../wingman-browser/docs/ui/redesign/IMPLEMENTATION_STATUS.md). The desktop implementation, exact tests, artifact, and remaining foreground-input acceptance gap are recorded in [macOS verification](macos/README.md). Older checklist text below is inherited checkpoint history, not the final desktop result.
+
 # Platform acceptance matrix
 
 Initial audit, 2026-09-25. All implementation/test columns are pending until recorded evidence exists.

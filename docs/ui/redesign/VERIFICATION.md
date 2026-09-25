@@ -1,3 +1,5 @@
+> **Native macOS branch addendum (2026-09-25).** This branch starts from the completed UI checkpoint and adds the native macOS target. The current shared UI/mobile/web evidence is maintained in the [sibling UI implementation status](../../../../wingman-browser/docs/ui/redesign/IMPLEMENTATION_STATUS.md). The desktop implementation, exact tests, artifact, and remaining foreground-input acceptance gap are recorded in [macOS verification](macos/README.md). Older checklist text below is inherited checkpoint history, not the final desktop result.
+
 # Verification ledger
 
 Date:2026-09-25. macOS15.7.4 arm64; Flutter3.44.4/Dart3.12.2; Xcode26.3; Java17. Commands ran from the UI worktree unless specified. Logs are local evidence; generated build output is not a release certification.

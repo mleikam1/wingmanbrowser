@@ -233,7 +233,9 @@ void main() {
           findsOneWidget,
         );
         expect(
-          find.textContaining('Native desktop apps are a separate project'),
+          find.textContaining(
+            'Native search requires a working browser engine and protection baseline',
+          ),
           findsOneWidget,
         );
         await tester.pumpWidget(const SizedBox());

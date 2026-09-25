@@ -197,6 +197,39 @@ final class RunnerTests: XCTestCase {
       XCTAssertTrue(view.view().subviews.contains { $0 === web })
     }
     change("window.historyMarker='kept'; history.pushState({}, '', '/history-results?q=pencils')", suffix: "/history-results?q=pencils")
+    // The Flutter toolbar uses native channel history, including the first
+    // document entry. URL KVO can precede WebKit's current-item transaction.
+    messenger.invoke("back", ["viewId": 810])
+    waitForJavaScript(web, "location.href === '\(origin)/popup-parent' && window.historyMarker === 'kept'")
+    XCTAssertEqual(bridge.testDocumentIdentity(810)?.url, origin + "/popup-parent")
+    messenger.invoke("forward", ["viewId": 810])
+    waitForJavaScript(web, "location.href === '\(origin)/history-results?q=pencils' && window.historyMarker === 'kept'")
+    XCTAssertEqual(bridge.testDocumentIdentity(810)?.url, origin + "/history-results?q=pencils")
+    XCTAssertEqual(bridge.testDocumentIdentity(810)?.generation, generation)
+    XCTAssertEqual(server.counts["/popup-parent"], 1)
+    // Middle-to-middle traversal keeps both toolbar availability flags true.
+    // Address publication must also observe settlement of the pending load.
+    change("history.pushState({}, '', '/history-middle')", suffix: "/history-middle")
+    change("history.pushState({}, '', '/history-last')", suffix: "/history-last")
+    change("history.back()", suffix: "/history-middle")
+    XCTAssertTrue(web.canGoBack && web.canGoForward)
+    publishedURLs.removeAll()
+    messenger.invoke("back", ["viewId": 810])
+    waitForJavaScript(web, "location.href === '\(origin)/history-results?q=pencils' && window.historyMarker === 'kept'")
+    XCTAssertEqual(bridge.testDocumentIdentity(810)?.url, origin + "/history-results?q=pencils")
+    XCTAssertTrue(publishedURLs.contains(origin + "/history-results?q=pencils"))
+    XCTAssertTrue(web.canGoBack && web.canGoForward)
+    publishedURLs.removeAll()
+    messenger.invoke("forward", ["viewId": 810])
+    waitForJavaScript(web, "location.href === '\(origin)/history-middle' && window.historyMarker === 'kept'")
+    XCTAssertEqual(bridge.testDocumentIdentity(810)?.url, origin + "/history-middle")
+    XCTAssertTrue(publishedURLs.contains(origin + "/history-middle"))
+    XCTAssertTrue(web.canGoBack && web.canGoForward)
+    XCTAssertEqual(bridge.testDocumentIdentity(810)?.generation, generation)
+    XCTAssertTrue(view.view().subviews.contains { $0 === web })
+    XCTAssertNil(server.counts["/history-middle"])
+    XCTAssertNil(server.counts["/history-last"])
+    change("history.back()", suffix: "/history-results?q=pencils")
     change("history.replaceState({}, '', '/history-results?q=colored-pencils')", suffix: "/history-results?q=colored-pencils")
     change("history.pushState({}, '', '#details')", suffix: "/history-results?q=colored-pencils#details")
     change("history.back()", suffix: "/history-results?q=colored-pencils")
@@ -282,6 +315,26 @@ final class RunnerTests: XCTestCase {
     waitForClose(); wait(for: [closed], timeout: 11)
     XCTAssertTrue(view.view().subviews.isEmpty)
     XCTAssertNil(server.targets["/popup-parent?must-not-open=1"])
+
+    // Also close without a superseding request: the saved restore still has
+    // the same request ID, so only its released-lifetime fence can reject it.
+    messenger.invoke("open", ["viewId": 810, "requestId": 6, "url": origin + "/popup-parent?restore-must-stay-closed=1"])
+    let finalWeb = try XCTUnwrap(view.view().subviews.compactMap { $0 as? WKWebView }.first)
+    waitForJavaScript(finalWeb, "location.search === '?restore-must-stay-closed=1' && document.title === 'Popup parent'")
+    let finalCompletions = messenger.completions["updateRestrictions", default: 0]
+    messenger.invoke("updateRestrictions", ["viewId": 810, "blockedUrls": [origin + "/denied-history", origin + "/never-restore-after-close"]])
+    bridge.closeAll()
+    let restoreClosed = expectation(description: "Saved restore finishes after native close")
+    let restoreDeadline = Date().addingTimeInterval(10)
+    func waitForRestoreClose() {
+      if messenger.completions["updateRestrictions", default: 0] > finalCompletions { restoreClosed.fulfill() }
+      else if Date() >= restoreDeadline { XCTFail("Saved restore preparation did not complete"); restoreClosed.fulfill() }
+      else { DispatchQueue.main.asyncAfter(deadline: .now() + 0.05, execute: waitForRestoreClose) }
+    }
+    waitForRestoreClose(); wait(for: [restoreClosed], timeout: 11)
+    XCTAssertTrue(view.view().subviews.isEmpty)
+    XCTAssertEqual(server.targets["/popup-parent?restore-must-stay-closed=1"], 1)
+
 
   }
 

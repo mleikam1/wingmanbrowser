@@ -1,5 +1,10 @@
 # Native audit and desktop preparation
 
+Desktop branch addendum: the audit below records the UI baseline. The separate
+`feat/wingman-macos` implementation and current verification evidence are now in
+[macOS verification](macos/README.md). Pending desktop statements below describe
+the original audit checkpoint, not the current implementation status.
+
 Audit date: 2026-09-25. Work branch: `feat/wingman-wow-ui`; initial checkout commit: `254c90717eb9e2837e5bbd1e757c02f3a7513d56`. The branch was created from the current repository checkout, not a historical rollback. This record distinguishes source inspection, new execution, and historical acceptance.
 
 ## Existing engines and boundaries
