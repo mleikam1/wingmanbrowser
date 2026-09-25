@@ -1,0 +1,9 @@
+00:00 +0: loading /Users/MattLeikam/Documents/Codex/2026-09-25/files-mentioned-by-the-user-wingman/outputs/wingman-browser/test/ui/preferences_reset_welcome_test.dart
+00:00 +0: (setUpAll)
+00:00 +0: explicit reset alone repairs malformed Home data after durable success
+00:00 +1: queued reset cannot write after its controller session closes
+00:00 +2: private Home reset neither reads nor replaces the owner layout
+00:00 +3: Home reset cancellation and pending write preserve saved choices
+00:03 +4: first-run failed save stays on Welcome and retry enters Home
+00:04 +5: (tearDownAll)
+00:04 +5: All tests passed!

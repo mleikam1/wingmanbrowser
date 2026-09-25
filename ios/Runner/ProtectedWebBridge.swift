@@ -360,6 +360,7 @@ private final class ProtectedWebView: NSObject, FlutterPlatformView, WKNavigatio
   private var blockedSearch = false
   private var blockedURLs = Set<String>()
   private(set) var documentGeneration = 0
+  private var lifecycleRevision = 0
   private var uploadGeneration = -1
   private weak var uploadRenderer: WKWebView?
   private var uploadOrigin: String?
@@ -446,14 +447,16 @@ private final class ProtectedWebView: NSObject, FlutterPlatformView, WKNavigatio
     let version = restrictionVersion
     restrictionsReady = false; restrictionFailure = false
     let restoreURL = web == nil ? nil : checked(currentURL).url
+    let restoreRequest = requestId
     // Adding a restriction closes the old renderer before new resource rules
     // compile. A live script cannot race the newly tightened policy.
     release()
+    let restoreRevision = lifecycleRevision
     var hosts = Array(next)
     if search { hosts += ["safe.duckduckgo.com", "duckduckgo.com"] }
     if hosts.isEmpty && urls.isEmpty {
       if let list = additionalRules { web?.configuration.userContentController.remove(list) }
-      additionalRules = nil; restrictionsReady = true; if let restoreURL = restoreURL { open(restoreURL, request: requestId) }; completion(); return
+      additionalRules = nil; restrictionsReady = true; if let restoreURL = restoreURL, requestId == restoreRequest, lifecycleRevision == restoreRevision { open(restoreURL, request: restoreRequest) }; completion(); return
     }
     var rules = hosts.map { host in
       ["trigger": ["url-filter": "^https?://([^/]+\\.)?" + NSRegularExpression.escapedPattern(for: host) + "\\.?[/:]"], "action": ["type": "block"]] as [String: Any]
@@ -467,7 +470,7 @@ private final class ProtectedWebView: NSObject, FlutterPlatformView, WKNavigatio
       guard let self = self, version == self.restrictionVersion else { completion(); return }
       guard let list = list, error == nil else { self.release(); self.restrictionFailure = true; self.restrictionsReady = true; completion(); return }
       if let old = self.additionalRules { self.web?.configuration.userContentController.remove(old) }
-      self.additionalRules = list; self.web?.configuration.userContentController.add(list); self.restrictionsReady = true; if let restoreURL = restoreURL { self.open(restoreURL, request: self.requestId) }; completion()
+      self.additionalRules = list; self.web?.configuration.userContentController.add(list); self.restrictionsReady = true; if let restoreURL = restoreURL, self.requestId == restoreRequest, self.lifecycleRevision == restoreRevision { self.open(restoreURL, request: restoreRequest) }; completion()
     }
   }
 
@@ -528,8 +531,9 @@ private final class ProtectedWebView: NSObject, FlutterPlatformView, WKNavigatio
   func open(_ url: URL, request: Int64) {
     requestId = request; errorText = nil
     if !restrictionsReady {
+      let revision = lifecycleRevision
       DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
-        guard let self = self, self.requestId == request else { return }; self.open(url, request: request)
+        guard let self = self, self.requestId == request, self.lifecycleRevision == revision else { return }; self.open(url, request: request)
       }
       return
     }
@@ -557,6 +561,7 @@ private final class ProtectedWebView: NSObject, FlutterPlatformView, WKNavigatio
   }
   func stop() { web?.stopLoading(); emit() }
   func release() {
+    lifecycleRevision += 1
     bridge?.cancelWindows(openedBy: self)
     windowToken = nil; awaitingWindowAdoption = false
     let deferred = deferredWindowNavigations; deferredWindowNavigations.removeAll(); deferred.forEach { $0.cancel() }
@@ -653,7 +658,7 @@ private final class ProtectedWebView: NSObject, FlutterPlatformView, WKNavigatio
     decisionHandler(.allow)
   }
   func webView(_ webView: WKWebView, didReceiveServerRedirectForProvisionalNavigation navigation: WKNavigation!) {
-    guard let raw = webView.url?.absoluteString else { return }
+    guard webView === web, bridge?.mayOpen == true, let raw = webView.url?.absoluteString else { return }
     let decision = checked(raw)
     if decision.url == nil { webView.stopLoading(); blocked(raw, decision) }
   }

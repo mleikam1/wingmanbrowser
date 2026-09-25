@@ -172,6 +172,7 @@ final class RunnerTests: XCTestCase {
     }
     waitForRenderer(); wait(for: [mounted], timeout: 10)
     let web = try XCTUnwrap(view.view().subviews.compactMap { $0 as? WKWebView }.first)
+    let retiredDelegate = web.navigationDelegate
     let window = UIWindow(frame: view.view().frame); let controller = UIViewController()
     window.rootViewController = controller; controller.view.addSubview(view.view()); window.isHidden = false
     defer { window.isHidden = true }
@@ -229,6 +230,78 @@ final class RunnerTests: XCTestCase {
     XCTAssertEqual(blocked, ["blockAdditionalRestriction"])
     XCTAssertTrue(view.view().subviews.isEmpty, "A denied history URL must not leave an interactive renderer")
     XCTAssertNil(server.counts["/denied-history"])
+
+    // A queued callback from the retired renderer must not manufacture a denial
+    // carrying the replacement renderer's newer request identity.
+    var lateBoundaries = 0
+    messenger.onEvent = { call in if call.method == "navigationBlocked" { lateBoundaries += 1 } }
+    messenger.invoke("open", ["viewId": 810, "requestId": 3, "url": origin + "/popup-parent?new=1"])
+    let replacement = try XCTUnwrap(view.view().subviews.compactMap { $0 as? WKWebView }.first)
+    waitForJavaScript(replacement, "document.title === 'Popup parent'")
+    retiredDelegate?.webView?(web, didReceiveServerRedirectForProvisionalNavigation: nil)
+    XCTAssertEqual(lateBoundaries, 0)
+    XCTAssertEqual(bridge.testDocumentIdentity(810)?.url, origin + "/popup-parent?new=1")
+
+    // An explicit newer navigation wins over automatic restore after an
+    // asynchronously compiled restriction. Published state must never claim
+    // that the old destination belongs to the new request.
+    var restoredStaleDestination = false
+    messenger.onEvent = { call in
+      guard call.method == "pageState", let value = call.arguments as? [String: Any] else { return }
+      if value["url"] as? String == origin + "/popup-parent?new=1", (value["requestId"] as? NSNumber)?.int64Value == 4 { restoredStaleDestination = true }
+    }
+    messenger.invoke("updateRestrictions", ["viewId": 810, "blockedUrls": [origin + "/denied-history", origin + "/never-restore"]])
+    messenger.invoke("open", ["viewId": 810, "requestId": 4, "url": origin + "/popup-parent?new=2"])
+    let nextMounted = expectation(description: "New navigation resumes after rule compilation")
+    let nextDeadline = Date().addingTimeInterval(10)
+    func waitForNext() {
+      if view.view().subviews.contains(where: { $0 is WKWebView }) { nextMounted.fulfill() }
+      else if Date() >= nextDeadline { XCTFail("Replacement renderer did not mount"); nextMounted.fulfill() }
+      else { DispatchQueue.main.asyncAfter(deadline: .now() + 0.05, execute: waitForNext) }
+    }
+    waitForNext(); wait(for: [nextMounted], timeout: 11)
+    let nextWeb = try XCTUnwrap(view.view().subviews.compactMap { $0 as? WKWebView }.first)
+    waitForJavaScript(nextWeb, "location.search === '?new=2' && document.title === 'Popup parent'")
+    XCTAssertFalse(restoredStaleDestination)
+
+    // Closing all renderers while rule preparation is pending invalidates both
+    // the saved restore and polling open. No fresh Dart request follows close.
+    messenger.onEvent = nil
+    let completedBefore = messenger.completions["updateRestrictions", default: 0]
+    messenger.invoke("updateRestrictions", ["viewId": 810, "blockedUrls": [origin + "/denied-history", origin + "/never-after-close"]])
+    messenger.invoke("open", ["viewId": 810, "requestId": 5, "url": origin + "/popup-parent?must-not-open=1"])
+    bridge.closeAll()
+    let closed = expectation(description: "Rule preparation completes after native close")
+    let closeDeadline = Date().addingTimeInterval(10)
+    func waitForClose() {
+      if messenger.completions["updateRestrictions", default: 0] > completedBefore {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { closed.fulfill() }
+      } else if Date() >= closeDeadline { XCTFail("Rule preparation did not complete"); closed.fulfill() }
+      else { DispatchQueue.main.asyncAfter(deadline: .now() + 0.05, execute: waitForClose) }
+    }
+    waitForClose(); wait(for: [closed], timeout: 11)
+    XCTAssertTrue(view.view().subviews.isEmpty)
+    XCTAssertNil(server.targets["/popup-parent?must-not-open=1"])
+
+    // Also close without a superseding request: the saved restore still has
+    // the same request ID, so only its released-lifetime fence can reject it.
+    messenger.invoke("open", ["viewId": 810, "requestId": 6, "url": origin + "/popup-parent?restore-must-stay-closed=1"])
+    let finalWeb = try XCTUnwrap(view.view().subviews.compactMap { $0 as? WKWebView }.first)
+    waitForJavaScript(finalWeb, "location.search === '?restore-must-stay-closed=1' && document.title === 'Popup parent'")
+    let finalCompletions = messenger.completions["updateRestrictions", default: 0]
+    messenger.invoke("updateRestrictions", ["viewId": 810, "blockedUrls": [origin + "/denied-history", origin + "/never-restore-after-close"]])
+    bridge.closeAll()
+    let restoreClosed = expectation(description: "Saved restore finishes after native close")
+    let restoreDeadline = Date().addingTimeInterval(10)
+    func waitForRestoreClose() {
+      if messenger.completions["updateRestrictions", default: 0] > finalCompletions { restoreClosed.fulfill() }
+      else if Date() >= restoreDeadline { XCTFail("Saved restore preparation did not complete"); restoreClosed.fulfill() }
+      else { DispatchQueue.main.asyncAfter(deadline: .now() + 0.05, execute: waitForRestoreClose) }
+    }
+    waitForRestoreClose(); wait(for: [restoreClosed], timeout: 11)
+    XCTAssertTrue(view.view().subviews.isEmpty)
+    XCTAssertEqual(server.targets["/popup-parent?restore-must-stay-closed=1"], 1)
+
   }
 
   @MainActor
@@ -666,6 +739,7 @@ private final class PopupTestMessenger: NSObject, FlutterBinaryMessenger {
   private var handler: FlutterBinaryMessageHandler?
   var onEvent: ((FlutterMethodCall) -> Void)?
   var errors: [FlutterError?] = []
+  var completions: [String: Int] = [:]
   func send(onChannel channel: String, message: Data?) { if let data = message { onEvent?(FlutterStandardMethodCodec.sharedInstance().decodeMethodCall(data)) } }
   func send(onChannel channel: String, message: Data?, binaryReply callback: FlutterBinaryReply?) { send(onChannel: channel, message: message); callback?(nil) }
   func setMessageHandlerOnChannel(_ channel: String, binaryMessageHandler handler: FlutterBinaryMessageHandler?) -> FlutterBinaryMessengerConnection { self.handler = handler; return 1 }
@@ -673,7 +747,7 @@ private final class PopupTestMessenger: NSObject, FlutterBinaryMessenger {
   func invoke(_ method: String, _ args: [String: Any]) {
     let codec = FlutterStandardMethodCodec.sharedInstance()
     handler?(codec.encode(FlutterMethodCall(methodName: method, arguments: args))) { data in
-      guard let data = data else { return }; self.errors.append(codec.decodeEnvelope(data) as? FlutterError)
+      self.completions[method, default: 0] += 1; guard let data = data else { return }; self.errors.append(codec.decodeEnvelope(data) as? FlutterError)
     }
   }
 }

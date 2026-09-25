@@ -1,0 +1,33 @@
+{
+  "nativeManifest": "ios-final-summary-20260925T203524Z.json",
+  "checks": {
+    "flutter": {
+      "command": "flutter test --no-pub --reporter expanded",
+      "passed": 1041,
+      "skipped": 6,
+      "failed": 0,
+      "seconds": 130,
+      "log": "flutter-final-after-ios-20260925T204000Z.log",
+      "exitCode": 0,
+      "logSha256": "b15a01f6f52685101142199af38487950538632ab80b463073af540598c8fc61"
+    },
+    "stateCaptures": {
+      "command": "flutter test --no-pub --reporter expanded --dart-define=WINGMAN_REDESIGN_CAPTURES=true test/ui/preferences_reset_welcome_test.dart",
+      "passed": 5,
+      "skipped": 0,
+      "failed": 0,
+      "seconds": 4,
+      "log": "preferences-state-captures-final-20260925T204500Z.log",
+      "exitCode": 0,
+      "logSha256": "0ebbd06b1386a16814383e33e55633e3dc3f0db9ebdd4974640488d520438422"
+    },
+    "analyzer": {
+      "command": "flutter analyze --no-pub",
+      "issues": 0,
+      "seconds": 7.2,
+      "log": "analyzer-final-after-ios-20260925T204600Z.log",
+      "exitCode": 0,
+      "logSha256": "54f154cfb4460030d9e1b43df43d9110c06cdd0ac0cc10774521160bd791f40a"
+    }
+  }
+}
