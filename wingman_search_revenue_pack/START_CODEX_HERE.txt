@@ -1,0 +1,67 @@
+WINGMAN — BRAVE SEARCH, NEWS AND AD REVENUE IMPLEMENTATION (V2)
+
+Work in the existing wingmanbrowser repository selected in this Codex workspace.
+Read wingman_search_revenue_pack/START_HERE.md, 00_MASTER_CODEX_PROMPT.txt,
+07_BRAVE_ACTIVATION_AND_REVENUE_HARDENING.txt, BRAVE_API_CONTRACT.md,
+LOCAL_KEY_SETUP.md and SOURCES.md before changing code.
+
+Implement phases 01–06 in the real app and backend. If work is already underway,
+preserve it and apply the v2 differences; do not restart, reset, overwrite local
+changes or replace the browser with a separate demo. Give progress checkpoints
+and continue independent work without asking permission after every phase.
+
+PRODUCT
+Use Brave Web Search for Wingman-branded organic results and Brave News Search
+for news. Keep Wingman branding and permanent protections. There is no named
+assistant to introduce. Consumers pay nothing: no subscriptions or paid privacy.
+Build Wingman Search Ads, a restrained New Tab sponsor and finite news sponsor
+placements, plus real campaign administration, payments/test reconciliation and
+aggregate earned-revenue reporting. Optimize sustainable net contribution, not
+ad density, while protecting search relevance, security, privacy and performance.
+
+CREDENTIALS
+I already obtained a Brave API key. Do not ask me to create another account or
+paste a key into this conversation. Use an existing authorized local backend
+secret, or first create a hidden local entry command and show me the exact
+command to run. Never retrieve credentials from chat logs or other projects.
+Use a replacement for the chat-shared key for continued development/production.
+No key belongs in source, prompts, app bundles, URLs, command arguments, screenshots
+or diagnostics. Fixture work must continue while local entry is pending.
+
+LIMITED LIVE-TEST AUTHORIZATION
+When I execute this prompt, I authorize one local smoke-test run of at most two
+Brave requests total: one Web Search and one News Search, synthetic nonsensitive
+queries, count=1, strict filtering, no retries. Enforce a persistent attempt cap
+before dispatch; stop on the first failure. At the reviewed list rate two
+successful calls are $0.01 before credits/account adjustments. If a higher rate
+or new purchase is required, do not proceed without my approval. This allowance
+is not permission for ongoing live traffic, background refreshes or unlimited tests.
+Keep the development cap proposal distinct from actual spending authorization.
+
+SECURITY AND COMMERCIAL RULES
+The app calls the Wingman gateway; only that backend holds Brave credentials.
+Explicitly enforce strict search on both endpoints and the additional Wingman
+policy on queries, results, ads and supported navigation. Do not add bypasses.
+Do not store consumer search/browsing histories or create behavioral ad profiles.
+No third-party pixels, tracking SDKs, fingerprinting, secret paid organic ranking,
+forced ad views, interstitial browsing gates or ads inserted into external sites.
+
+Brave's Search API supplies result data, not verified advertiser demand. Build
+a usable direct-campaign system and contracted-partner extension points, never
+a fake Brave ad endpoint. Paying ads need real approved demand, valid measurement
+and reconciled earned revenue. Keep unknown rights and unapproved partner demand
+disabled without blocking unrelated coding. Shared Brave news caching and images
+require their applicable documented permissions; do not bypass that review.
+
+Do not purchase infrastructure, enable auto-recharge, create another paid plan,
+change DNS/IAM, deploy production, send outreach, accept contracts or charge
+advertisers without specific approval. Do not modify unrelated cloud projects.
+
+DELIVER
+Implement code and tests, not another high-level proposal. Finish with changed
+files, exact commands, passed/failed/skipped tests, actual platform evidence,
+provider authentication/schema evidence or the precise blocker, attempts versus
+confirmed charges, privacy/security checks, ad/finance tests, production flags,
+remaining owner actions and a rollback plan preserving data and budget ledgers.
+Clearly distinguish implemented, locally verified, production-authorized and
+actually earning revenue. Start by inspecting the current workspace and begin.

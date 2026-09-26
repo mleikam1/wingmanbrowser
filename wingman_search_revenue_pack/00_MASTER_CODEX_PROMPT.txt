@@ -1,0 +1,50 @@
+MASTER TASK — WINGMAN SEARCH, NEWS, AND PRIVACY-PRESERVING AD REVENUE
+
+Work in the existing repository https://github.com/mleikam1/wingmanbrowser and the local checkout selected in this Codex workspace. Implement the following phases in the real application and backend, not a standalone mockup. Read START_HERE.md, SOURCES.md, BRAVE_API_CONTRACT.md and 07_BRAVE_ACTIVATION_AND_REVENUE_HARDENING.txt when this pack is available locally. The v2 addendum takes precedence over outdated setup instructions, never over security, privacy or owner spending boundaries. Preserve completed implementation and apply only the missing changes.
+
+BUSINESS AND PRODUCT REQUIREMENTS
+Wingman is a consumer-first browser with the mission “We've got your back, not your data.” Build Wingman-branded web search and news using Brave Search API, with Wingman Search Ads and restrained first-party sponsorships. Consumers pay nothing: no subscriptions, no paid privacy tier, and no payment-gated protection. Do not add cryptocurrency, browser rewards, forced advertising views, interstitial browsing gates, or a mandatory account.
+
+Ads may be selected using the current submitted query, an explicitly opened nonsensitive content section, or untargeted campaign rotation. Do not select them using search/browsing history, retained interests, inferred personal attributes, cross-site identifiers, fingerprinting or external audience segments. Do not sell or expose individual searches, users or browsing sessions to advertisers.
+
+Preserve permanent baseline protections for pornography/explicit sexual material, gambling services, prohibited alcohol/drug/tobacco promotion, exploitation and malicious destinations. Optional focus restrictions can tighten access but cannot weaken the baseline. No switches, URL parameters, remote flags, allowlists, private-mode exceptions, or release/debug shortcuts that override mandatory protection. Distinguish prohibited promotion from legitimate news, education, recovery and health information. Do not promise perfect whole-web classification.
+
+REPOSITORY BASELINE
+Inspect AGENTS.md, git status, current branch, local commits, README, lib/, native platform code, backend/, tests and docs before changes. Read docs/CURRENTS_INTEGRATION.md, docs/CONSUMER_BROWSER_RECOVERY.md, docs/PROTECTION_COVERAGE.md, docs/SEARCH_ACCEPTANCE.md and docs/ui/ when present. Read actual code: documentation contains historical sections and is not proof of current behavior.
+The reviewed remote repository already has Flutter UI, Android System WebView, iOS WKWebView, and a Python news ingestion/snapshot backend. Preserve that stack unless a specific measured blocker justifies a narrowly scoped change. Add a Brave news adapter to existing provider-neutral plumbing. Do not turn the public read-only content service into an arbitrary open proxy.
+Do not delete local changes, reset the repository, clear user app data, uninstall personal-device builds, or overwrite branding. Use a feature branch and small reviewable commits only when the local workspace permits. Do not push or publish without authorization.
+
+WORKING BOUNDARIES
+Proceed with local implementation, fixtures, tests, documentation and dry-run deployment plans. Ask only for owner-controlled blockers that cannot be resolved by inspection: an API credential entered locally, an approved dedicated project/domain, a concrete spending authorization, signed commercial rights, or final release approval. Continue independent work while those remain missing. Never invent an API key, a partner approval, an advertiser, a billing account, a production host or successful test evidence.
+Do not create paid resources, increase quotas, enable auto-recharge, accept agreements, send outreach, charge advertisers, use employer accounts, change DNS/IAM or deploy production services without specific authorization. Never modify Trivia Tussle, Grumpy Skies, wingman-interactive-live, or unrelated resources. Access to my computer is not permission to spend or to alter other projects.
+
+COMMERCIAL REALITY
+Brave Search API provides organic result data. Do not invent a Brave advertising endpoint or assume API credentials grant ad demand/revenue sharing. A partner adapter must remain disabled until real documentation, credentials, permissible data fields, inventory approval and signed commercial terms exist.
+Build a usable direct-campaign route so a real approved sponsor can buy a defined placement through prepaid CPC or impression delivery. Begin with manually approved campaigns rather than an unmoderated public auction. A fixture ad, house ad, sponsored NewsUSA article, advertiser inquiry or prepayment is not proof of earned ad revenue.
+
+RIGHTS AND PRIVACY
+Re-read current official Brave docs, pricing, terms and privacy notice; record review dates. Public terms distinguish transient operational storage from broader search-result caching/storage. Default shared Brave news snapshots, CDN redistribution, offline preview retention and media caching to disabled until the required rights are documented. An arbitrary short TTL is not a legal permission. Publisher image/full-text rights are separate from API access.
+Brave's reviewed standard API privacy notice permits query retention up to 90 days and offers enterprise zero-retention options. Never publish “nothing leaves your device” or “nobody stores your searches.” Send only necessary query/language/selected-country fields server-to-server; do not forward consumer IP, cookies, account identifiers or complete browser headers. A query may itself contain personal information. Disclose processing accurately. A no-provider-retention requirement blocks launch until supported by the applicable agreement.
+No consumer raw query/page URL/referrer storage in databases, logs, analytics, traces, error reports, crash dumps, replay tools, backups or exported reports. Audit infrastructure logging, not only application print statements. Do not claim hashed queries/IPs are anonymous. Local preferences must not become remote advertising profiles.
+Use event-scoped short-lived ad tokens only for delivery/anti-replay, never stable user identifiers. Keep security counters purpose-limited, ephemeral and unlinked to queries; disclose any pseudonymous processing. Keep legitimate advertiser contact/invoice/payment records separate from consumer activity. Private and student/managed surfaces have no ads or automatic news requests in this release.
+
+SYSTEM SHAPE
+Existing app -> Wingman query protection -> secret-bearing search gateway -> Brave -> validated/filtered organic results -> Wingman presentation.
+The gateway extracts an ephemeral nonsensitive intent for Wingman's isolated ad decision service. Organic ranking does not depend on bids. Ads must independently pass the policy and destination checks. Approved public scheduled news queries feed the existing content pipeline only under appropriate caching/redistribution rights.
+No ordinary navigation or unsubmitted keystroke should trigger paid search. Do not add an LLM to ordinary search or news refresh. Do not invent a named assistant, chatbot, mascot personality or AI dependency. This release is Wingman Search, Wingman News and Wingman Ads; cloud AI is outside this revenue MVP.
+
+SPENDING AND FAILURES
+Every possible paid provider attempt needs an atomic durable budget reservation before network I/O. Timeouts count conservatively. Retries, paging, news, suggestions, image requests and tests must use the same accounting boundary with separate caps. Deployments, cache deletion and credential rotation cannot reset budgets. No local SQLite-on-ephemeral-Cloud-Run fiction or in-memory multi-instance global ceiling.
+Use a measured low-cost deployment plan. Cloud billing alerts alone are not request-level spending enforcement. At budget exhaustion stop new provider spending, retain permitted ordinary browsing/local tools, and show an honest service message. Never silently weaken filtering, scrape another engine, or show fabricated fresh results.
+
+PHASES
+01 foundation/contracts/privacy/secrets/budgets;
+02 real branded search;
+03 news with rights-aware refresh;
+04 contextual ad server/campaigns/measurement;
+05 real commercial onboarding/revenue accounting;
+06 integrated tests/staged release.
+After each phase update a progress record with changed files, test commands/results, costs incurred, live-versus-fixture evidence, production flags, unresolved blockers and next action. Implement, do not stop at a proposal. Continue through independent local phases without requesting a new approval after each one. A phase checkpoint is a status update, not a mandatory pause. Explicit approvals are still required for production activity, new spending, commercial agreements and externally consequential actions.
+
+ACCEPTANCE
+At completion provide: changed files; runnable setup commands; real platform evidence; exact owner actions; privacy data-flow/retention inventory; partner and image-rights register; cost/earned-revenue dashboard; secure campaign operation workflow; failure drills; rollback plan; and clear distinctions among build-ready, production-authorized, revenue-ready and actually earning revenue. No fake screenshots, fabricated tests, hardcoded income or “production ready” claims with missing dependencies.

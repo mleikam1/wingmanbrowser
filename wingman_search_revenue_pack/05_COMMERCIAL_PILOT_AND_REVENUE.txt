@@ -1,0 +1,44 @@
+PHASE 05 — TURN INVENTORY INTO PAYING REVENUE
+Apply all master instructions. The objective is a usable commercial workflow, not a dashboard with fake income.
+
+1. Build an advertiser-facing landing page on an owner-approved Wingman property. Explain available sponsored search, New Tab and news placements, content exclusions, contextual selection, no behavioral profiles, reporting limitations and the approval process. Show only measured aggregate traffic with a date range; with no verified traffic, say that the paid pilot is not yet open. Do not fabricate advertiser logos, testimonials, audience demographics, conversion rates, unique reach or coverage. A small contact/application workflow is sufficient; no public self-serve unmoderated ad auction.
+
+2. Implement an authenticated owner/admin area separated from public search. Require proper operator authentication and authorization; do not use a secret URL or a key in a web bundle. Provide sponsor/application review, creative preview, domain approval, campaign dates, placement, CPC/CPM rate, budget, proof of contract/funds, pause controls and reports. Preserve audit records of operator changes without storing consumer traffic. Approving a campaign must not change organic ranking or content restrictions.
+
+3. Create a paid-pilot package template for owner review, not legal advice or a binding agreement. It should specify inventory, permitted content, geographic/language scope, eligible placement definition, impression/click measurement, invalid-traffic treatment, aggregate-only reports, budget/price, payment timing, underdelivery/refunds, cancellation and privacy boundaries. Advertisers cannot demand user queries, device IDs, pixels, individual conversions or targeted audiences. Do not make offers/send outreach/accept agreements on my behalf without approval.
+
+4. Provide two sample commercial packages marked illustrative, not market forecasts: a $500 sponsor package at $10 per 1,000 qualifying impressions, requiring 50,000 deliverable impressions; or a prepaid $500 contextual search campaign at $0.50 per valid click, capped at 1,000 valid clicks. Quotes require verified available inventory and owner approval. Do not promise a fixed delivery deadline unsupported by traffic. If the actual available audience is smaller, reduce the package or wait; never inflate impressions. Reserve contracted supply across sponsors and avoid selling the same exclusive placement twice.
+
+5. Integrate payments only with an explicitly authorized merchant account. Start with an audited invoice/manual payment reconciliation path or a real provider test environment. Never collect raw card details. A production webhook must verify signatures, prevent replay, handle retries/idempotency/refunds/chargebacks and be reconciled against the payment provider. Funds appear as prepaid advertiser liability until delivered. No live charge or auto-renewal without owner approval. Consumer subscription products are out of scope.
+
+6. Build dashboard calculations from aggregate counters and verified business records:
+- submitted/completed/failed user search-page requests;
+- total Brave attempts by endpoint, billed requests and estimated/actual cost;
+- average paid provider calls per user search-page request, with retries/failures included;
+- eligible-ad rate, fill among eligible opportunities, visible impressions, valid clicks, invalid/rejected activity;
+- earned net search revenue, New Tab/news earned revenue, refunds, partner share, payment fees and cash collected;
+- revenue per 1,000 all user search-page requests, not just commercial/monetized queries;
+- variable contribution and fully loaded operating result, with source definitions and missing costs shown.
+Do not multiply fill twice or mix CPM per impression with RPM per search. Label estimated, earned, invoiced, collected and settled amounts separately. House ads, sample campaigns, internal tests, free sponsored content and unapproved affiliate projections contribute zero commercial revenue.
+
+7. Add an editable scenario calculator using explicit assumptions, not hidden optimistic defaults:
+S = all user search-page requests during the period;
+f = fraction of S receiving one billable-quality ad opportunity;
+t = valid click-through rate for those ad opportunities;
+p = net Wingman earned amount per valid click after expected variable revenue deductions;
+k = total paid web-search calls / S;
+c = provider cost per 1,000 calls;
+v = other variable search costs per 1,000 S.
+Search revenue per 1,000 S = 1000*f*t*p.
+Search delivery cost per 1,000 S = k*c + v.
+Contribution = revenue - delivery cost.
+Use initial sensitivity inputs c=5, k=1.05 and v=1.25, with scenarios (f,t,p)=(0.30,0.02,0.40), (0.50,0.03,0.60), (0.65,0.04,0.80). Expected arithmetic: revenues 2.40,9.00,20.80; costs 6.50; contributions -4.10,2.50,14.30. None of these are predicted Wingman results. Compute fully loaded outcomes separately including news, fixed infrastructure, salaries/time, sales, licenses, taxes, support and acquisition.
+
+8. Build partner-evaluation records for any external demand source: company, contact, API/docs, permitted Wingman web/native inventory, organic-provider compatibility, minimum traffic, fees/revenue share, payment terms, invalid-traffic rules, mandatory fields, retention, SDK/cookie/pixel behavior, restricted-category controls, rendering/attribution rules and agreement status. Brave's advertiser purchase console is not a publisher monetization account. Do not create a fictional integration or use an advertiser API as a publisher feed. “Non-personalized” is not proof of identifier-free operation. A partner that requires forbidden tracking stays disabled.
+
+9. Provide a commercial launch checklist. At least one paying authorized campaign/partner must have a real approved destination, funds/payment terms, live delivery and reconciled reports before claiming Wingman earns revenue. Before substantial growth, require a proposed four-week observed contribution margin >=25% on repeatable earned revenue after actual variable costs, plus safe operation and a funded runway. This is a planning gate, not a guarantee or a reason to add more intrusive ads. Use aggregate measurement, not user history, to evaluate economics. Pause paid acquisition when retention/cost evidence is insufficient.
+
+Deliver operational advertiser/admin pages, pilot templates, payment test evidence, accurate dashboards, the calculator with automated tests, and a specific list of commercial blockers. Do not mark revenue-live merely because code compiles.
+
+V2 BUSINESS OBJECTIVE
+Optimize sustainable earned net contribution subject to privacy, protection, relevance, latency and brand constraints; do not optimize clicks, gross bids or ad density alone. Show break-even coverage/CPC and downside cases, net yield by allowed placement, outstanding campaign delivery obligations, cost per completed and per submitted search, and time-to-cash assumptions. Keep search/data supply costs separate from ad demand revenue and never imply a Brave Search credential activates Brave advertiser inventory. Report verified income only from real valid delivery under an applicable agreement.
