@@ -6,7 +6,8 @@ request allowance**. The target app is **iOS internal TestFlight 0.17.0 (20)**,
 bundle ID `com.wingmanbrowser.app`.
 
 **The gateway is deployed. Hosted Web/News and News images passed verification
-in the actual iOS simulator app; the TestFlight upload remains pending.** Cloud
+in the actual iOS simulator app. Apple accepted the internal TestFlight upload;
+the build is Testing in the existing internal group. Delivery is recorded in [TESTFLIGHT_0_17_0.md](TESTFLIGHT_0_17_0.md).** Cloud
 Build `7b73a128-527b-471e-9b12-06e1b4821e0f` completed successfully. Revision
 `wingman-search-00001-mhh` is ready and receives 100% of traffic; public invocation
 is enabled. Apple delivery is recorded separately after upload.
