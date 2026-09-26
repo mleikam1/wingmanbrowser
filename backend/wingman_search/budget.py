@@ -134,6 +134,13 @@ def rate_windows(headers: dict, now: int) -> tuple[list[dict], int]:
             periods.append(int(match[2]))
     windows = []
     for i, (limit, remaining, reset) in enumerate(zip(*fields)):
+        # Brave documents a monthly limit of zero as unlimited. Accept it only
+        # after a finite burst window and an explicit long-window policy; an
+        # ambiguous zero must not remove a real rate limit. Local spending caps
+        # remain independent of the provider's monthly allowance.
+        if (limit == 0 and remaining == 0 and i > 0 and periods is not None
+                and periods[i] >= 86_400):
+            continue
         if (limit < 1 or remaining < 0 or remaining > limit
                 or not limit.is_integer() or not remaining.is_integer()):
             raise BudgetError("invalid_rate_metadata")

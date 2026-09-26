@@ -32,12 +32,52 @@ class SearchFailure implements Exception {
       'This search is restricted by Wingman’s protection policy. Educational, health and recovery searches remain available.',
     'budget-exhausted' =>
       'Wingman Search has reached its service allowance. Ordinary browsing and local tools remain available.',
-    'provider-rate-limited' || 'service-busy' =>
-      'Wingman Search is busy. Try again later; this request will not retry automatically.',
+    'allowance-expired' =>
+      'The local search allowance has expired. It will not renew automatically.',
+    'verification-limit' || 'automated-limit-reached' =>
+      'The automated verification allowance is used up. No further verification request was sent.',
+    'allowance-paused' =>
+      'The local search allowance is paused. Its configuration or provider status needs review before another request.',
+    'provider-authentication' =>
+      'Brave did not accept the backend credential (401). Search is paused until the credential is checked.',
+    'provider-entitlement' =>
+      'Brave refused this request with an account or permission response (402/403). Check account access; this status alone does not identify a billing issue.',
+    'provider-request-invalid' =>
+      'Brave rejected the request format (400/422). Wingman’s backend configuration needs correction before retrying.',
+    'provider-rate-limited' =>
+      'Search is waiting for request pacing, throttling or quota limits. Wait before submitting again; this request will not retry automatically.',
+    'provider-unavailable' =>
+      'Brave could not complete the request. This request will not retry automatically.',
+    'service-busy' =>
+      'Wingman Search is busy. Wait before submitting again; this request will not retry automatically.',
+    'service-unavailable' =>
+      'The Wingman gateway could not complete this request. Check its service and allowance status before submitting again.',
+    'transport-dns' =>
+      'The Wingman gateway could not resolve the search provider’s address. The credential has not been verified by this request.',
+    'transport-tls' =>
+      'The Wingman gateway could not establish a verified secure connection to Brave. The credential has not been verified by this request.',
+    'transport-connection' =>
+      'The Wingman gateway could not connect to Brave. The credential has not been verified by this request.',
+    'transport-timeout' =>
+      'The request to Brave timed out. This does not establish whether the credential is valid; no automatic retry will occur.',
+    'malformed-response' =>
+      'Brave returned a response that Wingman could not read safely. This is a response error, not an empty result set.',
+    'gateway-not-configured' =>
+      'This build has no Wingman Search gateway configured. Set the app’s search gateway before submitting again.',
+    'gateway-invalid-configuration' =>
+      'This build’s Wingman Search gateway address is invalid or disallowed. Check the app endpoint and development-mode settings.',
+    'gateway-response-invalid' =>
+      'The configured gateway returned an unsupported response. Check the Wingman gateway address and mode before submitting again.',
+    'gateway-timeout' =>
+      'The Wingman gateway did not respond in time. Check that it is running and reachable; this does not indicate an invalid Brave credential.',
+    'gateway-tls' =>
+      'The app could not verify a secure connection to the Wingman gateway. Check its HTTPS configuration.',
+    'gateway-connection' =>
+      'The app could not reach the Wingman gateway. Check that it is running, reachable, and allows this app’s origin.',
     'transport-error' || 'timeout' =>
       'The search request did not finish. You can try again explicitly.',
     'configuration-required' =>
-      'Wingman Search is not configured on this build. Ordinary browsing and local tools remain available.',
+      'The Wingman gateway has live search disabled or incomplete backend configuration. Ordinary browsing and local tools remain available.',
     'cancelled' =>
       'This search was paused when you left it. Submit again to continue.',
     _ =>

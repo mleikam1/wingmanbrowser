@@ -46,6 +46,8 @@ class FakeClient implements WingmanSearchClient {
 }
 
 class FakeTransport implements SearchTransport {
+  int calls = 0;
+  SearchFailure? failure;
   Uri? endpoint;
   String? body;
   SearchTransportResponse value = SearchTransportResponse(
@@ -66,8 +68,10 @@ class FakeTransport implements SearchTransport {
   );
   @override
   Future<SearchTransportResponse> post(Uri uri, String content) async {
+    calls++;
     endpoint = uri;
     body = content;
+    if (failure case final error?) throw error;
     return value;
   }
 
@@ -76,6 +80,169 @@ class FakeTransport implements SearchTransport {
 }
 
 void main() {
+  test(
+    'missing or invalid gateway is local and does not send a request',
+    () async {
+      for (final config in {
+        '': 'gateway-not-configured',
+        'http://127.0.0.1:8895/v1/search': 'gateway-invalid-configuration',
+        'https://search.example.com/incorrect': 'gateway-invalid-configuration',
+        'https://credential@example.com/v1/search':
+            'gateway-invalid-configuration',
+      }.entries) {
+        final transport = FakeTransport();
+        final client = GatewaySearchClient.fromConfiguration(
+          config.key,
+          transport: transport,
+        );
+        expect(transport.calls, 0);
+        await expectLater(
+          client.search(SearchRequest(query: 'synthetic configuration test')),
+          throwsA(
+            isA<SearchFailure>().having((v) => v.code, 'code', config.value),
+          ),
+        );
+        expect(transport.calls, 0);
+      }
+      final transport = FakeTransport();
+      final client = GatewaySearchClient.fromConfiguration(
+        'http://127.0.0.1:8895/v1/search',
+        allowDevelopment: true,
+        transport: transport,
+      );
+      expect(transport.calls, 0);
+      await client.search(SearchRequest(query: 'synthetic explicit submit'));
+      expect(transport.calls, 1);
+      expect(transport.endpoint.toString(), 'http://127.0.0.1:8895/v1/search');
+    },
+  );
+  test(
+    'safe backend failures remain distinct and never retry or expose body',
+    () async {
+      final messages = <String>{};
+      for (final code in [
+        'configuration-required',
+        'service-unavailable',
+        'transport-dns',
+        'transport-tls',
+        'transport-connection',
+        'transport-timeout',
+        'provider-request-invalid',
+        'provider-authentication',
+        'provider-entitlement',
+        'provider-rate-limited',
+        'provider-unavailable',
+        'malformed-response',
+        'budget-exhausted',
+        'allowance-expired',
+        'automated-limit-reached',
+        'allowance-paused',
+      ]) {
+        final transport = FakeTransport()
+          ..value = SearchTransportResponse(
+            503,
+            Uint8List.fromList(
+              utf8.encode(
+                jsonEncode({
+                  'schemaVersion': 1,
+                  'status': 'error',
+                  'error': {'code': code, 'detail': 'PRIVATE_PROVIDER_BODY'},
+                }),
+              ),
+            ),
+          );
+        final model = WingmanSearchController(
+          client: GatewaySearchClient(
+            endpoint: Uri.parse('https://search.example.com/v1/search'),
+            transport: transport,
+          ),
+          context: SearchContext.normal,
+          permitted: () => true,
+          resultAllowed: (_) => true,
+        );
+        await model.submit('PRIVATE_QUERY');
+        expect(model.failure?.code, code);
+        expect(model.status, 'error');
+        expect(model.results, isEmpty);
+        expect(model.moreAvailable, isFalse);
+        expect(model.failure!.message, isNot(contains('PRIVATE_')));
+        expect(model.failure.toString(), isNot(contains('PRIVATE_')));
+        expect(messages.add(model.failure!.message), isTrue);
+        if (code == 'provider-rate-limited') {
+          expect(model.failure!.message, isNot(contains('429')));
+          expect(model.failure!.message, contains('pacing'));
+        }
+        await model.more();
+        expect(transport.calls, 1);
+        model.dispose();
+      }
+    },
+  );
+  test(
+    'wrong gateway or malformed success is an error, never empty results',
+    () async {
+      for (final reply in [
+        SearchTransportResponse(
+          200,
+          Uint8List.fromList(utf8.encode('<html>PRIVATE_BODY</html>')),
+        ),
+        SearchTransportResponse(
+          404,
+          Uint8List.fromList(utf8.encode('Not found PRIVATE_BODY')),
+        ),
+        SearchTransportResponse(
+          200,
+          Uint8List.fromList(utf8.encode('{"schemaVersion":2,"results":[]}')),
+        ),
+        SearchTransportResponse(
+          503,
+          Uint8List.fromList(
+            utf8.encode('{"schemaVersion":1,"error":{"code":"PRIVATE_QUERY"}}'),
+          ),
+        ),
+      ]) {
+        final transport = FakeTransport()..value = reply;
+        final client = GatewaySearchClient(
+          endpoint: Uri.parse('https://search.example.com/v1/search'),
+          transport: transport,
+        );
+        await expectLater(
+          client.search(SearchRequest(query: 'synthetic')),
+          throwsA(
+            isA<SearchFailure>()
+                .having((v) => v.code, 'code', 'gateway-response-invalid')
+                .having(
+                  (v) => v.message,
+                  'message',
+                  isNot(contains('PRIVATE_')),
+                ),
+          ),
+        );
+        expect(transport.calls, 1);
+      }
+    },
+  );
+  test(
+    'client connection errors do not become provider authentication errors',
+    () async {
+      for (final code in [
+        'gateway-timeout',
+        'gateway-tls',
+        'gateway-connection',
+      ]) {
+        final transport = FakeTransport()..failure = SearchFailure(code);
+        final client = GatewaySearchClient(
+          endpoint: Uri.parse('https://search.example.com/v1/search'),
+          transport: transport,
+        );
+        await expectLater(
+          client.search(SearchRequest(query: 'synthetic')),
+          throwsA(isA<SearchFailure>().having((v) => v.code, 'code', code)),
+        );
+        expect(transport.calls, 1);
+      }
+    },
+  );
   test(
     'POST contains finite fields; no query-bearing URL; no implicit retries',
     () async {

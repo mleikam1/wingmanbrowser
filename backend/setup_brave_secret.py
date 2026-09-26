@@ -17,7 +17,7 @@ def main() -> int:
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("error", getpass.GetPassWarning)
-            key = getpass.getpass("Replacement Brave API key (hidden): ")
+            key = getpass.getpass("Brave API key (hidden): ")
         root = Path(__file__).absolute().parent.parent
         write_secret(default_secret_path(root), key, root)
     except (SecretError, getpass.GetPassWarning, EOFError, KeyboardInterrupt):
