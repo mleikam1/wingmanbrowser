@@ -135,3 +135,38 @@ The bridge fixture exercises independent request denials, supported public journ
 The signed offline article catalog separately expires on March 10, 2027 and uses a development signing key whose private seed is outside Git. The live network scope is pinned into the reviewed application build; it is not a remotely signed production publisher. Renewal requires review and a rebuilt app. See [Content policy](docs/CONTENT_POLICY.md) and [Live browsing policy](docs/LIVE_BROWSING_POLICY.md).
 
 The [screen registry](docs/ui/SCREEN_REGISTRY.md), [design system](docs/ui/DESIGN_SYSTEM.md) and [Launchpad specification](docs/ui/LAUNCHPAD_SPEC.md) explain the existing product. Previous [Launchpad QA](docs/ui/LAUNCHPAD_QA.md), [signature status](docs/SIGNATURE_FEATURES_STATUS.md), [privacy architecture](docs/PRIVACY_ARCHITECTURE.md), [platform capabilities](docs/PLATFORM_CAPABILITIES.md) and [release readiness](docs/RELEASE_READINESS.md) record earlier milestones. Their blanket no-live-network/no-renderer statements were superseded by the v0.8 destination pilot; blanket no-web-search statements, including those in its status report, are superseded by [v0.9 Strict search](docs/STRICT_SEARCH.md). Historical test totals are not current release acceptance evidence. Phase 1–3A documents and [the earlier README](docs/history/README_PHASE3A.md) remain historical.
+
+## Wingman Search, News and direct-campaign pilot (2026-09-26)
+
+The existing browser now has Wingman-branded All/News results through a separate
+Brave gateway. Submitted cloud queries go through Wingman to Brave, whose own
+retention policy applies. Wingman query/result state remains transient; URL
+navigation and native protection continue through the existing browser path. No provider key belongs
+in Flutter settings, assets, build flags, URLs or source. Default live gates are
+closed. Provider failure does not silently switch engines.
+
+Read [Brave setup](docs/BRAVE_SETUP.md), [implementation progress](docs/WINGMAN_SEARCH_PROGRESS.md),
+[privacy/retention](docs/DATA_FLOW_AND_RETENTION.md), and
+[release evidence](docs/WINGMAN_SEARCH_RELEASE_REPORT.md) before activation.
+The single authorized smoke allowance is separate from ongoing user traffic.
+Use the hidden replacement-key utility in your own terminal:
+
+```sh
+python3 backend/setup_brave_secret.py
+```
+
+Run the real app with the synthetic gateway while credentials/rights are pending:
+
+```sh
+PYTHONPATH=backend work/brave-venv/bin/python -m wingman_search serve-fixtures --port 8895 --origin http://127.0.0.1:8894
+flutter run -d chrome --web-hostname=127.0.0.1 --web-port=8894 --dart-define=WINGMAN_SEARCH_URL=http://127.0.0.1:8895/v1/search --dart-define=WINGMAN_SEARCH_DEVELOPMENT=true
+```
+
+Loopback endpoints are accepted only by explicitly enabled debug builds. Release
+builds require an approved HTTPS gateway. Shared Brave news additionally requires
+explicit caching/fan-out rights; its source ships disabled, preserving existing
+approved RSS/Currents delivery. Search supply does not include advertiser demand.
+No live campaigns, charges, partner integrations or production deployment are
+activated by installing this code. Development/test campaigns are never revenue.
+
+Direct campaigns and owner operations: [operator guide](docs/WINGMAN_ADS_OPERATOR.md), [commercial pilot](docs/WINGMAN_COMMERCIAL_PILOT.md), and [controlled traffic/benchmark evidence](docs/WINGMAN_TRAFFIC_AND_BENCHMARK.md).

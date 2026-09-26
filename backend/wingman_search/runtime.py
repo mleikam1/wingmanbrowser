@@ -13,7 +13,7 @@ from .shared_budget import GCSBudgetLedger
 from .provider import BraveProvider
 
 
-def read_config(path):
+def read_config(path, *, required_gates=None):
     try:
         path = Path(path)
         if path.stat().st_size > 16384:
@@ -21,7 +21,7 @@ def read_config(path):
         from .contracts import decode_json
         value = decode_json(path.read_bytes(), 16384)
         config = SearchConfig(**value)
-        config.validate()
+        config.validate(required_gates=required_gates)
         return config
     except Exception:
         raise ConfigurationError('invalid_search_configuration') from None
@@ -51,7 +51,7 @@ def _secret(reference):
 
 def create_brave_provider(config: SearchConfig, *, ledger_factory=GCSBudgetLedger,
                           secret_loader=_secret, transport=None):
-    config.validate()
+    config.validate(required_gates={'live_search'})
     if config.profile != 'production' or config.environment != 'production':
         raise ConfigurationError('approved_production_configuration_required')
     # Constructor validates the durable marker's approval as well as every read.
@@ -68,7 +68,7 @@ def create_brave_provider(config: SearchConfig, *, ledger_factory=GCSBudgetLedge
     provider = BraveProvider(ledger, key, transport=transport)
     # Re-read local owner-managed gates before every reservation, allowing fast
     # rights withdrawal without waiting for a process restart or secret refresh.
-    provider.before_request = config.validate
+    provider.before_request = lambda: config.validate(required_gates={'live_search'})
     return provider
 
 
@@ -83,7 +83,51 @@ class DurableSearchMetrics:
         return self.ledger.search_metrics()
 
 
-def create_search_application(config, **factory_options):
+class RightsGatedAds:
+    """Re-read independent rights gates on every public ad operation."""
+    def __init__(self, service, config):
+        self.service, self.config = service, config
+
+    def _call(self, name, *args, **kwargs):
+        self.config.validate(required_gates={'live_ads', 'production_billing'})
+        return getattr(self.service, name)(*args, **kwargs)
+
+    def issue_context(self, **kwargs):
+        return self._call('issue_context', **kwargs)
+
+    def decision(self, raw):
+        return self._call('decision', raw)
+
+    def event(self, raw):
+        return self._call('event', raw)
+
+    def asset(self, asset_id):
+        return self._call('asset', asset_id)
+
+    def close(self):
+        return self.service.close()
+
+
+def create_search_application(config, *, ads_factory=None, **factory_options):
     from .gateway import SearchApplication
     provider = create_brave_provider(config, **factory_options)
-    return SearchApplication(provider, metrics=DurableSearchMetrics(provider.ledger))
+    ads = None
+    ads_unavailable = False
+    if config.live_ads:
+        # This only OPENS an already initialized, independently authorized live
+        # ledger. No test-store promotion, payment or auto-initialization exists.
+        # The cloud search-only image deliberately omits this package; approved
+        # advertising requires the documented single durable host deployment.
+        try:
+            config.validate(required_gates={'live_ads', 'production_billing'})
+            if ads_factory is None:
+                from wingman_ads.service import open_approved_live_service
+                ads_factory = open_approved_live_service
+            ads = RightsGatedAds(ads_factory(config.approved_ads_store_path), config)
+        except Exception:
+            # Ad rights/storage failure cannot disable an authorized organic
+            # search. No paid ad event can pass this closed service boundary.
+            ads_unavailable = True
+    app = SearchApplication(provider, metrics=DurableSearchMetrics(provider.ledger), ads=ads)
+    app.ads_unavailable = ads_unavailable
+    return app

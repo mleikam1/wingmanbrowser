@@ -13,12 +13,13 @@ from .gateway import BurstGuard
 
 class SearchWSGI:
     def __init__(self, app, config):
-        config.validate()
+        config.validate(required_gates={'live_search'})
         if config.environment != 'production':
             raise ValueError('production_configuration_required')
         self.app, self.config = app, config
         self.host = urlsplit(config.production_gateway_url).hostname
         self.guard = BurstGuard(limit=60)
+        self.ad_guard = BurstGuard(limit=120)
 
     def __call__(self, environ, start_response):
         headers = [('Content-Type', 'application/json; charset=utf-8'),
@@ -26,12 +27,14 @@ class SearchWSGI:
                    ('X-Content-Type-Options', 'nosniff'),
                    ('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'")]
         status, value = 503, {'status': 'error', 'error': {'code': 'service-unavailable'}}
+        binary = None
         try:
-            self.config.validate()
+            self.config.validate(required_gates={'live_search'})
             if (environ.get('HTTP_HOST') not in (self.host, self.host + ':443')
                     or environ.get('wsgi.url_scheme') != 'https'):
                 raise SearchError('invalid-host', 403)
-            if not self.guard.allow(None):
+            path = environ.get('PATH_INFO', '')
+            if not (self.ad_guard if path.startswith('/v1/ads/') else self.guard).allow(None):
                 raise SearchError('service-busy', 429)
             origin = environ.get('HTTP_ORIGIN')
             rights = load_rights(__import__('pathlib').Path(self.config.rights_register_path))
@@ -45,7 +48,11 @@ class SearchWSGI:
             path = environ.get('PATH_INFO')
             if environ.get('QUERY_STRING'):
                 raise SearchError('not-found', 404)
-            if method == 'GET' and path == '/healthz':
+            if method in ('GET', 'HEAD') and path.startswith('/v1/ads/assets/'):
+                binary, mime = self.app.ad_asset(path)
+                status = 200
+                headers[0] = ('Content-Type', mime)
+            elif method == 'GET' and path == '/healthz':
                 status, value = 200, {'status': 'ok', 'service': 'Wingman Search'}
             elif method == 'OPTIONS' and path in ('/v1/search', '/v1/ads/decision', '/v1/ads/event'):
                 status, value = 200, {'status': 'ok'}
@@ -71,7 +78,7 @@ class SearchWSGI:
             status, value = exc.http_status, {'status': 'error', 'error': {'code': exc.code}}
         except Exception:
             pass  # No request-derived exception details reach response or logs.
-        body = json.dumps(value, separators=(',', ':'), ensure_ascii=True).encode()
+        body = binary if binary is not None else json.dumps(value, separators=(',', ':'), ensure_ascii=True).encode()
         headers.append(('Content-Length', str(len(body))))
         from http import HTTPStatus
         start_response(f'{status} {HTTPStatus(status).phrase}', headers)
@@ -80,5 +87,5 @@ class SearchWSGI:
 
 def create_application(config_path):
     """Explicit path only; no gcloud/environment target inference or auto-init."""
-    config = read_config(config_path)
+    config = read_config(config_path, required_gates={'live_search'})
     return SearchWSGI(create_search_application(config), config)

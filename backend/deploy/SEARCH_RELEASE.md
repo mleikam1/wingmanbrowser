@@ -74,6 +74,42 @@ paths. Gunicorn application access/error output is suppressed in the image;
 operator health comes from bounded aggregate counters. Review platform-provided
 request metadata separately, including retention and deletion.
 
+## Optional direct ads on an approved persistent host
+
+The cloud search image is search-only. Never attach a local SQLite advertising
+store to ephemeral Cloud Run instances or horizontally replicated copies. For
+an independently authorized pilot on one durable host, install the backend
+package including `wingman_ads`, mount its persistent financial store and use
+the same WSGI factory with these additional explicit configuration fields:
+
+```json
+{
+  "live_ads": true,
+  "production_billing": true,
+  "ads_runtime": "single-durable-host",
+  "approved_ads_store_path": "/OWNER_APPROVED_PERSISTENT_VOLUME/ads.sqlite3"
+}
+```
+
+This snippet is not a complete approved configuration. Both rights-register
+gates and the independent owner-only live-finance evidence described in
+`docs/WINGMAN_ADS_OPERATOR.md` are required. The existing store must already
+have been explicitly initialized under that approval; startup never initializes
+it or promotes fixture money. Run one host against one persistent database,
+with tested backups, restore reconciliation and no auto-scaling. Keep the
+operator server on loopback behind separately authorized private access; never
+route its paths through the public search service. Its business-data backups
+have a separate retention policy from consumer request state.
+
+Advertising store or rights failure closes advertising without blocking an
+otherwise authorized organic search. The constructed application exposes
+`ads_unavailable` to the private host supervisor when startup cannot open the
+approved ads service. Consumer responses contain no storage or approval details.
+Every later ad operation rechecks the advertising rights and financial evidence.
+Search dispatch independently rechecks `live_search`. Revocation cannot turn an
+ad failure into a paid organic retry. Repairing a failed ads startup requires a
+controlled restart after approval/storage repair, with the same intact ledger.
+
 No automatic spending/replenishment, ongoing polling, DNS, IAM, cloud resources,
 public invocation, domain setup or advertiser billing has been authorized.
 GCS transaction and secret-access costs are **unknown**, not zero. Compute,

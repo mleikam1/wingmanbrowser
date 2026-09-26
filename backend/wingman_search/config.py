@@ -34,8 +34,13 @@ class SearchConfig:
     production_cap_micros: int = 0
     production_unit_cost_micros: int = 5000
     rights_register_path: str | None = None
+    approved_ads_store_path: str | None = None
+    ads_runtime: str | None = None
 
-    def validate(self) -> None:
+    def validate(self, *, required_gates=None) -> None:
+        scope = GATES if required_gates is None else frozenset(required_gates)
+        if not scope <= GATES:
+            raise ConfigurationError("unknown_rights_gate")
         if self.profile not in {"fixtures", "smoke", "approved-local", "production"}:
             raise ConfigurationError("unsupported_profile")
         if self.environment not in {"local", "production"}:
@@ -44,6 +49,14 @@ class SearchConfig:
             raise ConfigurationError("invalid_budget_configuration")
         if any(type(getattr(self, flag)) is not bool for flag in GATES):
             raise ConfigurationError("invalid_operational_gate")
+        if self.live_ads and scope & {'live_ads', 'production_billing'}:
+            if (self.environment != "production" or not self.production_billing
+                    or self.ads_runtime != "single-durable-host"
+                    or not isinstance(self.approved_ads_store_path, str)
+                    or not Path(self.approved_ads_store_path).is_absolute()):
+                raise ConfigurationError("approved_durable_ads_configuration_required")
+        elif not self.live_ads and scope & {'live_ads', 'production_billing'} and (self.approved_ads_store_path is not None or self.ads_runtime is not None):
+            raise ConfigurationError("ads_configuration_requires_live_ads_gate")
         if self.profile == "fixtures" and any(getattr(self, flag) for flag in GATES):
             raise ConfigurationError("fixture_profile_cannot_dispatch")
         if self.profile == "smoke" and self.environment != "local":
@@ -75,7 +88,7 @@ class SearchConfig:
             if not isinstance(rights.get("approved_domains"), list) or host not in rights["approved_domains"]:
                 raise ConfigurationError("production_domain_not_approved")
             # Organic API spending and advertiser billing are separate approvals.
-            for gate in GATES:
+            for gate in scope:
                 if getattr(self, gate):
                     require_right(rights, gate)
         elif self.profile == "production":

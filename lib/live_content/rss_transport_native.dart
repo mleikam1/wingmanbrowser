@@ -53,7 +53,7 @@ class NativeRssFeedTransport
       _connector = connector ?? Socket.startConnect;
   final RssResolver _resolver;
   final RssConnector _connector;
-  final Set<HttpClient> _clients = {};
+  final Map<HttpClient, void Function()> _clients = {};
   final Set<void Function()> _cancelConnections = {};
   int _epoch = 0;
   // DNS itself is an OS future. A timed-out lookup keeps its slot until actual
@@ -195,7 +195,12 @@ class NativeRssFeedTransport
           ..findProxy = ((_) => 'DIRECT')
           ..connectionTimeout = const Duration(seconds: 8);
         active = client;
-        _clients.add(client);
+        // HttpClient.close attaches socket-future listeners internally. Keep
+        // teardown in the resource's owning error zone even when a different
+        // view/test zone initiates privacy cancellation.
+        _clients[client] = Zone.current.bindCallback(
+          () => client.close(force: true),
+        );
         client.connectionFactory = (url, proxyHost, proxyPort) async {
           valid();
           if (url.host != origin.host ||
@@ -210,7 +215,7 @@ class NativeRssFeedTransport
           // subscribe to the returned task. Observe errors immediately; the
           // original future still delivers cancellation to any later listener.
           completion.future.ignore();
-          void stop() {
+          final stop = Zone.current.bindCallback(() {
             tcp.cancel();
             try {
               connected?.destroy();
@@ -218,7 +223,7 @@ class NativeRssFeedTransport
             if (!completion.isCompleted) {
               completion.completeError(const RssFailure('cancelled'));
             }
-          }
+          });
 
           _cancelConnections.add(stop);
           localStops.add(stop);
@@ -380,8 +385,8 @@ class NativeRssFeedTransport
     for (final stop in _cancelConnections.toList()) {
       stop();
     }
-    for (final client in _clients.toList()) {
-      client.close(force: true);
+    for (final close in _clients.values.toList()) {
+      close();
     }
     _clients.clear();
   }
