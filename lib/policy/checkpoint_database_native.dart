@@ -7,7 +7,8 @@ Future<Database> openPolicyCheckpointDatabase(
   OpenDatabaseOptions options,
 ) async {
   final String directory;
-  if (defaultTargetPlatform == TargetPlatform.iOS) {
+  if (defaultTargetPlatform == TargetPlatform.iOS ||
+      defaultTargetPlatform == TargetPlatform.macOS) {
     final value = await const MethodChannel(
       'wingman/browser',
     ).invokeMethod<String>('localDataDirectory');

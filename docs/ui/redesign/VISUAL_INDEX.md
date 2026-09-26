@@ -10,7 +10,7 @@ The indexed files include **54 production-widget renders**, **18 actual iOS simu
 - **Ordinary runtime capture:** the running production `lib/main.dart` app or its standard web build, captured through the host UI. iOS files are simulator captures, not physical-device evidence. The SpringBoard installation image only records setup.
 - **Reference:** supplied PNG concept; illustrative prices, tasks and totals are not production defaults. The app uses real empty/populated state and unavailable observation where appropriate.
 
-Final aggregate test/build status belongs to [IMPLEMENTATION_STATUS](IMPLEMENTATION_STATUS.md) and [PLATFORM_MATRIX](PLATFORM_MATRIX.md); exact final results are recorded there. Native source/test scope is in [NATIVE_AUDIT](NATIVE_AUDIT.md). The separate macOS worktree records its adapter tests, captures and limits in the [desktop ledger](../../../../wingman-macos/docs/ui/redesign/macos/README.md). Windows/Linux native engines remain absent.
+Final aggregate test/build status belongs to [IMPLEMENTATION_STATUS](IMPLEMENTATION_STATUS.md) and [PLATFORM_MATRIX](PLATFORM_MATRIX.md); exact final results are recorded there. Native source/test scope is in [NATIVE_AUDIT](NATIVE_AUDIT.md). The native macOS target records its adapter tests, captures and limits in the [desktop ledger](macos/README.md). Windows/Linux native engines remain absent.
 
 ## All nine boards
 
@@ -171,7 +171,7 @@ These original files are 1206 × 2622 physical pixels from a dedicated iOS simul
 - [Backend regression log](evidence/backend-tests.log): existing feed backend tests after only a fixed-clock test-fixture repair. Production feed/backend behavior is unchanged.
 - [Run/rollback instructions](LOCAL_RUN_AND_ROLLBACK.md), [privacy/capability scope](PRIVACY_CAPABILITIES.md), [release notes](RELEASE_NOTES.md).
 
-The static gallery contains no analytics, remote assets or production app logic. Open an individual image for full resolution. Rebuild the index after adding captures with `python3 work/redesign/build_evidence_index.py` from the UI worktree; this only updates documentation/index files and does not run Flutter.
+The static gallery contains no analytics, remote assets or production app logic. Open an individual image for full resolution. The original UI worktree retains the local index generator at `work/redesign/build_evidence_index.py`; it is scratch tooling outside Git. When updating this committed index, preserve the distinction between widget captures, ordinary runtime and OS blockers.
 
 ## Final web companion
 

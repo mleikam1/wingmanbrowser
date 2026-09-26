@@ -13,7 +13,7 @@ The dashboard distinguishes configured rules, actual observed activity and limit
 | Android | Actual policy-denied `shouldInterceptRequest` outcomes from this tab's current native page engine. Renderer lifetime only; resets on release/recreation. Retries of one address are separate outcomes. Count saturates at 100,000 and is labelled with a plus when saturated. |
 | iOS | Request-level blocking totals are not observable by this adapter; value remains unavailable, not zero. |
 | Web companion | Cannot observe or enforce unrelated host-browser traffic. No blocking total is invented. |
-| macOS | Separate native worktree implements AppKit WKWebView; request-level totals remain explicitly unobservable. Native acceptance is recorded in its own ledger. |
+| macOS | Native AppKit WKWebView adapter. Request-level blocking totals remain unobservable/null, as on iOS. Engine tests and the remaining runtime acceptance gaps are recorded in [macOS verification](macos/README.md). |
 
 A dashboard reading is a snapshot at opening. An observable engine without a status value says no observation is available yet. Android counters exclude other renderers, main-frame decisions, TLS failures, downloads and traffic that does not pass the guarded interception callback. No URL metadata is required for the counter. Normal/private counters stay separate; obsolete native callbacks are rejected. See [NATIVE_AUDIT](NATIVE_AUDIT.md) for source and test evidence.
 
@@ -28,7 +28,7 @@ Typed native denial events preserve reason without exporting blocked URL/title. 
 - `UiPreferences` schema 2 stores local tone and reduced motion beside Home layout. Old schema 1 documents preserve explicit choices; an explicit successful edit migrates. Corrupt/future data is preserved until explicit reset, and failed writes retain the previous snapshot. Private preferences are ephemeral and do not access the normal document. Global appearance controls are read-only in private Settings.
 - Trust Receipt remains a bounded local journal with previewed export. Its catalog freshness wording now explicitly separates offline article status from the installed browsing baseline.
 
-Android private browsing uses the supported disposable native profile; iOS uses a nonpersistent WKWebView store. The web companion's private app state cannot make the user's host browser private. OS/browser storage, website behavior, clipboard recipients and network observers retain their documented boundaries. This redesign does not introduce telemetry or a backend page-analysis service.
+Android private browsing uses the supported disposable native profile; iOS and macOS use nonpersistent WKWebView stores. macOS uses a new sandboxed local preview identifier and Application Support paths; it does not share an existing mobile profile. The web companion's private app state cannot make the user's host browser private. OS/browser storage, website behavior, clipboard recipients and network observers retain their documented boundaries. This redesign does not introduce telemetry or a backend page-analysis service.
 
 ## Existing feeds
 

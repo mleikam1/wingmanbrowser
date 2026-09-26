@@ -1,6 +1,6 @@
 # Platform acceptance matrix
 
-2026-09-25. **Implemented/tested** means the stated local check passed; it does not certify every request path, physical device or distribution channel. The UI branch is `feat/wingman-wow-ui`; the separate native desktop branch is `feat/wingman-macos`.
+2026-09-25. **Implemented/tested** means the stated local check passed; it does not certify every request path, physical device or distribution channel. Shared UI/mobile/web and native macOS are combined in this repository for `main`; [merge acceptance](MERGE_ACCEPTANCE.md) identifies the exact source heads and validation.
 
 | Feature | Android | iOS | Web companion | macOS | Windows/Linux |
 |---|---|---|---|---|---|
@@ -18,8 +18,8 @@
 
 Shared tests cover migrations, write failures/corruption, timer clock/background rules, optional nudges behind mandatory policy, task/Space ownership, terms evidence/input limits, private isolation, existing feeds/handoff/deletion, responsive layouts and200% text. Exact totals and commands are in [VERIFICATION](VERIFICATION.md). No production feed quota was consumed.
 
-Native source/test limits are recorded in [NATIVE_AUDIT](NATIVE_AUDIT.md), the [desktop ledger](../../../../wingman-macos/docs/ui/redesign/macos/README.md), and existing [protection coverage](../../PROTECTION_COVERAGE.md). Usable-stale installed rules do not imply active online updates or comprehensive classification. WK resource totals are not available. Android callback counts are neither unique trackers nor a complete network log.
+Native source/test limits are recorded in [NATIVE_AUDIT](NATIVE_AUDIT.md), the [desktop ledger](macos/README.md), and existing [protection coverage](../../PROTECTION_COVERAGE.md). Usable-stale installed rules do not imply active online updates or comprehensive classification. WK resource totals are not available. Android callback counts are neither unique trackers nor a complete network log.
 
 The final macOS native test host stalled in dyld before any test began, including one clean retry. Expanded toolbar history assertions compiled; the final macOS production-app integration and matching iOS native history tests passed. Those results do not substitute for execution of the complete final macOS native suite.
 
-Artifacts remain local. Android signing uses the repository's existing debug-key fallback; iOS is a simulator build; macOS is locally ad hoc signed. No push, notarization, store submission or universal desktop-support claim is made.
+Artifacts remain local. Android signing uses the repository's existing debug-key fallback; iOS is a simulator build; macOS is locally ad hoc signed. Source publication status is recorded in [merge acceptance](MERGE_ACCEPTANCE.md). No notarization, store submission or universal desktop-support claim is made.

@@ -1,8 +1,8 @@
 # Screen and flow registry
 
-Updated 2026-09-25 for the 0.16.0+19 redesign candidate on `feat/wingman-wow-ui`. Production entry is `lib/main.dart`; routing and captured-session ownership live in `lib/presentation/browser_shell.dart`. This is an implementation map, not release certification. The [verification ledger](redesign/IMPLEMENTATION_STATUS.md), [platform matrix](redesign/PLATFORM_MATRIX.md) and [visual index](redesign/VISUAL_INDEX.md) record evidence and outstanding work.
+Updated 2026-09-25 for the 0.16.0+19 combined redesign/native macOS implementation for `main`. Production entry is `lib/main.dart`; routing and captured-session ownership live in `lib/presentation/browser_shell.dart`. This is an implementation map, not release certification. The [verification ledger](redesign/IMPLEMENTATION_STATUS.md), [platform matrix](redesign/PLATFORM_MATRIX.md) and [visual index](redesign/VISUAL_INDEX.md) record evidence and outstanding work.
 
-Android System WebView and iOS WKWebView provide live browsing through ProtectedWebBridge. The web build is a companion that hands external navigation to its host browser; it does not enforce policy inside unrelated host tabs. macOS is pending a separate worktree. The exact earlier 51-ID inventory is preserved as [0.6 history](SCREEN_REGISTRY_0_6_HISTORY.md); its no-live-engine statements and old test totals are historical.
+Android System WebView and iOS WKWebView provide live browsing through ProtectedWebBridge. The web build is a companion that hands external navigation to its host browser; it does not enforce policy inside unrelated host tabs. macOS provides an AppKit WKWebView target using the shared Apple policy source; its [native acceptance ledger](redesign/macos/README.md) records coverage and remaining gaps. The exact earlier 51-ID inventory is preserved as [0.6 history](SCREEN_REGISTRY_0_6_HISTORY.md); its no-live-engine statements and old test totals are historical.
 
 ## Current route map
 

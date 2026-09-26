@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		C0D202609250000000000009 /* ConsumerProtection.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D202609250000000000001 /* ConsumerProtection.swift */; };
 		B89120260913000000000001 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = B89120260913000000000002 /* PrivacyInfo.xcprivacy */; };
 		B89120260911000000000001 /* ProtectedWebBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = B89120260911000000000002 /* ProtectedWebBridge.swift */; };
 		A78120260910000000000001 /* NativeGuardPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = A78120260910000000000002 /* NativeGuardPolicy.swift */; };
@@ -45,6 +46,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		C0D202609250000000000001 /* ConsumerProtection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ConsumerProtection.swift; path = ../../darwin/ConsumerProtection.swift; sourceTree = "<group>"; };
 		B89120260913000000000002 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		B89120260911000000000002 /* ProtectedWebBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtectedWebBridge.swift; sourceTree = "<group>"; };
 		A78120260910000000000002 /* NativeGuardPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeGuardPolicy.swift; sourceTree = "<group>"; };
@@ -129,6 +131,7 @@
 				1498D2321E8E86230040F4C2 /* GeneratedPluginRegistrant.h */,
 				1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */,
 				74858FAE1ED2DC5600515810 /* AppDelegate.swift */,
+				C0D202609250000000000001 /* ConsumerProtection.swift */,
 				A78120260910000000000002 /* NativeGuardPolicy.swift */,
 				B89120260911000000000002 /* ProtectedWebBridge.swift */,
 				7884E8672EC3CC0400C636F2 /* SceneDelegate.swift */,
@@ -292,6 +295,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */,
+				C0D202609250000000000009 /* ConsumerProtection.swift in Sources */,
 				A78120260910000000000001 /* NativeGuardPolicy.swift in Sources */,
 				B89120260911000000000001 /* ProtectedWebBridge.swift in Sources */,
 				1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */,

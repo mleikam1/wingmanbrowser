@@ -1,6 +1,8 @@
 # Native audit and desktop preparation
 
-Audit date: 2026-09-25. Work branch: `feat/wingman-wow-ui`; initial checkout commit: `254c90717eb9e2837e5bbd1e757c02f3a7513d56`. The branch was created from the current repository checkout, not a historical rollback. This record distinguishes source inspection, new execution, and historical acceptance.
+This audit records the initial UI/native inspection and subsequent implementation evidence. The native macOS target is now included in the same repository; [macOS verification](macos/README.md) records its execution results, and [merge acceptance](MERGE_ACCEPTANCE.md) records the combined tree checks.
+
+Audit date: 2026-09-25. Original work branch: `feat/wingman-wow-ui`; initial checkout commit: `254c90717eb9e2837e5bbd1e757c02f3a7513d56`. The branch was created from the current repository checkout, not a historical rollback. This record distinguishes source inspection, new execution, and historical acceptance.
 
 ## Existing engines and boundaries
 
@@ -67,7 +69,7 @@ Integration-test APKs in transient build output are not delivery artifacts. The 
 
 ## Historical macOS preparation and current workstream
 
-At the initial audit macOS was **absent**. It is now implemented on the separate `feat/wingman-macos` branch; current build, runtime and test evidence is in [the desktop ledger](../../../../wingman-macos/docs/ui/redesign/macos/README.md). The following API audit records the original preparation, not current completion status. The web build remains a companion and cannot claim host browser protection. Per the master task, create the macOS branch only after the shared UI is completed and committed; do not delay the cross-platform UI for this work.
+At the initial audit macOS was **absent**. It was implemented on `feat/wingman-macos` and is now included in this repository; current build, runtime and test evidence is in [the desktop ledger](macos/README.md). The following API audit records the original preparation, not current completion status. The web build remains a companion and cannot claim host browser protection. The macOS branch was created after the shared UI checkpoint was completed and committed.
 
 The lowest-dependency appropriate adapter is AppKit `WKWebView` inside Flutter `AppKitView`, retaining the existing protected method-channel contract. Official Flutter documentation describes an `NSView` factory through `FlutterMacOS`; the installed SDK confirms `create(withViewIdentifier:arguments:) -> NSView`, unlike iOS's `FlutterPlatformView` factory. It warns that macOS platform-view gesture support remains incomplete, which requires real mouse, keyboard, scrolling, overlays, and focus testing. See [Flutter macOS platform views](https://docs.flutter.dev/platform-integration/macos/platform-views) and [AppKitView](https://api.flutter.dev/flutter/widgets/AppKitView-class.html).
 
@@ -88,7 +90,7 @@ Apple APIs and deployment availability checked in the installed Xcode macOS WebK
 
 The implemented target uses macOS13+ (including AppKit sharing-picker lifecycle APIs) and can use these APIs on the detected 15.7.4 host. Official [content rule documentation](https://developer.apple.com/documentation/webkit/wkcontentruleliststore) requires rule compilation and addition to each configuration before loading. [Nonpersistent stores](https://developer.apple.com/documentation/webkit/wkwebsitedatastore/nonpersistent()) separate ephemeral website state. A sandboxed target needs outgoing network capability ([Apple entitlement reference](https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.security.network.client)); downloads/uploads require scoped user-selected file access rather than blanket filesystem access. No paid plugin, external rendering engine, VPN, signing entitlement request, notarization, or production identifier change is necessary for local development.
 
-The separate branch followed this implementation sequence:
+The native workstream followed this implementation sequence:
 
 1. Generate only the new macOS target in the isolated desktop checkout. Preserve mobile IDs/signing. Set a local macOS identifier scoped to this new target and document it.
 2. Extract/reuse the platform-independent Apple policy decoder, digest validation, strict-search canonicalization, compiled-rule generator, and signed-update semantics with parity tests. Keep UIKit-dependent sheets, lifecycle, factory signatures, and permissions out of the macOS adapter.
@@ -97,8 +99,8 @@ The separate branch followed this implementation sequence:
 5. Exercise real neutral pages plus local redirects, new windows, POST forms, private cookies/storage, history, stale events, absent/corrupt policy, native hide/background, rule enforcement, and disposal. Leave live browsing gated on any missing mandatory capability.
 6. Capture the running desktop shell and website; build local release output. Compile success alone is not native-browser acceptance.
 
-Persistent coverage limits remain: WK request counts are unobservable, Android resource redirect coverage is limited, and the existing small alcohol/drug/tobacco data supplements are not comprehensive maintained feeds. Actual macOS acceptance is maintained in its separate ledger. Windows/Linux are absent and are not prerequisites for the macOS workstream.
+Persistent coverage limits remain: WK request counts are unobservable, Android resource redirect coverage is limited, and the existing small alcohol/drug/tobacco data supplements are not comprehensive maintained feeds. Actual macOS acceptance is maintained in its native ledger. Windows/Linux are absent and are not prerequisites for the macOS workstream.
 
 ## Apple ownership follow-up
 
-The final native callback/request/lifecycle fencing mirrored from the macOS audit into iOS has a separate source-hash/test/build record in [IOS_OWNERSHIP_FOLLOWUP](IOS_OWNERSHIP_FOLLOWUP.md). It supersedes the earlier iOS build for delivery once its recorded command succeeds; earlier screenshots retain their stated provenance.
+The final native callback/request/lifecycle fencing mirrored from the macOS audit into iOS has a separate source-hash/test/build record in [IOS_OWNERSHIP_FOLLOWUP](IOS_OWNERSHIP_FOLLOWUP.md). Its successful build and tests supersede the earlier iOS ownership baseline; earlier screenshots retain their stated provenance.

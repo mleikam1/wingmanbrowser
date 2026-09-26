@@ -80,7 +80,7 @@ class AboutScreen extends StatelessWidget {
             tone: policy.status.usable ? WingmanTone.info : WingmanTone.caution,
           ),
           const Text(
-            'Local tools: Spaces, Finish Mode, Official Routes evidence, Before You Commit, Trust Receipt and previewed compatibility export. Native Hand It Over shares only selected static text with an owner-return gate.',
+            'Local tools: Spaces, Finish Mode, Official Routes evidence, Before You Commit, Trust Receipt and previewed compatibility export. Hand It Over on supported Android/iOS builds shares only selected static text with an owner-return gate; it is unavailable on macOS.',
           ),
           const SizedBox(height: 16),
           const Text(
@@ -88,7 +88,7 @@ class AboutScreen extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           const Text(
-            'Web search sends submitted queries and the connection’s IP address directly to DuckDuckGo, with no remote suggestions while typing and no paid search service. Native desktop apps are not available. The web companion has local tools and submits search by leaving for the strict provider. It cannot enforce native protection in the host browser.',
+            'Web search sends submitted queries and the connection’s IP address directly to DuckDuckGo, with no remote suggestions while typing and no paid search service. macOS uses the native WKWebView adapter when its protection baseline is available. Windows and Linux native browsing are unavailable. The web companion has local tools and submits search by leaving for the strict provider. It cannot enforce native protection in the host browser.',
           ),
           const SizedBox(height: 12),
           const Text(

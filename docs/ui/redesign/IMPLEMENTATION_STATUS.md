@@ -1,10 +1,10 @@
 # Wingman redesign implementation status
 
-Updated 2026-09-25. The shared production redesign is implemented, with **1041 Flutter tests passed/6 existing opt-in skips**, clean analysis, Android/iOS/web local builds and runtime evidence. The separate macOS native workstream has **1055 Flutter tests passed/6 skips**, **14 native tests passed before the final history patch**, and a passing production-app integration journey after that patch. The Apple history timing defect is corrected on both Apple branches; the rebuilt iOS app passed native tests and an ordinary runtime smoke. Android ordinary visual QA and the final macOS XCTest launch have documented environment blockers. The packaged macOS release passed real foreground input, scrolling and toolbar history checks. This ledger is local acceptance evidence, not release certification.
+Updated 2026-09-25. The shared production redesign is implemented, with **1041 Flutter tests passed/6 existing opt-in skips**, clean analysis, Android/iOS/web local builds and runtime evidence. The native macOS target has **1055 Flutter tests passed/6 skips**, **14 native tests passed before the final history patch**, and a passing production-app integration journey after that patch. The Apple history timing defect is corrected on both Apple targets; the rebuilt iOS app passed native tests and an ordinary runtime smoke. Android ordinary visual QA and the final macOS XCTest launch have documented environment blockers. The packaged macOS release passed real foreground input, scrolling and toolbar history checks. This ledger is local acceptance evidence, not release certification.
 
 ## Protected starting state
 
-Original checkout `2026-09-10/.../outputs/wingman_browser` remains clean at `18eef0c`; fetch showed0 local-only/19 remote-only commits. Original branch and working tree are unchanged. The isolated `outputs/wingman-browser` worktree uses `feat/wingman-wow-ui`, based on verified current `origin/main` (`254c907`). The remote coincidentally matched the historical design review; no rollback was performed. No AGENTS.md was found.
+The redesign began from verified `origin/main` at `254c907`; the older original checkout was preserved throughout implementation. Shared UI/mobile/web work reached `908cbce` on `feat/wingman-wow-ui`, and native macOS work reached `c4d2832` on `feat/wingman-macos`. The user then authorized combining both into `main` and publishing to `origin/main`. [Merge acceptance](MERGE_ACCEPTANCE.md) records the integrated tree, validation and remote result. No historical rollback was performed; no AGENTS.md was found.
 
 Production entrypoint is `lib/main.dart`. Android System WebView/iOS WKWebView use ProtectedWebBridge; the retired BrowserEnginePool is not browsing authority. Web is an external-navigation companion. No desktop target existed initially.
 
@@ -17,7 +17,7 @@ Production entrypoint is `lib/main.dart`. Android System WebView/iOS WKWebView u
 - Optional monotonic timer with paused background/restart checkpoints, reversible tab parking, scoped task completion and opt-in exact-site nudges after mandatory approval.
 - Protection configuration/observation/limitations dashboard; actual Android interception counters with renderer lifetime, saturation and redacted typed boundary events. WK/web do not fabricate totals.
 - Calm mandatory boundaries with safe task/Home recovery and preview-only review details. Local supplied-text terms analysis with excerpts/uncertainty, grouped Settings, tone/reduced motion and private preference separation.
-- Native callbacks/async rule preparation are fenced to the captured renderer, request and lifetime on both Apple branches.
+- Native callbacks/async rule preparation are fenced to the captured renderer, request and lifetime on both Apple targets.
 - Native Apple Back/Forward address publication follows loading/history settlement while retaining current-renderer, history-item and policy checks. iOS regressions cover first and interior history entries without reloading the document.
 - Production feed/backend behavior unchanged. The only backend edit freezes a pre-existing time-sensitive test fixture. No account, cloud AI, telemetry, automatic page capture, new polling or paid service was added.
 
@@ -27,7 +27,7 @@ Production entrypoint is `lib/main.dart`. Android System WebView/iOS WKWebView u
 
 Ordinary iOS and web runtime exercised task/checklist/note persistence, timer state, companion reopening and safe private/host-navigation scope. Android ordinary APK installation/launch metadata is verified; its final screenshot shows a System UI ANR and is labeled as a blocker, not app acceptance.
 
-Local builds are preserved under `artifacts/android/`, `artifacts/ios-simulator/` and `artifacts/web-companion/`, with hashes/source inventories in evidence. The [visual index](VISUAL_INDEX.md) maps all nine boards, mobile variants and additional loading/failure captures; widget-render, ordinary-runtime and OS setup/blocker evidence is clearly labeled. [Visual adaptations](VISUAL_DEVIATIONS.md) explain accessibility/capability-driven differences.
+Pre-merge local builds are preserved in their original implementation worktrees under `artifacts/android/`, `artifacts/ios-simulator/`, `artifacts/web-companion/` and the desktop `artifacts/macos/`, with hashes/source inventories in evidence. These ignored binaries are not included by a source checkout; see [local builds and run instructions](LOCAL_RUN_AND_ROLLBACK.md). The [visual index](VISUAL_INDEX.md) maps all nine boards, mobile variants and additional loading/failure captures; widget-render, ordinary-runtime and OS setup/blocker evidence is clearly labeled. [Visual adaptations](VISUAL_DEVIATIONS.md) explain accessibility/capability-driven differences.
 
 ## Local commits and desktop lineage
 
@@ -37,9 +37,10 @@ Local builds are preserved under `artifacts/android/`, `artifacts/ios-simulator/
 - `50dab41`: iOS renderer/request/lifetime fences, expanded native regression and final1041-test/analyzer evidence.
 - `9ee6d45`: final shared build/evidence records and production loading/failure captures.
 - `edf5499`: iOS Back/Forward address synchronization, 13 passing native tests, 22 focused Dart tests and a replacement ordinary simulator artifact.
-- The final documentation/capture commit is the branch tip after these changes; use `git log -1` for its exact hash.
+- `908cbce`: final shared UI/mobile/web documentation and native foreground acceptance evidence.
+- `c4d2832`: final desktop implementation, Apple shared-source extraction, native release and history evidence.
 
-`outputs/wingman-macos` / `feat/wingman-macos` starts from3a6cd00 and includes the shared runtime corrections, new AppKit WKWebView target and shared Apple policy code. Its [native ledger](../../../../wingman-macos/docs/ui/redesign/macos/README.md) owns desktop commits, artifact names, foreground checks, native fixture/integration results and gaps. Windows/Linux native targets remain absent.
+The desktop branch started from `3a6cd00` and supplied the shared runtime corrections, new AppKit WKWebView target and shared Apple policy code now included in this repository. Its [native ledger](macos/README.md) owns desktop commits, artifact names, foreground checks, native fixture/integration results and gaps. Windows/Linux native targets remain absent.
 
 ## Final follow-up and manual verification gaps
 
@@ -51,4 +52,4 @@ The final macOS XCTest rerun stalled in dyld before application initialization o
 
 ## Boundaries
 
-No push, merge, deployment, store submission, notarization purchase or paid service. Existing identifiers/signing and user installs are preserved; the new macOS target has its own local sandboxed identifier. Dedicated test devices/data are used. No invented metrics/tasks/page content or protection bypasses are present. An abrupt kill can restore only the timer's last durable checkpoint, paused. Physical-device certification, full assistive-technology coverage, performance/leak measurement and complete web-content classification are not claimed.
+Source merge and publication to `origin/main` are authorized; their exact result is recorded in [merge acceptance](MERGE_ACCEPTANCE.md). No application deployment, store submission, notarization purchase or paid service is included. Existing identifiers/signing and user installs are preserved; the new macOS target has its own local sandboxed identifier. Dedicated test devices/data are used. No invented metrics/tasks/page content or protection bypasses are present. An abrupt kill can restore only the timer's last durable checkpoint, paused. Physical-device certification, full assistive-technology coverage, performance/leak measurement and complete web-content classification are not claimed.

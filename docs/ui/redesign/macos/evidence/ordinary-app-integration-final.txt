@@ -1,0 +1,23 @@
+Command: flutter test integration_test/macos_consumer_app_test.dart -d macos --reporter expanded
+Result: exit 0; 1 passed in 11 seconds.
+Entrypoint: actual app.main; real AppKitView / WKWebView; bundled production policy.
+Fixture: benign loopback HTML and reserved gambling.protection.test redirect.
+Capture pass was separate; this final clean run did not attach CUA mid-test.
+
+Failed to foreground app; open returned 1
+MACOS_STAGE startup
+MACOS_STAGE real bundled mandatory protection prepared
+MACOS_STAGE expanded native chrome ready
+MACOS_STAGE new native normal tab
+MACOS_STAGE search route
+MACOS_STAGE actual AppKitView WK page executed and history reached Flutter
+MACOS_STAGE committed document and enabled Back control
+MACOS_STAGE native history back
+MACOS_STAGE native history forward
+MACOS_STAGE return home
+MACOS_STAGE search route
+MACOS_STAGE native redirect denial reaches branded boundary
+MACOS_APP actualMain=true bundledPolicy=true AppKitView=true nativeJavaScript=true historyBackForward=true redirectBoundary=true blockedAddressAbsent=true
+MACOS_STAGE boundary returns to Home
+00:11 +1: (tearDownAll)
+00:11 +1: All tests passed!

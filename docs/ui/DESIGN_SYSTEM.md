@@ -1,6 +1,6 @@
 # Wingman design system
 
-This document describes the Flutter implementation in the 2026-09-25 redesign candidate, version 0.16.0+19, on `feat/wingman-wow-ui`. The source is [WingmanTokens](../../lib/presentation/design_system/wingman_tokens.dart), [WingmanTheme](../../lib/presentation/theme.dart), and [shared components](../../lib/presentation/components/wingman_components.dart). The supplied PNG redesign references guide composition; the original logo and existing brand identity remain. Reference images are design inputs, not application or security evidence. Current rendered evidence is indexed in [VISUAL_INDEX](redesign/VISUAL_INDEX.md).
+This document describes the Flutter implementation in the 2026-09-25 redesign candidate, version 0.16.0+19, now included with the native macOS target in the combined implementation for `main`. The source is [WingmanTokens](../../lib/presentation/design_system/wingman_tokens.dart), [WingmanTheme](../../lib/presentation/theme.dart), and [shared components](../../lib/presentation/components/wingman_components.dart). The supplied PNG redesign references guide composition; the original logo and existing brand identity remain. Reference images are design inputs, not application or security evidence. Current rendered evidence is indexed in [VISUAL_INDEX](redesign/VISUAL_INDEX.md).
 
 ## Semantic colors
 

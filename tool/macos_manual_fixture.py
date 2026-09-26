@@ -1,0 +1,16 @@
+"""Benign loopback-only manual macOS input/scroll/panel fixture; run from repo root."""
+from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
+from pathlib import Path
+import html
+class Handler(BaseHTTPRequestHandler):
+ def log_message(self,*args): pass
+ def do_GET(self):
+  if self.path=='/download':
+   body=b'Synthetic Wingman desktop download fixture.\n';self.send_response(200);self.send_header('Content-Type','text/plain');self.send_header('Content-Disposition','attachment; filename="wingman-qa.txt"');self.send_header('Content-Length',str(len(body)));self.end_headers();self.wfile.write(body);return
+  title='Wingman native QA' if self.path=='/' else 'Wingman second page'
+  body=('''<!doctype html><html><head><meta name="viewport" content="width=device-width"><title>'''+title+'''</title><style>body{font:20px system-ui;max-width:820px;margin:48px auto;padding:24px;color:#142342}button,input,a{font:inherit;margin:12px;padding:12px}section{padding:20px;border:1px solid #b9cce2;border-radius:14px;margin:20px 0}.spacer{height:950px;background:linear-gradient(#eef7ff,#e2f7ff);padding:20px}</style></head><body><h1>'''+title+'''</h1><p>Generated benign local fixture. No external resources.</p><section><label>Native page input <input aria-label="Native page input" placeholder="Synthetic input"></label><button onclick="document.getElementById('status').textContent='Button activated'">Test page button</button><p id="status">Ready for native interaction</p></section><section><a href="/next">Next local page</a><a href="/popup" target="_blank">Open local child tab</a><a href="http://gambling.protection.test/">Synthetic policy boundary</a></section><section><form action="/post" method="post"><label>Fixture note <input name="note" value="synthetic-only"></label><button type="submit">Submit local form</button></form><label>Choose synthetic fixture file <input type="file"></label><a href="/download" download>Download synthetic fixture</a></section><section><p id="storage"></p><button onclick="localStorage.setItem('wingmanQa','normal-marker');document.getElementById('storage').textContent='Stored normal marker'">Store local marker</button></section><div class="spacer">Scroll down to the fixture footer.</div><h2>Native scroll reached the footer</h2><a href="/">Back to fixture start</a><script>document.getElementById('storage').textContent=localStorage.getItem('wingmanQa')||'No local marker';</script></body></html>''').encode()
+  self.send_response(200);self.send_header('Content-Type','text/html');self.send_header('Cache-Control','no-store');self.send_header('Content-Length',str(len(body)));self.end_headers();self.wfile.write(body)
+ def do_POST(self):
+  n=min(int(self.headers.get('Content-Length','0')),65536);data=self.rfile.read(n).decode(errors='replace');body=('<!doctype html><title>Local form received</title><h1>Local POST received</h1><pre>'+html.escape(data)+'</pre><a href="/">Return to fixture</a>').encode();self.send_response(200);self.send_header('Content-Type','text/html');self.send_header('Content-Length',str(len(body)));self.end_headers();self.wfile.write(body)
+Path('work').mkdir(exist_ok=True)
+server=ThreadingHTTPServer(('127.0.0.1',0),Handler);Path('work/macos-fixture-port.txt').write_text(str(server.server_port));print(server.server_port,flush=True);server.serve_forever()

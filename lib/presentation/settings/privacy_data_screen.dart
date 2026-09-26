@@ -272,7 +272,7 @@ class _PrivacyDataScreenState extends State<PrivacyDataScreen>
                   ),
                 const SizedBox(height: 24),
                 const Text(
-                  'Website views use disposable data: Android profiles can use temporary disk files; iOS uses a nonpersistent website store. This pilot does not save website browsing history or create downloads. Explicit Launchpad pins remain local until removed. Closing a view does not erase device backups or copies held elsewhere. Completed legacy downloads, exported receipts and reports are outside Wingman’s deletion boundary.',
+                  'Normal website sessions use the native engine’s website store. Private website views use separate disposable data: Android profiles can use temporary disk files; iOS and macOS use nonpersistent website stores. This pilot does not save website browsing history or create downloads. Explicit Launchpad pins remain local until removed. Closing a view does not erase device backups or copies held elsewhere. Completed legacy downloads, exported receipts and reports are outside Wingman’s deletion boundary.',
                 ),
                 TextButton(
                   onPressed: () {

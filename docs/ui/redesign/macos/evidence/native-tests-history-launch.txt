@@ -1,0 +1,24 @@
+Final native history regression attempt, 2026-09-25
+Command: xcodebuild test -workspace macos/Runner.xcworkspace -scheme Runner -configuration Debug -destination platform=macOS,arch=arm64 -parallel-testing-enabled NO -derivedDataPath work/macos-derived FLUTTER_TARGET=lib/main.dart
+
+The native app/test targets compiled and signed. No test case began.
+The first host PID94005 remained in dyld startup for more than four minutes.
+A bounded clean retry reproduced the same startup state with host PID96453.
+Both samples showed a 208KB footprint and the main thread waiting in:
+  dyld4::prepare -> JustInTimeLoader::loadDependents -> Loader::getLoader
+  -> JustInTimeLoader::makeJustInTimeLoaderDisk
+  -> SyscallDelegate::mapFileReadOnly -> dyld3::open -> __open
+No Dart/Flutter application, AppDelegate, WebKit, or XCTest test body appeared in
+the sampled call stacks. Only the verified task host and xcodebuild processes
+were terminated; command exit143 is an interrupted attempt, NOT a test pass.
+No global LaunchServices, security, privacy or signing setting was changed.
+Raw local samples: work/macos-testhost-sample.txt and work/macos-testhost-retry-sample.txt.
+Raw ignored logs: native-tests-history-final.log and native-tests-history-retry.log.
+
+Last successful macOS native suite:14 passed,0 failed,23.821s, BEFORE the final
+history observer patch; see native-tests-production-resolver.txt.
+The new endpoint and middle-to-middle native regressions compiled in this attempt
+but were not executed on macOS. Equivalent iOS native regressions passed inside
+the final13-test suite on the UI worktree. The actual macOS app.main integration
+passed1 test in11s with real native Back/Forward, visible address publication,
+redirect boundary and Home cleanup; see ordinary-app-integration-final.txt.

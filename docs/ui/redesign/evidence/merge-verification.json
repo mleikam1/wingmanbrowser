@@ -1,0 +1,55 @@
+{
+  "validatedAtUtc": "2026-09-26T01:07:44.953158+00:00",
+  "remoteBase": "254c90717eb9e2837e5bbd1e757c02f3a7513d56",
+  "uiHead": "908cbce",
+  "macOSHead": "c4d2832",
+  "logs": {
+    "pub-get": {
+      "command": "flutter --suppress-analytics pub get",
+      "exitCode": 0,
+      "log": "work/merge/pub-get.log",
+      "sha256": "7354d3056ad7229d5400699bf2424c7a62dc92f1d7673b9d01ea120e804ddd1b"
+    },
+    "analyze": {
+      "command": "flutter --suppress-analytics analyze --no-pub",
+      "exitCode": 0,
+      "log": "work/merge/analyze.log",
+      "sha256": "98aafc5b5c557a897e59c5e9d27cdd236d306293e9a6cb347e5a4d1a9a308e0c"
+    },
+    "flutter-tests": {
+      "command": "flutter --suppress-analytics test --no-pub --reporter expanded --concurrency=4",
+      "exitCode": 0,
+      "log": "work/merge/flutter-tests.log",
+      "sha256": "8db1b374baf4a3212d8dd48048c3950b201f8f4aa5a58c280bcf6a58d1496601"
+    }
+  },
+  "flutter": {
+    "passed": 1055,
+    "existingOptInSkipped": 6,
+    "durationSeconds": 102
+  },
+  "analyzer": {
+    "issues": 0,
+    "durationSeconds": 5.7
+  },
+  "nativeProjectPlistLint": "Both iOS and macOS project.pbxproj passed",
+  "productionMatchesMacOSHead": true,
+  "matchedPaths": [
+    "lib",
+    "ios/Runner",
+    "ios/Runner.xcodeproj",
+    "darwin",
+    "macos",
+    "android",
+    "pubspec.yaml",
+    "pubspec.lock"
+  ],
+  "nativeTestsRerun": false,
+  "nativeScope": "Production inputs equal the verified desktop head; prior native execution results and limitations remain unchanged.",
+  "mergeMarkers": [],
+  "credentialScan": {
+    "textFilesScanned": 156,
+    "highConfidenceFindings": 0
+  },
+  "artifactsPushed": false
+}

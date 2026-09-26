@@ -609,8 +609,20 @@ class _ProtectedWebSurfaceState extends State<ProtectedWebSurface>
         creationParamsCodec: const StandardMessageCodec(),
         onPlatformViewCreated: created,
       ),
+      TargetPlatform.macOS => AppKitView(
+        viewType: 'wingman/protected-web',
+        gestureRecognizers: {
+          Factory<OneSequenceGestureRecognizer>(EagerGestureRecognizer.new),
+        },
+        creationParams: params,
+        creationParamsCodec: const StandardMessageCodec(),
+        onPlatformViewCreated: created,
+      ),
       _ => const Center(
-        child: Text('Use the Android or iOS app for supported websites.'),
+        child: Text(
+          'Protected native browsing is unavailable on this platform. '
+          'Use a supported Android, iOS, or macOS app.',
+        ),
       ),
     };
     return Stack(

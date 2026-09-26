@@ -1,0 +1,41 @@
+Native macOS arm64 / macOS15.7.4 / Xcode26.3
+Configuration: Debug;14 current consumer/ownership tests
+
+Test Suite 'All tests' started at 2026-09-25 15:26:08.854.
+Test Suite 'RunnerTests.xctest' started at 2026-09-25 15:26:08.854.
+Test Suite 'RunnerTests' started at 2026-09-25 15:26:08.855.
+Test Case '-[RunnerTests.RunnerTests testConsumerConfigurationPreservesNormalCookiesSeparatesPrivateAndEnablesJavaScript]' started.
+Test Case '-[RunnerTests.RunnerTests testConsumerConfigurationPreservesNormalCookiesSeparatesPrivateAndEnablesJavaScript]' passed (0.690 seconds).
+Test Case '-[RunnerTests.RunnerTests testConsumerNativePolicyUnknownStrictAndMixedPaths]' started.
+Test Case '-[RunnerTests.RunnerTests testConsumerNativePolicyUnknownStrictAndMixedPaths]' passed (2.169 seconds).
+Test Case '-[RunnerTests.RunnerTests testConsumerNativeRuleCompilerBlocksSyntheticAndAllowsNeutralResources]' started.
+Test Case '-[RunnerTests.RunnerTests testConsumerNativeRuleCompilerBlocksSyntheticAndAllowsNeutralResources]' passed (9.521 seconds).
+Test Case '-[RunnerTests.RunnerTests testConsumerPathResourceRulesRejectAlternateSpellingsWithPositiveControl]' started.
+Test Case '-[RunnerTests.RunnerTests testConsumerPathResourceRulesRejectAlternateSpellingsWithPositiveControl]' passed (2.012 seconds).
+Test Case '-[RunnerTests.RunnerTests testConsumerSameCurrentRestorePreservesRollbackPredecessor]' started.
+Test Case '-[RunnerTests.RunnerTests testConsumerSameCurrentRestorePreservesRollbackPredecessor]' passed (0.001 seconds).
+Test Case '-[RunnerTests.RunnerTests testConsumerSignedUpdateAuthenticityAndMetadata]' started.
+Test Case '-[RunnerTests.RunnerTests testConsumerSignedUpdateAuthenticityAndMetadata]' passed (0.014 seconds).
+Test Case '-[RunnerTests.RunnerTests testDialogReplyCompletesOnceAcrossDismissalAndLateAction]' started.
+Test Case '-[RunnerTests.RunnerTests testDialogReplyCompletesOnceAcrossDismissalAndLateAction]' passed (0.001 seconds).
+Test Case '-[RunnerTests.RunnerTests testExpectedPolicyCancellationNeverSuppressesCertificateOrNetworkErrors]' started.
+Test Case '-[RunnerTests.RunnerTests testExpectedPolicyCancellationNeverSuppressesCertificateOrNetworkErrors]' passed (0.001 seconds).
+Test Case '-[RunnerTests.RunnerTests testExportPickerCannotResolvePendingUploadOrReplayAfterCancellation]' started.
+Test Case '-[RunnerTests.RunnerTests testExportPickerCannotResolvePendingUploadOrReplayAfterCancellation]' passed (0.001 seconds).
+Test Case '-[RunnerTests.RunnerTests testHiddenWebActivityEndsCaptureAndReturnNeverRestartsCapture]' started.
+Test Case '-[RunnerTests.RunnerTests testHiddenWebActivityEndsCaptureAndReturnNeverRestartsCapture]' passed (0.018 seconds).
+Test Case '-[RunnerTests.RunnerTests testHistoryAPIUpdatesNativeAddressWithoutReloadOrNewDocument]' started.
+Test Case '-[RunnerTests.RunnerTests testHistoryAPIUpdatesNativeAddressWithoutReloadOrNewDocument]' passed (4.001 seconds).
+Test Case '-[RunnerTests.RunnerTests testNativePopupAdoptionRetainsPostOpenerAndPrivateProfile]' started.
+Test Case '-[RunnerTests.RunnerTests testNativePopupAdoptionRetainsPostOpenerAndPrivateProfile]' passed (2.827 seconds).
+Test Case '-[RunnerTests.RunnerTests testPopupLeaseRejectsChangedDocumentProfileRestrictionAndExpiry]' started.
+Test Case '-[RunnerTests.RunnerTests testPopupLeaseRejectsChangedDocumentProfileRestrictionAndExpiry]' passed (0.001 seconds).
+Test Case '-[RunnerTests.RunnerTests testUnavailableProtectionNeverGrantsDesktopRendererAndCountersStayUnobservable]' started.
+Test Case '-[RunnerTests.RunnerTests testUnavailableProtectionNeverGrantsDesktopRendererAndCountersStayUnobservable]' passed (0.002 seconds).
+Test Suite 'RunnerTests' passed at 2026-09-25 15:26:30.120.
+	 Executed 14 tests, with 0 failures (0 unexpected) in 21.258 (21.265) seconds
+Test Suite 'RunnerTests.xctest' passed at 2026-09-25 15:26:30.122.
+	 Executed 14 tests, with 0 failures (0 unexpected) in 21.258 (21.267) seconds
+Test Suite 'All tests' passed at 2026-09-25 15:26:30.122.
+	 Executed 14 tests, with 0 failures (0 unexpected) in 21.258 (21.268) seconds
+** TEST SUCCEEDED **
