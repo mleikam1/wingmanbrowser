@@ -15,4 +15,7 @@ EXPOSE 8080
 # Forwarded TLS headers are trusted only from an explicitly reviewed proxy.
 # One process keeps transient News thumbnail capabilities available to later
 # image POSTs; four threads preserve concurrent request handling.
+# Cloud Run deployments explicitly replace command/args with gunicorn and
+# --config=python:wingman_search.gunicorn_cloud_run (see deploy/SEARCH_RELEASE.md).
+# Keep this generic-host entrypoint free of wildcard forwarded-header trust.
 ENTRYPOINT ["gunicorn", "--bind=0.0.0.0:8080", "--workers=1", "--threads=4", "--timeout=30", "--limit-request-line=1024", "--limit-request-fields=30", "--limit-request-field_size=2048", "--access-logfile=/dev/null", "--error-logfile=/dev/null", "wingman_search.production:application"]

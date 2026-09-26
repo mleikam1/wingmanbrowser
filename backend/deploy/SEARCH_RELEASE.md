@@ -1,9 +1,11 @@
-# Search deployment proposal — no authorization or deployment
+# Search deployment controls
 
 The separate WSGI gateway and `Dockerfile.search` are implemented. The existing
 read-only content service remains separate from search and the operator plane.
 The content image now includes the rights-gated Brave adapter's dependencies.
-Neither image has been built/pushed or deployed in this implementation session.
+The owner-approved September 26 hosted pilot, its fixed allowance and actual
+verification are recorded in [BRAVE_HOSTED_DEPLOYMENT.md](../../docs/BRAVE_HOSTED_DEPLOYMENT.md).
+The commands below are templates; they do not authorize additional deployments.
 
 ## Required explicit owner configuration
 
@@ -79,6 +81,34 @@ paths. Gunicorn application access/error output is suppressed in the image;
 operator health comes from bounded aggregate counters. Review platform-provided
 request metadata separately, including retention and deletion.
 
+### Explicit Cloud Run TLS configuration
+
+For a reviewed Cloud Run deployment, override the container command and arguments
+in its service manifest:
+
+```yaml
+command: [gunicorn]
+args:
+  - --config=python:wingman_search.gunicorn_cloud_run
+  - wingman_search.production:application
+```
+
+The module requires Cloud Run's `K_SERVICE`, `K_REVISION`, and `K_CONFIGURATION`
+environment values and binds the validated `PORT` (default 8080). It keeps one
+worker/four threads, the existing request limits, and both application logs at
+`/dev/null`. Startup rejects overrides of these settings. Only the managed
+edge's exact `X-Forwarded-Proto: https` selects HTTPS; alternate scheme headers,
+PROXY protocol, and forwarded WSGI path/user headers do not establish trust.
+The image's default entrypoint remains suitable for separately configured hosts.
+
+`forwarded_allow_ips='*'` is confined to this explicit Cloud Run module. The
+environment-name check is an accident guard, not proof of ingress isolation:
+the deployment must ensure no untrusted client can reach the container directly
+and the edge overwrites the protocol header. Do not enable this module on an
+ordinary exposed host or add client-controlled proxy paths. The actual Cloud Run
+boundary still needs deployment verification before a release claim. See
+[Gunicorn's scheme-header and forwarding settings](https://gunicorn.org/reference/settings/#secure_scheme_headers).
+
 ## Optional direct ads on an approved persistent host
 
 The cloud search image is search-only. Never attach a local SQLite advertising
@@ -115,8 +145,9 @@ Search dispatch independently rechecks `live_search`. Revocation cannot turn an
 ad failure into a paid organic retry. Repairing a failed ads startup requires a
 controlled restart after approval/storage repair, with the same intact ledger.
 
-No automatic spending/replenishment, ongoing polling, DNS, IAM, cloud resources,
-public invocation, domain setup or advertiser billing has been authorized.
+No automatic replenishment, ongoing polling, additional cloud resources, DNS
+changes, domain setup or advertiser billing is authorized by these templates.
+The named hosted pilot has its own owner-approved scope in the deployment record.
 GCS transaction and secret-access costs are **unknown**, not zero. Compute,
 egress, storage, payment fees, support and fixed costs remain unpriced until an
 approved target and measured workload exist. The reviewed Brave list-rate
@@ -147,5 +178,6 @@ reserved uncertain attempts consume the conservative allowance as well.
 6. Obtain owner approval of canary evidence, real costs and remaining risks
    before increasing traffic. Code readiness is not release authorization.
 
-Cloud persistence, mounted rights updates, TLS/logging behavior and the container
-build remain unverified on real infrastructure. No production revenue is claimed.
+For actual cloud persistence, TLS/logging, container and native verification,
+consult the dated deployment record. Any different target needs its own checks.
+No production revenue is claimed.
