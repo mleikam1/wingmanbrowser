@@ -20,12 +20,33 @@ void main() {
     expect(ready(), isTrue);
   }
 
+  bool interactive(Finder finder) {
+    final matches = finder.hitTestable().evaluate();
+    if (matches.isEmpty) return false;
+    final route = ModalRoute.of(matches.last);
+    return route == null ||
+        (route.isCurrent &&
+            (route.animation == null ||
+                route.animation!.status == AnimationStatus.completed));
+  }
+
   Future<void> tap(WidgetTester tester, Finder finder) async {
     FocusManager.instance.primaryFocus?.unfocus();
-    await tester.ensureVisible(finder);
-    await tester.pump(const Duration(milliseconds: 200));
+    await until(tester, () => finder.evaluate().isNotEmpty);
+    await tester.ensureVisible(finder.last);
+    await until(tester, () => interactive(finder));
     await tester.tap(finder.hitTestable().last);
-    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump();
+  }
+
+  Future<void> enterQuery(WidgetTester tester, String text) async {
+    final field = find.byKey(const ValueKey('protected-search'));
+    final editable = find.descendant(
+      of: field,
+      matching: find.byType(EditableText),
+    );
+    await until(tester, () => interactive(editable));
+    await tester.enterText(field, text);
   }
 
   testWidgets(
@@ -44,13 +65,16 @@ void main() {
       final originalIds = session.tabs.map((t) => t.id).toSet();
       final originalActive = session.current.id;
       try {
-        await tap(tester, find.byTooltip('Tabs (${session.tabs.length})').last);
-        await tap(tester, find.text('New tab').last);
-        await tap(tester, find.byKey(const ValueKey('home-search-entry')));
-        await tester.enterText(
-          find.byKey(const ValueKey('protected-search')),
-          'Python documentation',
+        await tap(tester, find.byTooltip('Tabs (${session.tabs.length})'));
+        await tap(
+          tester,
+          find.text(
+            'Normal (${session.tabs.where((t) => !t.isPrivate).length})',
+          ),
         );
+        await tap(tester, find.text('New tab'));
+        await tap(tester, find.byKey(const ValueKey('home-search-entry')));
+        await enterQuery(tester, 'Python documentation');
         expect(session.current.search, isNull);
         final watch = Stopwatch()..start();
         await tester.testTextInput.receiveAction(TextInputAction.search);
@@ -66,16 +90,13 @@ void main() {
         expect(search.kind, SearchKind.news);
         expect(search.fixture, isTrue);
         expect(search.failure?.code, isNull);
-        await tap(tester, find.byTooltip('Tabs (${session.tabs.length})').last);
-        await tap(tester, find.text('New private tab').last);
+        await tap(tester, find.byTooltip('Tabs (${session.tabs.length})'));
+        await tap(tester, find.text('New private tab'));
         expect(session.current.isPrivate, isTrue);
         expect(session.current.search, isNull);
         expect(find.text('Fixture results'), findsNothing);
         await tap(tester, find.byKey(const ValueKey('home-search-entry')));
-        await tester.enterText(
-          find.byKey(const ValueKey('protected-search')),
-          'NASA Moon facts',
-        );
+        await enterQuery(tester, 'NASA Moon facts');
         await tester.testTextInput.receiveAction(TextInputAction.search);
         await until(tester, () => session.current.search?.loading == false);
         expect(session.current.search!.context, SearchContext.private);
@@ -87,16 +108,16 @@ void main() {
         // Keep Flutter's global engine/frame callbacks and network resources in
         // one application lifecycle and test error zone, just as in a real app.
         if (const bool.fromEnvironment('WINGMAN_ADS_ENABLED')) {
+          await tap(tester, find.byTooltip('Tabs (${session.tabs.length})'));
           await tap(
             tester,
-            find.byTooltip('Tabs (${session.tabs.length})').last,
+            find.text(
+              'Normal (${session.tabs.where((t) => !t.isPrivate).length})',
+            ),
           );
-          await tap(tester, find.text('New tab').last);
+          await tap(tester, find.text('New tab'));
           await tap(tester, find.byKey(const ValueKey('home-search-entry')));
-          await tester.enterText(
-            find.byKey(const ValueKey('protected-search')),
-            'best office chairs',
-          );
+          await enterQuery(tester, 'best office chairs');
           await tester.testTextInput.receiveAction(TextInputAction.search);
           await until(tester, () => session.current.search?.loading == false);
           final search = session.current.search!;
@@ -109,6 +130,7 @@ void main() {
           expect(find.byType(SponsoredPlacement), findsOneWidget);
           expect(find.text('Fixture: useful everyday tools'), findsOneWidget);
           await tap(tester, find.text('Why this ad?'));
+          await until(tester, () => interactive(find.byType(AlertDialog)));
           expect(find.byType(AlertDialog), findsOneWidget);
           expect(
             find.textContaining('Advertisers receive no individual query'),
@@ -120,19 +142,13 @@ void main() {
           expect(search.kind, SearchKind.news);
           expect(search.sponsored, isNull);
           expect(find.byType(SponsoredPlacement), findsNothing);
-          await tap(
-            tester,
-            find.byTooltip('Tabs (${session.tabs.length})').last,
-          );
-          await tap(tester, find.text('New private tab').last);
+          await tap(tester, find.byTooltip('Tabs (${session.tabs.length})'));
+          await tap(tester, find.text('New private tab'));
           expect(session.current.isPrivate, isTrue);
           expect(find.byType(SponsoredPlacement), findsNothing);
           expect(session.current.homeAds, isNull);
           await tap(tester, find.byKey(const ValueKey('home-search-entry')));
-          await tester.enterText(
-            find.byKey(const ValueKey('protected-search')),
-            'best office chairs',
-          );
+          await enterQuery(tester, 'best office chairs');
           await tester.testTextInput.receiveAction(TextInputAction.search);
           await until(tester, () => session.current.search?.loading == false);
           expect(session.current.search!.failure, isNull);
