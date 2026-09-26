@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../../search/controller.dart';
 import '../../policy/strict_search_policy.dart';
 import '../storage/document_store.dart';
 import '../signature_services.dart';
@@ -18,8 +19,28 @@ class DiscoveryTab {
   // Bounded, memory-only positions; owner session survives isolated handoff UI.
   final Map<String, double> scrollOffsets = {};
   String? get currentEntry => trail[position];
+  final Map<String, WingmanSearchController> searches = {};
+  WingmanSearchController? get search => searches[currentEntry];
   String? get resourceId =>
-      currentEntry?.startsWith('web:') == true ? null : currentEntry;
+      currentEntry?.startsWith('web:') == true ||
+          currentEntry?.startsWith('search:') == true
+      ? null
+      : currentEntry;
+  void visitSearch(WingmanSearchController controller) {
+    final key = 'search:${DateTime.now().microsecondsSinceEpoch}-${_next++}';
+    searches[key] = controller;
+    visit(key);
+    while (searches.length > 10) {
+      searches.remove(searches.keys.first)?.dispose();
+    }
+  }
+
+  void cancelSearches() {
+    for (final search in searches.values) {
+      search.cancel();
+    }
+  }
+
   Uri? get website => currentEntry?.startsWith('web:') == true
       ? Uri.tryParse(currentEntry!.substring(4))
       : null;
@@ -33,19 +54,31 @@ class DiscoveryTab {
       trail.removeAt(0);
       position--;
     }
+    for (final key
+        in searches.keys.where((key) => !trail.contains(key)).toList()) {
+      searches.remove(key)?.dispose();
+    }
   }
 
   DiscoveryTab copyForUndo() {
     if (isPrivate) throw StateError('Private tabs cannot enter undo.');
     return DiscoveryTab(id: id)
       ..trail.clear()
-      ..trail.addAll(trail)
+      ..trail.addAll(
+        trail.map(
+          (entry) => entry?.startsWith('search:') == true ? null : entry,
+        ),
+      )
       ..position = position
       ..taskId = taskId;
   }
 
   void dispose() {
     scrollOffsets.clear();
+    for (final search in searches.values) {
+      search.dispose();
+    }
+    searches.clear();
   }
 }
 
@@ -132,7 +165,9 @@ class DiscoverySession {
         for (final tab in normal)
           {
             'id': tab.id,
-            'entry': tab.website != null && _isSearch(tab.website!)
+            'entry':
+                tab.currentEntry?.startsWith('search:') == true ||
+                    (tab.website != null && _isSearch(tab.website!))
                 ? null
                 : tab.currentEntry,
           },

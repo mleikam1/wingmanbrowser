@@ -21,6 +21,11 @@ class StrictSearchPolicy {
     'start.duckduckgo.com',
   };
 
+  /// Shared syntax checks with the separately bounded Brave request contract.
+  /// This grants no native navigation authority and cannot lower filtering.
+  String validateGatewayQuery(String query) =>
+      _validatedQuery(query, maximumCharacters: 400, maximumBytes: 1600);
+
   Uri buildQuery(String query) {
     final value = _validatedQuery(query);
     return Uri.parse(
@@ -189,7 +194,11 @@ class StrictSearchPolicy {
     }
   }
 
-  static String _validatedQuery(String input) {
+  static String _validatedQuery(
+    String input, {
+    int maximumCharacters = maxQueryCharacters,
+    int maximumBytes = maxQueryUtf8Bytes,
+  }) {
     if (input.length > _maxUrlLength) _invalid('This search is too long.');
     _validateUnicode(input);
     if (input.runes.any(_isControl)) {
@@ -206,8 +215,8 @@ class StrictSearchPolicy {
     }
     final value = String.fromCharCodes(runes.sublist(start, end));
     if (value.isEmpty) _invalid('Enter something to search for.');
-    if (end - start > maxQueryCharacters ||
-        utf8.encode(value).length > maxQueryUtf8Bytes) {
+    if (end - start > maximumCharacters ||
+        utf8.encode(value).length > maximumBytes) {
       _invalid('This search is too long.');
     }
     // Validation-only decoding catches quoted/encoded shortcut syntax without

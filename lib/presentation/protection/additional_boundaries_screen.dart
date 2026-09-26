@@ -118,7 +118,7 @@ class _AdditionalBoundariesScreenState
               contentPadding: EdgeInsets.zero,
               title: const Text('Disable web search'),
               subtitle: const Text(
-                'Keep search on this device’s reviewed library. This saved boundary also applies to private tabs and cannot change DuckDuckGo’s fixed Strict adult filter.',
+                'Keep search on this device’s reviewed library. This saved boundary also applies to private tabs and cannot weaken mandatory search protection.',
               ),
               value: restrictions.blockedCollections.contains('web-search'),
               onChanged: _busy || widget.isPrivate
@@ -126,7 +126,7 @@ class _AdditionalBoundariesScreenState
                   : (v) => _change(collection: 'web-search', hidden: v),
             ),
             const Text(
-              'Web search sends submitted queries directly to DuckDuckGo with required Strict adult filtering. Results and ads are not classified against all six Wingman rules. Consumer result destinations are checked against local category, threat and additional restrictions.',
+              'Wingman Search sends submitted queries through Wingman to Brave with required Strict filtering. Wingman also checks queries, result previews and destinations; filtering can miss content. Private tabs inherit these same boundaries.',
             ),
             const SizedBox(height: 20),
             const WingmanSection(title: 'Collections'),

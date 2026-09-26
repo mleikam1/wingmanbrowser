@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'search/client.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'browser/browser_engine.dart';
@@ -342,6 +343,7 @@ class WingmanApp extends StatelessWidget {
     this.session,
     this.handoff,
     this.liveContent,
+    this.searchClientFactory,
   });
   final BrowserState state;
   final PolicyRuntime policy;
@@ -349,6 +351,7 @@ class WingmanApp extends StatelessWidget {
   final DiscoverySession? session;
   final HandoffController? handoff;
   final LiveContentController? liveContent;
+  final SearchClientFactory? searchClientFactory;
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: state,
@@ -372,6 +375,7 @@ class WingmanApp extends StatelessWidget {
               session: session,
               handoff: handoff,
               liveContent: liveContent,
+              searchClientFactory: searchClientFactory,
             ),
     ),
   );

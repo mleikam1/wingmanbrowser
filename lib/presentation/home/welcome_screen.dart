@@ -51,7 +51,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         const WingmanStatus(
           title: 'Protection is part of Wingman',
           message:
-              'Explore the offline library and local tools. Native Wingman opens ordinary websites with mandatory category and security filters. DuckDuckGo Strict adult filtering is required; search previews and changing pages can contain misses. The web companion opens searches in your host browser and cannot control it after navigation.',
+              'Explore the offline library and local tools. Wingman Search displays Brave-powered results with required Strict filtering and independent protection checks. Submitted queries pass through Wingman to Brave; the standard Brave API notice permits retention up to 90 days. Filtering can miss content. Native links use Wingman protection; selected web-companion links open in your host browser.',
         ),
         const SizedBox(height: 20),
         const Text(

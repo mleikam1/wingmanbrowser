@@ -157,6 +157,19 @@ class PolicyRuntime extends ChangeNotifier {
           : status.usable &&
                 (policy.livePolicy?.isUsable(now: clock.now()) ?? false));
 
+  /// First-party results need the mandatory baseline, not an external provider renderer.
+  bool brandedSearchAvailable({AdditionalRestrictions? additional}) =>
+      productEdition == ProductEdition.consumer &&
+      consumerProtection.isUsable &&
+      additional?.blockedCollections.contains('web-search') != true &&
+      additional?.blockedResourceIds.contains('web-search') != true &&
+      additional?.blockedDomains.any(
+            (domain) =>
+                hostMatches('api.search.brave.com', domain) ||
+                hostMatches('search.brave.com', domain),
+          ) !=
+          true;
+
   bool searchAvailable({
     bool isPrivate = false,
     AdditionalRestrictions? additional,

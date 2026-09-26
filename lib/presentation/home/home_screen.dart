@@ -339,7 +339,7 @@ class HomeScreen extends StatelessWidget {
                     Text(
                       kIsWeb
                           ? 'Web companion · Website links open in your host browser'
-                          : 'Searches go to your provider. Typing stays here.',
+                          : 'Submitted searches go to Brave through Wingman. Typing stays here.',
                       style: type.bodySmall,
                     ),
                     if (quickTask != null) ...[
