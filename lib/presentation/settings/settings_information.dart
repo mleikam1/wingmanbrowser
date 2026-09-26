@@ -84,11 +84,11 @@ class AboutScreen extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           const Text(
-            'Native consumer Wingman uses System WebView or WKWebView for ordinary pages, forms, JavaScript and sign-in continuity. DuckDuckGo Strict adult filtering is required. Local category and threat rules check destinations separately. Unknown destinations may be permitted; they are not verified safe.',
+            'Native consumer Wingman uses System WebView or WKWebView for ordinary pages, forms, JavaScript and sign-in continuity. Wingman Search requires Brave Strict filtering and independent query/result checks. Local category and threat rules check destinations separately. Unknown destinations may be permitted; they are not verified safe.',
           ),
           const SizedBox(height: 12),
           const Text(
-            'Web search sends submitted queries and the connection’s IP address directly to DuckDuckGo, with no remote suggestions while typing and no paid search service. macOS uses the native WKWebView adapter when its protection baseline is available. Windows and Linux native browsing are unavailable. The web companion has local tools and submits search by leaving for the strict provider. It cannot enforce native protection in the host browser.',
+            'Wingman Search sends submitted queries through the Wingman gateway to Brave, without consumer IP, cookie or account forwarding. Brave’s standard API notice permits query retention up to 90 days. Typing stays local; Wingman does not save query history. Native links use existing browser protection; selected web-companion links leave for the host browser, whose other tabs Wingman cannot filter. Windows and Linux native browsing remain unavailable.',
           ),
           const SizedBox(height: 12),
           const Text(

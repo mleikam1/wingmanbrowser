@@ -26,10 +26,11 @@ class HeaderBudget:
 
 
 class SnapshotReader:
-    def __init__(self, store, ttl=15):
+    def __init__(self, store, ttl=15, brave_rights_loader=None):
         self.store, self.ttl = store, ttl
         self.cached, self.checked = None, 0
         self.lock = threading.Lock()
+        self.brave_rights_loader = brave_rights_loader
 
     def bundle(self):
         with self.lock:
@@ -43,15 +44,44 @@ class SnapshotReader:
                     if self.cached is None:
                         raise
                 self.checked = time.monotonic()
-            return self.cached
+            bundle = self.cached
+            if bundle and any(item.get('providerId') == 'brave' for item in bundle.get('snapshot', {}).get('items', [])):
+                from .brave import shared_grant, default_rights_loader
+                try:
+                    reference, retention = shared_grant((self.brave_rights_loader or default_rights_loader)())
+                    allowed = True
+                except Exception:
+                    reference, retention, allowed = None, 0, False
+                snapshot = bundle['snapshot']
+                checked_now = datetime.now(timezone.utc)
+                def authorized_item(item):
+                    if item.get('providerId') != 'brave':
+                        return True
+                    fetched = date_value(item.get('fetchedAt'))
+                    expiry = date_value(item.get('expiresAt'))
+                    return bool(allowed and item.get('sharedGrantReference') == reference and fetched and expiry
+                                and expiry <= fetched + timedelta(seconds=retention) and is_unexpired(item, checked_now))
+                snapshot = dict(snapshot, items=[item for item in snapshot['items'] if authorized_item(item)])
+                bundle = dict(bundle, snapshot=snapshot,
+                              media={key: value for key, value in bundle.get('media', {}).items()
+                                     if value.get('sourceId') != 'brave-news'})
+                if not allowed:
+                    revoked = set(snapshot.get('revokedSourceIds', [])) | {'brave-news'}
+                    snapshot = dict(snapshot, items=[item for item in snapshot['items'] if item.get('providerId') != 'brave'],
+                                    revokedSourceIds=sorted(revoked), sources=[dict(source, status='revoked')
+                                    if source.get('id') == 'brave-news' else source for source in snapshot.get('sources', [])])
+                    bundle = dict(bundle, snapshot=snapshot,
+                                  media={key: value for key, value in bundle.get('media', {}).items()
+                                         if value.get('sourceId') != 'brave-news'})
+            return bundle
 
     def read(self):
         bundle = self.bundle()
         return bundle['snapshot'] if bundle else None
 
 
-def handler_for(store):
-    reader = SnapshotReader(store)
+def handler_for(store, brave_rights_loader=None):
+    reader = SnapshotReader(store, brave_rights_loader=brave_rights_loader)
 
     class Handler(BaseHTTPRequestHandler):
         server_version = "WingmanContent/1.0"
@@ -128,12 +158,14 @@ def handler_for(store):
                 published = date_value(item.get('publishedAt'))
                 if published:
                     deadlines.append(published + timedelta(days=30))
-                if item.get('providerId') == 'currents':
+                if item.get('providerId') in ('currents', 'brave'):
                     fetched = date_value(item.get('fetchedAt'))
                     if fetched:
                         deadlines.append(fetched + timedelta(hours=24))
             ttl = max(0, min([60] + [int((value - now).total_seconds()) for value in deadlines])) if deadlines else 0
             cache = "public, max-age=%d, must-revalidate" % ttl if ttl else "no-cache, must-revalidate"
+            if any(item.get('providerId') == 'brave' for item in snapshot['items']):
+                cache = 'public, max-age=0, must-revalidate'
             headers = {"ETag": etag, "Cache-Control": cache}
             if modified:
                 headers["Last-Modified"] = modified

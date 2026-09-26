@@ -522,7 +522,7 @@ class ConfigurationTests(unittest.TestCase):
             "globalvoices-fashion", "globalvoices-food", "globalvoices-health",
             "globalvoices-science", "globalvoices-technology", "globalvoices-business",
             "globalvoices-entertainment", "globalvoices-headlines",
-            "newsusa-features", "phys-org", "tech-xplore", "medical-xpress", "nasa-photojournal", "currents",
+            "newsusa-features", "phys-org", "tech-xplore", "medical-xpress", "nasa-photojournal", "currents", "brave-news",
         })
         self.assertEqual({topic for source in config["sources"] for topic in source["topics"]}, {
             "sports", "fashion", "food", "health", "science", "technology",

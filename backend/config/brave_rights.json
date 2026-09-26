@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "provider": "Brave Search API",
+  "reviewed_utc_date": "2026-09-26",
+  "account_entitlements_verified": false,
+  "agreement_reference": null,
+  "agreement_date": null,
+  "approved_application": null,
+  "approved_domains": [],
+  "approved_platforms": [],
+  "ordinary_display_basis": "Public Search API documentation describes human web/news result display; applicable owner account acceptance and production scope remain unverified. No blanket enterprise requirement is inferred.",
+  "separate_ad_placement_basis": "Wingman first-party direct campaigns require actual approved demand; Brave organic API access does not establish an ad demand agreement.",
+  "source_attribution": "Identify original publisher; provide truthful Brave provider disclosure without claiming endorsement. Optional provider marks require compliance with current mark terms.",
+  "shared_news_use": "unknown_disabled",
+  "storage_duration_seconds": null,
+  "cdn_fanout": "unknown_disabled",
+  "remote_media_permissions": "unknown_disabled; publisher image/full-text rights are separate",
+  "ai_permissions": "not_requested_disabled",
+  "provider_retention": "Reviewed standard API privacy notice permits query retention up to 90 days; zero retention agreement is not verified.",
+  "commercial_contact": "Owner-controlled; no outreach sent and no signed partner terms verified.",
+  "gates": {
+    "live_search": {"enabled": false, "authorization_status": "unverified", "evidence_reference": null},
+    "cached_news": {"enabled": false, "authorization_status": "unknown", "evidence_reference": null},
+    "remote_media": {"enabled": false, "authorization_status": "unknown", "evidence_reference": null},
+    "live_ads": {"enabled": false, "authorization_status": "unknown", "evidence_reference": null},
+    "partner_demand": {"enabled": false, "authorization_status": "unknown", "evidence_reference": null},
+    "production_billing": {"enabled": false, "authorization_status": "not_authorized", "evidence_reference": null}
+  },
+  "local_smoke_authorization": {
+    "reference": "wingman_search_revenue_pack/START_CODEX_HERE.txt",
+    "scope": "One local smoke run, at most one web and one news attempt, count=1, strict, synthetic input, no retries, stop first failure",
+    "maximum_list_rate_micros_per_success": 5000,
+    "maximum_attempts": 2,
+    "ongoing_development_cap_micros": 0,
+    "production_cap_micros": 0
+  },
+  "sources": [
+    "https://api-dashboard.search.brave.com/terms-of-service",
+    "https://api-dashboard.search.brave.com/privacy-policy",
+    "https://api-dashboard.search.brave.com/app/plans",
+    "https://api-dashboard.search.brave.com/documentation/guides/rate-limiting",
+    "https://brave.com/search/api/",
+    "https://brave.com/brave-ads/search/"
+  ]
+}

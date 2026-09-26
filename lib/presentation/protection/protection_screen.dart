@@ -307,7 +307,7 @@ class ProtectionScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    '${policy.searchAvailable(isPrivate: isPrivate, additional: state.protectedPreferences.additional) ? 'DuckDuckGo search is available with required Strict adult filtering.' : 'Web search is unavailable or disabled in this session.'} Search snippets and ads are not classified against all six Wingman rules. Clicked destinations are evaluated separately.',
+                    '${policy.brandedSearchAvailable(additional: state.protectedPreferences.additional) ? 'Wingman Search is allowed with required Strict filtering; its gateway must be configured.' : 'Web search is unavailable or disabled in this session.'} Query, result and destination checks apply. Filtering can miss content; listed results are not verified safe.',
                   ),
                   const SizedBox(height: 12),
                   Text(
@@ -373,9 +373,9 @@ class ProtectionScreen extends StatelessWidget {
           ),
           const _InformationRoute(
             icon: Icons.search,
-            title: 'Submitted search with DuckDuckGo',
+            title: 'Submitted search through Wingman to Brave',
             detail:
-                'The provider receives submitted queries and your IP address. Wingman sends no remote suggestions while you type.',
+                'The Wingman gateway receives the submitted query and sends it to Brave without consumer IP, cookie or account forwarding. The standard Brave notice permits retention up to 90 days. Typing stays local.',
           ),
           _InformationRoute(
             icon: Icons.newspaper_outlined,
@@ -537,7 +537,7 @@ class AlwaysOnProtectionsScreen extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           const Text(
-            'DuckDuckGo adult filtering stays Strict where native web search is supported. The provider can miss adult content, and its results and advertisements are not a six-category Wingman classification. An additional boundary can disable web search; private tabs inherit it.',
+            'Wingman Search always requires Strict provider filtering and separate query, preview and destination checks. These checks can miss content. An additional boundary can disable web search; private tabs inherit it.',
           ),
         ],
       ),

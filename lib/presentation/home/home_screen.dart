@@ -27,6 +27,7 @@ class HomeScreen extends StatelessWidget {
     this.launchpad,
     this.contentCollections,
     this.websiteDiscovery,
+    this.sponsor,
     this.task,
     this.isPrivate = false,
     this.notice,
@@ -49,7 +50,7 @@ class HomeScreen extends StatelessWidget {
   final ValueChanged<String> onOpen, onTask;
   final List<Widget> spaceCards;
   final FinishWorkspace? task;
-  final Widget? launchpad, contentCollections, websiteDiscovery;
+  final Widget? launchpad, contentCollections, websiteDiscovery, sponsor;
   final bool isPrivate, policyUsable;
   final String? notice, storageError;
   final ScrollController? controller;
@@ -339,7 +340,7 @@ class HomeScreen extends StatelessWidget {
                     Text(
                       kIsWeb
                           ? 'Web companion · Website links open in your host browser'
-                          : 'Searches go to your provider. Typing stays here.',
+                          : 'Submitted searches go to Brave through Wingman. Typing stays here.',
                       style: type.bodySmall,
                     ),
                     if (quickTask != null) ...[
@@ -377,6 +378,7 @@ class HomeScreen extends StatelessWidget {
                       const SizedBox(height: 20),
                       HomeArtworkPanel(artwork: preferences.homeArtwork),
                     ],
+                    ?sponsor,
                     ...children,
                     const SizedBox(height: 22),
                     _ProtectionEntry(onTap: onProtection),

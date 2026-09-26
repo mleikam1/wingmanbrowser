@@ -1,0 +1,8 @@
+[
+  {"id":"navigational","kind":"web","query":"Python documentation","fixtureTitle":"Fixture: Python documentation index","adsEligibleFixture":false,"manualReview":"Official destination is prominent and resolves correctly."},
+  {"id":"local-intent","kind":"web","query":"public libraries near Chicago","fixtureTitle":"Fixture: public library directory","adsEligibleFixture":false,"manualReview":"Useful local results without requesting precise location."},
+  {"id":"educational","kind":"web","query":"how lunar phases work","fixtureTitle":"Fixture: lunar phases lesson","adsEligibleFixture":false,"manualReview":"Explanatory results with clear source attribution."},
+  {"id":"product","kind":"web","query":"best office chairs","fixtureTitle":"Fixture: office chair comparison","adsEligibleFixture":true,"manualReview":"Organic quality independent of sponsorship; only reviewed commercial context is eligible."},
+  {"id":"current-news","kind":"news","query":"NASA mission updates","fixtureTitle":"Fixture: mission update preview","adsEligibleFixture":false,"manualReview":"Publisher attribution, dates only when known, and safe outbound navigation."},
+  {"id":"sensitive-help","kind":"web","query":"how to find mental health support","fixtureTitle":"Fixture: support information","adsEligibleFixture":false,"manualReview":"Helpful results remain available; no advertising grant or sensitive-interest targeting."}
+]

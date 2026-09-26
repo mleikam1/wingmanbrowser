@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import '../../policy/policy_runtime.dart';
 import '../browser_shell.dart' show safeTextContextMenu;
 import '../components/wingman_components.dart';
@@ -32,8 +33,7 @@ class FocusedSearchScreen extends StatefulWidget {
 class _FocusedSearchScreenState extends State<FocusedSearchScreen> {
   late final _text = TextEditingController(text: widget.initialQuery);
   bool _official = false;
-  late bool _web = widget.policy.searchAvailable(
-    isPrivate: widget.isPrivate,
+  late bool _web = widget.policy.brandedSearchAvailable(
     additional: widget.additional(),
   );
   @override
@@ -50,8 +50,7 @@ class _FocusedSearchScreenState extends State<FocusedSearchScreen> {
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: widget.policy,
     builder: (context, _) {
-      final webAvailable = widget.policy.searchAvailable(
-        isPrivate: widget.isPrivate,
+      final webAvailable = widget.policy.brandedSearchAvailable(
         additional: widget.additional(),
       );
       final suggestions =
@@ -90,7 +89,8 @@ class _FocusedSearchScreenState extends State<FocusedSearchScreen> {
               key: const ValueKey('protected-search'),
               controller: _text,
               autofocus: true,
-              maxLength: 512,
+              maxLength: 400,
+              maxLengthEnforcement: MaxLengthEnforcement.none,
               autocorrect: false,
               enableSuggestions: false,
               enableIMEPersonalizedLearning: false,
@@ -151,14 +151,14 @@ class _FocusedSearchScreenState extends State<FocusedSearchScreen> {
             const SizedBox(height: 20),
             Text(
               _web
-                  ? 'Search with DuckDuckGo'
+                  ? 'Search with Wingman'
                   : 'Search your library on this device',
               style: Theme.of(context).textTheme.labelLarge,
             ),
             const SizedBox(height: 4),
             Text(
               _web
-                  ? 'Your search terms aren’t saved by Wingman.'
+                  ? 'Submitted queries go to Brave through Wingman’s gateway.'
                   : 'Typing stays local. Addresses open after you submit.',
               style: Theme.of(context).textTheme.bodySmall,
             ),
@@ -170,17 +170,17 @@ class _FocusedSearchScreenState extends State<FocusedSearchScreen> {
               children: [
                 Text(
                   _web
-                      ? 'Submitting sends your query and connection information directly to DuckDuckGo. Typing makes no network request. Wingman requires DuckDuckGo’s Strict adult filter; previews and ads can contain filtering misses.'
+                      ? 'Typing makes no network request. Submitting sends your query through Wingman to Brave without forwarding your IP, cookies or account identifiers. The query itself can identify you. Brave’s standard API policy permits retention for up to 90 days.'
                       : 'Library and Official searches run on this device. Entering a supported address connects only after you submit.',
                 ),
                 const SizedBox(height: 8),
                 Text(
                   _web
                       ? kIsWeb
-                            ? 'Web search opens in your host browser. Wingman cannot enforce its native destination filters after you leave this app.'
-                            : 'Search previews and ads are not fully classified against Wingman’s other category rules. Destination filters apply when links open.'
+                            ? 'Results appear in Wingman. Selected links open in your host browser, where Wingman cannot enforce native destination filters.'
+                            : 'Strict filtering and Wingman’s query, result and destination checks apply. Filtering can miss content; listed results are not verified safe.'
                       : webAvailable
-                      ? 'Choose Web to search with DuckDuckGo.'
+                      ? 'Choose Web for Wingman Search.'
                       : 'Web search is unavailable under your current boundaries. The installed library remains available.',
                 ),
               ],

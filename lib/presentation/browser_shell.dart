@@ -1,4 +1,9 @@
+import 'state/tab_scroll_controller.dart';
 import 'dart:async';
+import '../ads/session.dart';
+import 'ads/sponsored_placement.dart';
+import '../search/controller.dart';
+import 'search/wingman_search_view.dart';
 import 'components/browser_find_dialog.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -74,6 +79,9 @@ class BrowserShell extends StatefulWidget {
     this.session,
     this.handoff,
     this.liveContent,
+    this.searchClientFactory,
+    this.adsClientFactory,
+    this.adsEnabled = wingmanAdsEnabled,
   });
   final BrowserState state;
   final PolicyRuntime policy;
@@ -81,6 +89,9 @@ class BrowserShell extends StatefulWidget {
   final DiscoverySession? session;
   final HandoffController? handoff;
   final LiveContentController? liveContent;
+  final SearchClientFactory? searchClientFactory;
+  final AdsClientFactory? adsClientFactory;
+  final bool adsEnabled;
   @override
   State<BrowserShell> createState() => _BrowserShellState();
 }
@@ -93,6 +104,10 @@ class _BrowserShellState extends State<BrowserShell>
   List<DiscoveryTab> get _tabs => _session.tabs;
   int get _activeTab => _session.active;
   set _activeTab(int v) {
+    // Tab removals can invalidate the previous index before selection changes.
+    for (final tab in _tabs) {
+      tab.cancelSearches();
+    }
     _companion = null;
     _session.active = v;
     if (mounted) _originChanges.value++;
@@ -135,6 +150,11 @@ class _BrowserShellState extends State<BrowserShell>
   void _recheckLiveContent() => widget.liveContent?.recheckEligibility();
 
   void _syncLiveContentContext() {
+    if (_covered || widget.handoff?.blocksOwner == true) {
+      for (final tab in _tabs) {
+        tab.cancelSearches();
+      }
+    }
     if (_ephemeral || widget.handoff?.blocksOwner == true) {
       _feedOwnerEpoch++;
       _liveFeedReturns.clear();
@@ -196,18 +216,11 @@ class _BrowserShellState extends State<BrowserShell>
   final Map<String, ScrollController> _scrolls = {};
   ScrollController _scrollFor(String page) {
     final owner = _tab, key = '${_tab.id}:$page';
-    // A detached controller creates a new ScrollPosition from its original
-    // initial offset. Recreate it from this tab's latest saved position when
-    // returning from a native article or another Home tab.
-    final previous = _scrolls[key];
-    if (previous != null && !previous.hasClients) {
-      previous.dispose();
-      _scrolls.remove(key);
-    }
+    // Keep the controller valid while deferred desktop selection/lazy children
+    // mount. New ScrollPositions read the tab's current saved offset.
     return _scrolls.putIfAbsent(key, () {
-      final controller = ScrollController(
-        initialScrollOffset: owner.scrollOffsets[page] ?? 0,
-        keepScrollOffset: false,
+      final controller = TabScrollController(
+        readOffset: () => owner.scrollOffsets[page] ?? 0,
       );
       controller.addListener(() {
         if (controller.hasClients && _tabs.contains(owner)) {
@@ -276,6 +289,7 @@ class _BrowserShellState extends State<BrowserShell>
     Widget page, {
     ValueChanged<Route<void>>? onRoute,
   }) async {
+    _tab.cancelSearches();
     FocusScope.of(context).unfocus();
     final ui = _features?.ui;
     final route = WingmanRoute<void>(
@@ -796,6 +810,9 @@ class _BrowserShellState extends State<BrowserShell>
     _session.privateServices?.workspaces.removeListener(_changed);
     _session.privateServices?.ui.removeListener(_changed);
     _session.privateServices?.launchpad.removeListener(_changed);
+    for (final tab in _tabs) {
+      tab.cancelSearches();
+    }
     if (widget.session == null) _session.dispose();
     _compatibility?.dispose();
     _native.dispose();
@@ -849,6 +866,11 @@ class _BrowserShellState extends State<BrowserShell>
   }
 
   void _changed() {
+    if (!_brandedSearchAllowed) {
+      for (final tab in _tabs) {
+        tab.cancelSearches();
+      }
+    }
     if (mounted) {
       _originChanges.value++;
       setState(() {});
@@ -911,6 +933,7 @@ class _BrowserShellState extends State<BrowserShell>
   }
 
   void _home() {
+    _tab.cancelSearches();
     _liveFeedReturns.remove(_tab.id);
     setState(() {
       _tab.visit(null);
@@ -924,6 +947,7 @@ class _BrowserShellState extends State<BrowserShell>
   }
 
   void _open(ApprovedResource r) {
+    _tab.cancelSearches();
     if (!_eligible(r)) {
       _deny(
         widget.policy.policy.evaluate(
@@ -979,6 +1003,7 @@ class _BrowserShellState extends State<BrowserShell>
         productEdition == ProductEdition.consumer &&
         const StrictSearchPolicy().acceptsCanonical(uri) &&
         widget.policy.searchAvailable(additional: _additional)) {
+      _tab.cancelSearches();
       navigateCompanion(uri, newTab: companionArticle);
       return;
     }
@@ -996,6 +1021,7 @@ class _BrowserShellState extends State<BrowserShell>
         return;
       }
       // A user-selected destination opens top-level in the host browser.
+      _tab.cancelSearches();
       navigateCompanion(uri, newTab: companionArticle);
       return;
     }
@@ -1019,6 +1045,7 @@ class _BrowserShellState extends State<BrowserShell>
     }
     FocusScope.of(context).unfocus();
     Navigator.of(context).popUntil((route) => route.isFirst);
+    _tab.cancelSearches();
     setState(() {
       if (newTab) {
         _tabs.add(DiscoveryTab(isPrivate: _tab.isPrivate));
@@ -1201,6 +1228,8 @@ class _BrowserShellState extends State<BrowserShell>
   }
 
   Widget _contentBody(ApprovedResource? resource, Uri? website) {
+    final showingSearch =
+        _destination == 0 && _tab.search != null && _query.isEmpty;
     final showingWeb = _destination == 0 && website != null && _query.isEmpty;
     if (showingWeb && _websiteDecision(website).isAllowed) {
       _retainEngine(_tab, website);
@@ -1229,7 +1258,18 @@ class _BrowserShellState extends State<BrowserShell>
                   ),
                 ),
               if (!showingWeb)
-                _destination == 0 && resource != null
+                showingSearch
+                    ? _brandedSearchAllowed
+                          ? _brandedResults()
+                          : const Center(
+                              child: Padding(
+                                padding: EdgeInsets.all(24),
+                                child: Text(
+                                  'Wingman Search is unavailable under the current protection boundary.',
+                                ),
+                              ),
+                            )
+                    : _destination == 0 && resource != null
                     ? _article(resource)
                     : _destination != 0 ||
                           _query.isNotEmpty ||
@@ -1264,6 +1304,7 @@ class _BrowserShellState extends State<BrowserShell>
   }
 
   void _historyStep(bool forward) {
+    _tab.cancelSearches();
     final engine = _webControllers[_tab.id];
     final status = _webStatuses[_tab.id];
     final feedReturn = _liveFeedReturns[_tab.id];
@@ -1433,9 +1474,14 @@ class _BrowserShellState extends State<BrowserShell>
         final provider = const StrictSearchPolicy().rewriteProviderInput(
           explicit ? value : 'https://$value',
         );
-        _navigateWebsite(
-          provider ?? Uri.parse(explicit ? value : 'https://$value'),
-        );
+        final query = provider?.queryParameters['q'];
+        if (query != null) {
+          _startBrandedSearch(query);
+        } else {
+          _navigateWebsite(
+            provider ?? Uri.parse(explicit ? value : 'https://$value'),
+          );
+        }
       } catch (_) {
         _deny();
       }
@@ -1443,7 +1489,7 @@ class _BrowserShellState extends State<BrowserShell>
     }
     if (web) {
       try {
-        _navigateWebsite(const StrictSearchPolicy().buildQuery(input));
+        _startBrandedSearch(input);
       } on FormatException catch (error) {
         ScaffoldMessenger.of(
           context,
@@ -1452,6 +1498,7 @@ class _BrowserShellState extends State<BrowserShell>
       return;
     }
     FocusScope.of(context).unfocus();
+    _tab.cancelSearches();
     _features?.journal.record(
       PrivacyActivity.localCatalogSearch,
       PrivacyOutcome.completed,
@@ -1463,6 +1510,89 @@ class _BrowserShellState extends State<BrowserShell>
       _query = value;
       _notice = null;
     });
+  }
+
+  bool get _brandedSearchAllowed =>
+      widget.policy.brandedSearchAvailable(additional: _additional);
+  bool _searchResultAllowed(Uri uri) =>
+      searchDestination(uri.toString()) != null &&
+      !widget.policy.policy
+          .blockedBrowsingUrls(_additional)
+          .contains(uri.toString()) &&
+      widget.policy.consumerProtection
+          .assessNavigation(uri, additional: _additional)
+          .isAllowed;
+
+  void _startBrandedSearch(String input) {
+    if (!_brandedSearchAllowed || !_validOrigin(_tab)) {
+      _deny();
+      return;
+    }
+    try {
+      SearchRequest(query: input);
+    } on SearchFailure catch (error) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
+      return;
+    }
+    final owner = _tab;
+    owner.cancelSearches();
+    late final WingmanSearchController search;
+    search = WingmanSearchController(
+      client: (widget.searchClientFactory ?? GatewaySearchClient.configured)(),
+      context: owner.isPrivate ? SearchContext.private : SearchContext.normal,
+      permitted: () =>
+          _validOrigin(owner) &&
+          identical(owner.search, search) &&
+          _destination == 0 &&
+          _query.isEmpty &&
+          _brandedSearchAllowed &&
+          !_covered,
+      resultAllowed: _searchResultAllowed,
+      adsEnabled: widget.adsEnabled,
+      adsClientFactory: widget.adsClientFactory ?? GatewayAdsClient.configured,
+    );
+    FocusScope.of(context).unfocus();
+    _liveFeedReturns.remove(owner.id);
+    setState(() {
+      owner.visitSearch(search);
+      _destination = 0;
+      _query = '';
+      _collection = null;
+      _notice = null;
+    });
+    _recordTaskNavigation();
+    unawaited(search.submit(input));
+  }
+
+  Widget _brandedResults() {
+    final owner = _tab, search = _tab.search!;
+    search.permitted = () =>
+        _validOrigin(owner) &&
+        identical(owner.search, search) &&
+        _destination == 0 &&
+        _query.isEmpty &&
+        _brandedSearchAllowed &&
+        !_covered;
+    search.resultAllowed = _searchResultAllowed;
+    return WingmanSearchView(
+      key: ValueKey(owner.currentEntry),
+      controller: search,
+      scrollController: _scrollFor(owner.currentEntry!),
+      canContinue: () =>
+          _validOrigin(owner) &&
+          identical(owner.search, search) &&
+          _destination == 0 &&
+          _query.isEmpty &&
+          _brandedSearchAllowed,
+      resultAllowed: _searchResultAllowed,
+      onOpen: (uri) {
+        if (_validOrigin(owner) && _searchResultAllowed(uri)) {
+          _navigateWebsite(uri);
+        }
+      },
+    );
   }
 
   bool _validOrigin(DiscoveryTab origin) =>
@@ -1624,6 +1754,7 @@ class _BrowserShellState extends State<BrowserShell>
       );
 
   Future<void> _focusedSearch() async {
+    _tab.cancelSearches();
     final origin = _tab;
     final intent = await Navigator.of(context).push<SearchIntent>(
       MaterialPageRoute(
@@ -1633,11 +1764,13 @@ class _BrowserShellState extends State<BrowserShell>
           contentContext: _context,
           isPrivate: origin.isPrivate,
           localSuggestions: widget.state.settings.localSuggestions,
-          initialQuery: _tab.website == null
-              ? _query
-              : const StrictSearchPolicy().acceptsCanonical(_tab.website!)
-              ? _tab.website!.queryParameters['q'] ?? ''
-              : _tab.website.toString(),
+          initialQuery:
+              _tab.search?.query ??
+              (_tab.website == null
+                  ? _query
+                  : const StrictSearchPolicy().acceptsCanonical(_tab.website!)
+                  ? _tab.website!.queryParameters['q'] ?? ''
+                  : _tab.website.toString()),
         ),
       ),
     );
@@ -1647,6 +1780,7 @@ class _BrowserShellState extends State<BrowserShell>
   }
 
   void _explore() => setState(() {
+    _tab.cancelSearches();
     _destination = 3;
     _query = '';
     _collection = null;
@@ -1758,7 +1892,9 @@ class _BrowserShellState extends State<BrowserShell>
                                     widget.policy
                                         .resource(tab.resourceId ?? '')
                                         ?.title ??
-                                    'New tab',
+                                    (tab.search != null
+                                        ? 'Wingman Search'
+                                        : 'New tab'),
                           selected: tab == _tab,
                           isPrivate: tab.isPrivate,
                           onSelect: () =>
@@ -1768,7 +1904,10 @@ class _BrowserShellState extends State<BrowserShell>
                     ],
                     address: websiteAllowed
                         ? website.toString()
-                        : resource?.title ?? 'Search or enter address',
+                        : resource?.title ??
+                              (_tab.search != null
+                                  ? 'Wingman Search'
+                                  : 'Search or enter address'),
                     onAddress: _focusedSearch,
                     onNewTab: _addNativeTab,
                     onTabs: _showTabs,
@@ -1871,7 +2010,11 @@ class _BrowserShellState extends State<BrowserShell>
                   onCompanion: _showCompanion,
                   tabCount: _tabs.length,
                   isPrivate: _tab.isPrivate,
-                  resourceTitle: website != null
+                  resourceTitle: _tab.search != null
+                      ? (_brandedSearchAllowed
+                            ? 'Wingman Search'
+                            : 'Search unavailable')
+                      : website != null
                       ? websiteAllowed
                             ? website.host
                             : 'Unavailable website'
@@ -1930,8 +2073,10 @@ class _BrowserShellState extends State<BrowserShell>
     final service = _features;
     final launchpadActions = _launchpadActions();
     final homeOrigin = _tab;
+    final homeScroll = _scrollFor('home');
     return HomeScreen(
       key: ValueKey('home-${homeOrigin.id}'),
+      sponsor: _homeSponsor(homeOrigin, homeScroll),
       launchpad: service?.initialized == true
           ? LaunchpadSection(
               controller: service!.launchpad,
@@ -2017,7 +2162,47 @@ class _BrowserShellState extends State<BrowserShell>
           _features?.ui.storageError ??
           _features?.launchpad.storageError ??
           model?.storageError,
-      controller: _scrollFor('home'),
+      controller: homeScroll,
+    );
+  }
+
+  bool _homeAdsAllowed(DiscoveryTab owner) =>
+      widget.adsEnabled &&
+      !_ephemeral &&
+      _validOrigin(owner) &&
+      _featureRouteDepth == 0 &&
+      _destination == 0 &&
+      owner.currentEntry == null &&
+      _query.isEmpty &&
+      _collection == null &&
+      _notice == null &&
+      widget.state.storageError == null &&
+      _features?.ui.storageError == null &&
+      _features?.launchpad.storageError == null &&
+      _features?.workspaces.storageError == null &&
+      _features?.initialized == true &&
+      widget.policy.consumerProtection.isUsable;
+  Widget? _homeSponsor(DiscoveryTab owner, ScrollController scroll) {
+    if (!_homeAdsAllowed(owner)) return null;
+    final page = owner.homeAds ??= AdsPageSession(
+      placement: 'newtab',
+      factory: widget.adsClientFactory ?? GatewayAdsClient.configured,
+    );
+    final slot = page.slot(
+      0,
+      section: 'untargeted',
+      allowed: () => _homeAdsAllowed(owner),
+    );
+    if (slot == null) return null;
+    return SponsoredPlacement(
+      session: slot,
+      scrollController: scroll,
+      canContinue: () => _homeAdsAllowed(owner),
+      onOpen: (uri) {
+        if (_homeAdsAllowed(owner) && _searchResultAllowed(uri)) {
+          _navigateWebsite(uri);
+        }
+      },
     );
   }
 
@@ -3094,11 +3279,26 @@ class _BrowserShellState extends State<BrowserShell>
           owner: origin,
           controller: feed,
           epoch: _feedOwnerEpoch,
+          ads: AdsPageSession(
+            placement: 'news',
+            enabled: widget.adsEnabled,
+            factory: widget.adsClientFactory ?? GatewayAdsClient.configured,
+          ),
         );
     if (!_validFeedLocation(captured)) return;
     _pushFeature(
       LiveContentFeedScreen(
         controller: feed,
+        ads: captured.ads,
+        onOpenSponsor: (uri) {
+          if (_validFeedLocation(captured) && _searchResultAllowed(uri)) {
+            _navigateWebsite(
+              uri,
+              returnToFeed: captured,
+              companionArticle: true,
+            );
+          }
+        },
         initialScrollOffset: captured.offset,
         onScrollOffsetChanged: (offset) => captured.offset = offset,
         canContinue: () => _validFeedLocation(captured),
@@ -3482,7 +3682,13 @@ class _BrowserShellState extends State<BrowserShell>
         ];
       }
       return [
-        if (origin.website case final uri?) ...[
+        if (origin.search != null) ...[
+          const Text('Wingman Search'),
+          const SizedBox(height: 12),
+          const Text(
+            'Submitted queries are transient in this session and pass through Wingman to Brave. Brave’s standard API notice permits up to 90 days of query retention. Wingman applies Strict and independent protection checks; results are not verified safe.',
+          ),
+        ] else if (origin.website case final uri?) ...[
           Text(
             const StrictSearchPolicy().acceptsCanonical(uri)
                 ? 'DuckDuckGo search · Adult filtering: Strict'
@@ -3611,8 +3817,9 @@ class _BrowserShellState extends State<BrowserShell>
               : () => _pinToLaunchpad(resource!.id, committedPage: true),
           subtitle: _ephemeral
               ? 'Unavailable for private or temporary pages'
-              : live != null &&
-                    const StrictSearchPolicy().acceptsCanonical(live)
+              : origin.search != null ||
+                    (live != null &&
+                        const StrictSearchPolicy().acceptsCanonical(live))
               ? 'Search terms are not saved; pin a destination page'
               : live != null
               ? 'Pin this permitted page to Home'
@@ -3823,7 +4030,9 @@ class _LiveFeedLocation {
     required this.owner,
     required this.controller,
     required this.epoch,
+    this.ads,
   });
+  final AdsPageSession? ads;
   final DiscoveryTab owner;
   final LiveContentController controller;
   final int epoch;

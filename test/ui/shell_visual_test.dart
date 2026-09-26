@@ -97,6 +97,7 @@ void main() {
             find.byKey(const ValueKey('home-search-entry')),
           );
           await capture('f04-focused');
+          await shared.tap(tester, find.widgetWithText(ChoiceChip, 'Library'));
           await tester.enterText(
             find.byKey(const ValueKey('protected-search')),
             'moon',

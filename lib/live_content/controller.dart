@@ -116,7 +116,8 @@ class LiveContentController extends ChangeNotifier {
               ? 'revoked'
               : status?.status ?? 'unavailable',
           availability:
-              source.id == 'currents' && provider is! SnapshotFeedProvider
+              {'currents', 'brave-news'}.contains(source.id) &&
+                  provider is! SnapshotFeedProvider
               ? 'configuration'
               : status?.availability,
           fetchedAt: status?.fetchedAt,
@@ -199,7 +200,7 @@ class LiveContentController extends ChangeNotifier {
         )) {
       return false;
     }
-    if (item.providerId != 'currents') return true;
+    if (!item.isProviderPreview) return true;
     String host(String value) =>
         value.startsWith('www.') ? value.substring(4) : value;
     final articleHost = host(item.canonicalUrl.host);
@@ -208,7 +209,7 @@ class LiveContentController extends ChangeNotifier {
     return !_preferences.hiddenSourceIds.any((id) {
       final hidden = eligibility.registry.sources[id];
       return hidden != null &&
-          hidden.providerId != 'currents' &&
+          !{'currents', 'brave'}.contains(hidden.providerId) &&
           (hidden.allowedArticleHosts.any(
                 (value) => host(value) == articleHost,
               ) ||
@@ -426,7 +427,11 @@ class LiveContentController extends ChangeNotifier {
         if (_valid(epoch)) {
           _preferences = preferences;
           final legacyIds = eligibility.registry.sources.values
-              .where((s) => s.enabled && s.source.id != 'currents')
+              .where(
+                (s) =>
+                    s.enabled &&
+                    !{'currents', 'brave-news'}.contains(s.source.id),
+              )
               .map((s) => s.source.id)
               .toSet();
           if (eligibility.registry.sources['currents']?.enabled == true &&
@@ -698,11 +703,13 @@ class LiveContentController extends ChangeNotifier {
           if (s.status == 'revoked' || !s.rights.titles) s.id,
         for (final s in _snapshot?.sources ?? <LiveSource>[])
           if (!sourceIds.contains(s.id) &&
-              (s.id != 'currents' || provider is SnapshotFeedProvider))
+              (!{'currents', 'brave-news'}.contains(s.id) ||
+                  provider is SnapshotFeedProvider))
             s.id,
         for (final s in _saved)
           if (!sourceIds.contains(s.sourceId) &&
-              (s.sourceId != 'currents' || provider is SnapshotFeedProvider))
+              (!{'currents', 'brave-news'}.contains(s.sourceId) ||
+                  provider is SnapshotFeedProvider))
             s.sourceId,
       };
       final revokedItems = {..._revokedItems, ...snapshot.revokedItemIds};
@@ -1025,8 +1032,8 @@ class LiveContentController extends ChangeNotifier {
             id: item.id,
             sourceId: item.sourceId,
             savedAt: _now,
-            item: item.providerId == 'currents' ? null : _redactExcerpt(item),
-            linkUrl: item.providerId == 'currents' ? item.openingUrl : null,
+            item: item.isProviderPreview ? null : _redactExcerpt(item),
+            linkUrl: item.isProviderPreview ? item.openingUrl : null,
           ),
           ..._saved,
         ];
@@ -1183,7 +1190,7 @@ class LiveContentController extends ChangeNotifier {
     if (!_owner) return;
     final rows = _snapshot?.items ?? const <LiveContentItem>[];
     final expired = rows
-        .where((i) => i.providerId == 'currents' && !i.expiresAt.isAfter(_now))
+        .where((i) => i.isProviderPreview && !i.expiresAt.isAfter(_now))
         .toList();
     if (expired.isNotEmpty) {
       final ids = expired.map((i) => i.id).toSet();
@@ -1199,7 +1206,7 @@ class LiveContentController extends ChangeNotifier {
       );
     }
     final next = (_snapshot?.items ?? const <LiveContentItem>[])
-        .where((i) => i.providerId == 'currents' && i.expiresAt.isAfter(_now))
+        .where((i) => i.isProviderPreview && i.expiresAt.isAfter(_now))
         .map((i) => i.expiresAt)
         .fold<DateTime?>(null, (a, b) => a == null || b.isBefore(a) ? b : a);
     if (next != null) {

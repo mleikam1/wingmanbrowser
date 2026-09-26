@@ -4,6 +4,43 @@
 
 **Built for discovery. Designed with boundaries.**
 
+## Wingman Search, News and direct-campaign pilot (2026-09-26)
+
+The existing browser now has Wingman-branded All/News results through a separate
+Brave gateway. Submitted cloud queries go through Wingman to Brave, whose own
+retention policy applies. Wingman query/result state remains transient; URL
+navigation and native protection continue through the existing browser path. No provider key belongs
+in Flutter settings, assets, build flags, URLs or source. Default live gates are
+closed. Provider failure does not silently switch engines.
+
+Read [Brave setup](docs/BRAVE_SETUP.md), [implementation progress](docs/WINGMAN_SEARCH_PROGRESS.md),
+[privacy/retention](docs/DATA_FLOW_AND_RETENTION.md), and
+[release evidence](docs/WINGMAN_SEARCH_RELEASE_REPORT.md) before activation.
+The single authorized smoke allowance is separate from ongoing user traffic.
+Use the hidden replacement-key utility in your own terminal:
+
+```sh
+python3 backend/setup_brave_secret.py
+```
+
+Run the real app with the synthetic gateway while credentials/rights are pending:
+
+```sh
+PYTHONPATH=backend work/brave-venv/bin/python -m wingman_search serve-fixtures --port 8895 --origin http://127.0.0.1:8894
+flutter run -d chrome --web-hostname=127.0.0.1 --web-port=8894 --dart-define=WINGMAN_SEARCH_URL=http://127.0.0.1:8895/v1/search --dart-define=WINGMAN_SEARCH_DEVELOPMENT=true
+```
+
+Loopback endpoints are accepted only by explicitly enabled debug builds. Release
+builds require an approved HTTPS gateway. Shared Brave news additionally requires
+explicit caching/fan-out rights; its source ships disabled, preserving existing
+approved RSS/Currents delivery. Search supply does not include advertiser demand.
+No live campaigns, charges, partner integrations or production deployment are
+activated by installing this code. Development/test campaigns are never revenue.
+
+Direct campaigns and owner operations: [operator guide](docs/WINGMAN_ADS_OPERATOR.md), [commercial pilot](docs/WINGMAN_COMMERCIAL_PILOT.md), and [controlled traffic/benchmark evidence](docs/WINGMAN_TRAFFIC_AND_BENCHMARK.md).
+
+## Existing content integrations and earlier milestones
+
 The shared Currents integration extends Home/Discover with the reviewed v2
 categories, backend-only credentials and a durable 150-attempt daily ceiling.
 Existing approved feeds and NewsUSA remain supported. Setup, testing, deployment
@@ -54,7 +91,7 @@ Version **0.9.0+9** adds direct DuckDuckGo search with publisher-fixed Strict ad
 
 Reviewed-content restrictions have no switches, exceptions, PIN bypasses or private-mode exemptions. Search has a separate fixed provider filter and clearly disclosed coverage limits. Unsupported destination addresses and operations stay closed; saving a shortcut cannot approve a website. Additional restrictions can remove access but cannot grant new access or lower Strict adult filtering. Live eligibility, including search, also requires current policy, intact build-pinned assets and an available native capability. The live scope expires at **00:00 UTC on October 11, 2026**; there is no automatic updater or unrestricted fallback.
 
-## Reviewed website scope
+## Historical v0.9 reviewed website scope
 
 | Destination | Supported scope |
 | --- | --- |
@@ -67,7 +104,10 @@ No whole destination domain is approved. Scripts, forms, sign-in, checkout, uplo
 
 Android uses an independently gated WebView with mediated HTTPS requests. The iOS 18.4+ pilot uses WKWebView with compiled resource rules and nonpersistent website storage; older iOS retains the offline app. Their guarantees differ: iOS does **not** provide Android's per-subresource response MIME/body inspection or streamed byte limits. Neither mechanism classifies future page content. The retired unrestricted engine APIs remain closed; the pilot uses a separate protected bridge.
 
-## Strict web search
+## Historical v0.9 Strict web search
+
+This section records the retired v0.9 provider flow. Current All/News search uses
+the Wingman gateway described above; it does not fall back to this flow.
 
 Use the native address/search field, choose **Web**, and submit. Wingman builds `https://safe.duckduckgo.com/lite/?q=<encoded-query>&kp=1` and opens the provider's ordinary page directly. Only the first text results page and one fixed stylesheet are permitted. Search images, pagination, provider forms and scripts are unavailable; enter each new query in Wingman's field. No scraping service, private search API, paid search subscription or custom endpoint is configured.
 
@@ -112,9 +152,9 @@ Normal consumer preferences persist locally. Private customization uses separate
 
 ## Privacy and operating cost
 
-Opening an eligible page contacts that website and its permitted asset hosts directly; submitting web search contacts DuckDuckGo with the query. Wingman does not upload the browsing URL, query or page content to a Wingman server, Firebase, an analytics SDK or an AI classifier. Websites, the search provider and network providers still observe ordinary connection metadata; native platform security services and private mode are not a promise of anonymous traffic.
+Opening an eligible page contacts that website and its permitted asset hosts. When an approved live Search gateway is configured, explicitly submitted search queries go to Wingman’s backend and then Brave; typing does not request suggestions. Brave receives the query and server connection metadata, and its retention policy applies. Wingman keeps query/result state transient and excludes raw queries from its accounting and aggregate ad reports. Existing approved news sources still receive their normal connection metadata. Private mode does not make network traffic anonymous. See [current data flow and retention](docs/DATA_FLOW_AND_RETENTION.md) for the boundaries and unverified infrastructure paths.
 
-Policy decisions, the supported EasyPrivacy subset, artwork and application preferences are local. No Firebase/GCP project, paid API, deployment or recurring Browser service was added; search introduces no Wingman per-query cloud charge. Read-only cloud inventory found an existing Wingman-named project serving unrelated applications; it was left unchanged. Existing account spending was not audited. App-store distribution, maintenance, policy review, updates and connectivity can still have costs. See [Cloud cost plan](docs/CLOUD_COST_PLAN.md) for the inventory and a future static-update proposal with explicit cost limits and privacy tradeoffs.
+Brave Search can incur per-request provider charges, plus separately budgeted gateway and infrastructure costs. Durable accounting reserves each attempt before dispatch, and all ongoing live gates and budgets remain closed. This implementation made zero provider calls and created no production resources. Direct campaigns use verified prepaid funds only after separate approval; fixture delivery is test money, not earned revenue. Existing account spending was not audited. See [current release evidence and launch gates](docs/WINGMAN_SEARCH_RELEASE_REPORT.md) and [deployment preparation](backend/deploy/SEARCH_RELEASE.md); the earlier [cloud cost plan](docs/CLOUD_COST_PLAN.md) is historical.
 
 ## Validation and maintenance
 

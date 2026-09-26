@@ -864,6 +864,55 @@
         "label": "Powered by Currents News API",
         "url": "https://currentsapi.services/"
       }
+    },
+    {
+      "id": "brave-news",
+      "name": "Wingman News \u00b7 Brave",
+      "homepageUrl": "https://brave.com/search/api/",
+      "language": "en",
+      "topics": [
+        "headlines",
+        "sports",
+        "entertainment",
+        "science_technology",
+        "science",
+        "technology",
+        "business",
+        "education",
+        "environment",
+        "health"
+      ],
+      "allowedArticleHosts": [],
+      "articlePathPrefixes": [
+        "/"
+      ],
+      "eligibilityScope": "brave-preview",
+      "rights": {
+        "titles": false,
+        "excerpts": false,
+        "images": false,
+        "attribution": "Original publisher; results supplied by Brave Search API",
+        "licenseUrl": "https://api-dashboard.search.brave.com/terms-of-service"
+      },
+      "enabled": false,
+      "verifiedAt": "2026-09-26T00:00:00Z",
+      "feedUrl": "https://api.search.brave.com/res/v1/news/search",
+      "feedRedirectHosts": [
+        "api.search.brave.com"
+      ],
+      "minRefreshSeconds": 900,
+      "retentionSeconds": 86400,
+      "providerId": "brave",
+      "articleHostPolicy": "validated-public",
+      "providerAttribution": {
+        "label": "Results supplied by Brave Search API",
+        "url": "https://brave.com/search/api/"
+      },
+      "sharedNewsGrant": {
+        "status": "unknown",
+        "reference": null,
+        "retentionSeconds": null
+      }
     }
   ]
 }

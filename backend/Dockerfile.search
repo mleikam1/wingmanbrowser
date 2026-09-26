@@ -1,0 +1,16 @@
+# Offline-reviewable build definition. Building/publishing/deploying is separate.
+FROM python:3.13-slim
+ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/app/backend
+WORKDIR /app
+COPY backend/requirements*.txt /app/backend/
+RUN pip install --no-cache-dir -r backend/requirements-search.txt && \
+    groupadd --system wingman && useradd --system --gid wingman wingman
+COPY backend/wingman_content /app/backend/wingman_content
+COPY backend/wingman_search /app/backend/wingman_search
+COPY backend/config/brave_rights.json /app/backend/config/brave_rights.json
+COPY assets/policy/consumer_protection.json /app/assets/policy/consumer_protection.json
+USER wingman
+EXPOSE 8080
+# Config/rights are mounted, never key values or consumer data in image layers.
+# Forwarded TLS headers are trusted only from an explicitly reviewed proxy.
+ENTRYPOINT ["gunicorn", "--bind=0.0.0.0:8080", "--workers=2", "--threads=2", "--timeout=30", "--limit-request-line=1024", "--limit-request-fields=30", "--limit-request-field_size=2048", "--access-logfile=/dev/null", "--error-logfile=/dev/null", "wingman_search.production:application"]

@@ -23,12 +23,29 @@ class NewsProvider(ABC):
 
 class CompositeNewsProvider(NewsProvider):
     """Exactly one adapter per source; provider absence never disables RSS."""
-    def __init__(self, rss_provider, currents_provider=None):
+    def __init__(self, rss_provider, currents_provider=None, brave_provider=None, primary_shared_provider='currents'):
         self.rss_provider, self.currents_provider = rss_provider, currents_provider
+        self.brave_provider, self.primary_shared_provider = brave_provider, primary_shared_provider
+
+    def retain_authorized(self, source, prior, now):
+        if source.get('providerId') == 'brave':
+            if self.brave_provider is not None:
+                return self.brave_provider.retain_authorized(source, prior, now)
+            return dict(prior, items=[], bravePools={}, rightsBlocked=True, error='brave-unconfigured')
+        return prior
 
     def refresh(self, source, prior, now):
         if source.get('providerId', 'rss') == 'rss':
             return self.rss_provider.refresh(source, prior, now)
+        if source.get('providerId') in ('brave', 'currents') and source.get('providerId') != self.primary_shared_provider:
+            return dict(prior, status='cached' if prior.get('lastSuccessAt') else 'not-configured',
+                        error='editorial-provider-standby', lastHttpStatus=None,
+                        nextRefreshAt=iso(now + timedelta(minutes=15)))
+        if source.get('providerId') == 'brave':
+            if self.brave_provider is not None:
+                return self.brave_provider.refresh(source, prior, now)
+            return dict(prior, items=[], bravePools={}, error='brave-unconfigured', status='not-configured',
+                        nextRefreshAt=iso(now + timedelta(minutes=15)))
         if source.get('providerId') != 'currents':
             raise ValueError('unreviewed-provider')
         if self.currents_provider is not None:
@@ -41,6 +58,8 @@ class CompositeNewsProvider(NewsProvider):
         gateway = getattr(self.currents_provider, 'gateway', None)
         if gateway is not None:
             gateway.before_request = guard
+        if self.brave_provider is not None:
+            self.brave_provider.bind_writer_guard(guard)
 
 
 def delay_seconds(headers, now, floor):
@@ -133,11 +152,16 @@ class RssAtomProvider(NewsProvider):
 
 def is_unexpired(item, now):
     expires = date_value(item.get("expiresAt"))
-    if item.get('providerId') == 'currents':
+    if item.get('providerId') in ('currents', 'brave'):
         fetched = date_value(item.get('fetchedAt'))
         if fetched is None or fetched > now + timedelta(minutes=5):
             return False
         expires = min(expires, fetched + timedelta(hours=24)) if expires else None
+        if item.get('providerId') == 'brave':
+            seconds = item.get('sharedGrantRetentionSeconds')
+            if type(seconds) is not int or not 3600 <= seconds <= 86400 or not item.get('sharedGrantReference'):
+                return False
+            expires = min(expires, fetched + timedelta(seconds=seconds)) if expires else None
     return expires is not None and expires > now
 
 
@@ -181,7 +205,8 @@ def bounded_public_item(item):
               'providerCategories', 'providerAttribution', 'title', 'canonicalUrl', 'originalUrl',
               'outboundUrl', 'publishedAt', 'fetchedAt', 'expiresAt', 'updatedAt', 'language',
               'topics', 'rights', 'eligibility', 'image', 'excerpt', 'excerptProvenance',
-              'attribution', 'author', 'syndicatedArticle', 'region')
+              'attribution', 'author', 'syndicatedArticle', 'region', 'discoveredAt', 'pageDate',
+              'providerFetchedAt', 'sharedGrantReference', 'sharedGrantRetentionSeconds')
     result = {key: item[key] for key in fields if key in item}
     for key, limit in (('excerpt', 1600), ('attribution', 500), ('author', 200),
                        ('publisherName', 120), ('publisherId', 253), ('providerArticleId', 120)):
@@ -200,7 +225,8 @@ def public_availability(state, status):
         return 'revoked'
     error = state.get('error')
     if error in ('provider-not-configured', 'currents-unconfigured', 'currents-setup-required',
-                 'authentication-paused', 'http-401', 'http-403'):
+                 'authentication-paused', 'http-401', 'http-403', 'brave-shared-rights-required',
+                 'brave-unconfigured', 'editorial-provider-standby'):
         return 'configuration'
     if error in ('http-429', 'provider-wait', 'local-budget-exhausted', 'provider-quota-reserve',
                  'supplement-budget-reserve'):
@@ -222,6 +248,9 @@ def public_snapshot(config, states, now, prior_snapshot=None):
             revoked_sources.append(old["id"])
     for source in config["sources"]:
         state = states.get(source["id"], {})
+        if (source.get('providerId') == 'brave' and not source.get('enabled')
+                and not any(s['id'] == source['id'] for s in (prior_snapshot or {}).get('sources', []))):
+            continue  # Unknown disabled source is not a historic rights revocation.
         revoked.update(source.get("revokedItemIds", []))
         revoked.update(state.get("revokedItemIds", []))
         for url in source.get("revokedUrls", []):
@@ -229,7 +258,7 @@ def public_snapshot(config, states, now, prior_snapshot=None):
             if canonical:
                 revoked.add(item_id(canonical))
         status = state.get("status", "unavailable")
-        if not source["enabled"] or not source['rights'].get('titles') or state.get("sourceRevoked"):
+        if not source["enabled"] or not source['rights'].get('titles') or state.get("sourceRevoked") or state.get('rightsBlocked'):
             status = "revoked"
             revoked_sources.append(source["id"])
         elif not state.get("lastSuccessAt"):
@@ -285,7 +314,7 @@ def public_snapshot(config, states, now, prior_snapshot=None):
                               old.get('rights') == candidate.get('rights'))
                 if compatible:
                     winner['topics'] = sorted(set(old.get('topics', [])) | set(candidate.get('topics', [])))
-                if compatible and old.get('providerId') == candidate.get('providerId') == 'currents':
+                if compatible and old.get('providerId') == candidate.get('providerId') and candidate.get('providerId') in ('currents', 'brave'):
                     winner['providerCategories'] = sorted(set(old.get('providerCategories', [])) |
                                                           set(candidate.get('providerCategories', [])))
                 by_url[candidate['canonicalUrl']] = winner
@@ -338,9 +367,13 @@ def _ingest(config, store, provider, now=None, media_fetcher=None, writer_guard=
     now = now or datetime.now(timezone.utc)
     prior = store.read() or {"states": {}, "snapshot": {}}
     states, report = {}, []
+    if isinstance(provider, CompositeNewsProvider):
+        provider.primary_shared_provider = config.get('primarySharedProvider', 'currents')
     for source in config["sources"]:
         source_now = datetime.now(timezone.utc) if live_clock else now
         previous = prior.get("states", {}).get(source["id"], {})
+        if hasattr(provider, 'retain_authorized'):
+            previous = provider.retain_authorized(source, previous, source_now)
         state = dict(previous)
         due = date_value(state.get("nextRefreshAt"))
         requested = False
@@ -380,10 +413,15 @@ def _ingest(config, store, provider, now=None, media_fetcher=None, writer_guard=
         if 'currentsPools' in state:
             state['currentsPools'] = {key: [item for item in items if is_unexpired(item, source_now)]
                                      for key, items in state['currentsPools'].items()}
+        if 'bravePools' in state:
+            state['bravePools'] = {key: [item for item in items if is_unexpired(item, source_now)]
+                                   for key, items in state['bravePools'].items()}
         if not source['enabled'] or not source['rights'].get('titles') or state.get('sourceRevoked'):
             state['items'] = []
             if 'currentsPools' in state:
                 state['currentsPools'] = {}
+            if 'bravePools' in state:
+                state['bravePools'] = {}
         from .diagnostics import source_diagnostics
         state['diagnostics'] = source_diagnostics(source, state, source_now, action, requested,
                                                   was_due=due is None or source_now >= due)
@@ -392,7 +430,7 @@ def _ingest(config, store, provider, now=None, media_fetcher=None, writer_guard=
                        "held": state.get("heldCount", 0), "heldReasons": state.get("heldReasons", {}),
                        "heldExamples": state.get("heldExamples", []), "nextRefreshAt": state.get("nextRefreshAt"),
                        'diagnostics': state['diagnostics']})
-        if source.get('providerId') == 'currents':
+        if source.get('providerId') in ('currents', 'brave'):
             report[-1]['jobReport'] = state.get('jobReport', [])
     snapshot = public_snapshot(config, states, datetime.now(timezone.utc) if live_clock else now, prior.get("snapshot"))
     if snapshot.get('recoveryRequired'):

@@ -91,7 +91,7 @@ def canonical_url(value, source):
         return None
     try:
         parsed = urlsplit(value)
-        dynamic = (source.get("providerId") == "currents" and source.get("articleHostPolicy") == "validated-public")
+        dynamic = (source.get("providerId") in ("currents", "brave") and source.get("articleHostPolicy") == "validated-public")
         allowed = public_article_host(parsed.hostname) if dynamic else parsed.hostname in source["allowedArticleHosts"]
         if (parsed.scheme != "https" or not allowed
                 or parsed.username is not None or parsed.password is not None
@@ -128,6 +128,8 @@ def public_article_host(host):
     if host.split('.')[-1].isdigit() or host.endswith(('.localhost', '.local', '.internal', '.invalid')):
         return False
     if host == 'currentsapi.services' or host.endswith('.currentsapi.services'):
+        return False
+    if host == 'api.search.brave.com' or host.endswith('.api.search.brave.com'):
         return False
     try:
         ipaddress.ip_address(host)

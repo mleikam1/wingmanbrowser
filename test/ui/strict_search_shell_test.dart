@@ -1,4 +1,10 @@
 import 'dart:convert';
+import 'dart:async';
+import 'package:wingman_browser/ads/session.dart';
+import 'package:wingman_browser/presentation/ads/sponsored_placement.dart';
+import '../ads/ads_test.dart' as ad_fixtures;
+import 'package:wingman_browser/search/controller.dart';
+import 'package:wingman_browser/presentation/search/wingman_search_view.dart';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -7,6 +13,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:wingman_browser/browser/protected_web_surface.dart';
 import 'package:wingman_browser/domain/models.dart';
 import 'package:wingman_browser/main.dart';
+import 'package:wingman_browser/presentation/settings/settings_screen.dart';
 import 'package:wingman_browser/policy/policy_runtime.dart';
 import 'package:wingman_browser/presentation/components/browser_chrome.dart';
 import 'package:wingman_browser/presentation/components/wingman_components.dart';
@@ -68,10 +75,63 @@ class _RecordingRepository extends MemoryBrowserRepository {
   }
 }
 
+class _FixtureSearchClient implements WingmanSearchClient {
+  final List<SearchRequest> requests;
+  _FixtureSearchClient(this.requests, {this.withGrant = false});
+  final bool withGrant;
+  @override
+  Future<SearchResponse> search(SearchRequest request) async {
+    requests.add(request);
+    return SearchResponse(
+      kind: request.kind,
+      status: 'ok',
+      results: [
+        SearchResult(
+          title: 'Example moon guide',
+          url: Uri.parse('https://unreviewed.example/moon'),
+          description: 'Synthetic search contract fixture',
+          source: 'unreviewed.example',
+        ),
+        SearchResult(
+          title: 'NASA Moon facts',
+          url: Uri.parse('https://science.nasa.gov/moon/facts/'),
+          description: 'Synthetic NASA fixture',
+          source: 'science.nasa.gov',
+        ),
+      ],
+      moreAvailable: false,
+      fixture: true,
+      adContext: withGrant
+          ? AdContextGrant(
+              'transient-grant-token',
+              DateTime.now().toUtc().add(const Duration(minutes: 10)),
+            )
+          : null,
+    );
+  }
+
+  @override
+  void cancel() {}
+}
+
+class _DelayedSearchClient implements WingmanSearchClient {
+  final pending = Completer<SearchResponse>();
+  int calls = 0;
+  @override
+  Future<SearchResponse> search(SearchRequest request) {
+    calls++;
+    return pending.future;
+  }
+
+  @override
+  void cancel() {}
+}
+
 void main() {
   const policy = StrictSearchPolicy();
   const nasa = 'https://science.nasa.gov/moon/facts/';
   shared.Harness? activeHarness;
+  final requests = <SearchRequest>[];
 
   void shellTest(String description, Future<void> Function(WidgetTester) body) {
     testWidgets(description, (tester) async {
@@ -86,8 +146,12 @@ void main() {
   }
 
   Future<({shared.Harness h, _RecordingRepository repository})> mount(
-    WidgetTester tester,
-  ) async {
+    WidgetTester tester, {
+    SearchClientFactory? factory,
+    AdsClientFactory? adsFactory,
+    bool adsEnabled = false,
+  }) async {
+    requests.clear();
     tester.view.physicalSize = const Size(1024, 1000);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -134,6 +198,9 @@ void main() {
         policy: runtime,
         signatures: services,
         session: session,
+        searchClientFactory: factory ?? () => _FixtureSearchClient(requests),
+        adsClientFactory: adsFactory,
+        adsEnabled: adsEnabled,
       ),
     );
     await tester.pumpAndSettle();
@@ -172,44 +239,45 @@ void main() {
     expect(h.state.tabs.every((tab) => !tab.url.contains(marker)), isTrue);
   }
 
-  shellTest('Web defaults on, typing stays local, submitted words use Strict', (
-    tester,
-  ) async {
-    final (:h, :repository) = await mount(tester);
-    const marker = 'WINGMAN_QUERY_ONLY_6137';
-    final calls = <MethodCall>[];
-    final messenger =
-        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
-    messenger.setMockMethodCallHandler(ProtectedWebBridge.channel, (
-      call,
-    ) async {
-      calls.add(call);
-      return null;
-    });
-    addTearDown(
-      () =>
-          messenger.setMockMethodCallHandler(ProtectedWebBridge.channel, null),
-    );
-    await enter(tester, '$marker moon phases');
-    final webChip = tester.widget<ChoiceChip>(
-      find.ancestor(of: find.text('Web'), matching: find.byType(ChoiceChip)),
-    );
-    expect(webChip.selected, isTrue);
-    expect(h.session.current.website, isNull);
-    expect(find.byType(ProtectedWebSurface), findsNothing);
-    expect(calls, isEmpty);
-    await expectNotStored(h, repository, marker);
-    await submit(tester);
-    final surface = tester.widget<ProtectedWebSurface>(
-      find.byType(ProtectedWebSurface),
-    );
-    expect(surface.url, policy.buildQuery('$marker moon phases'));
-    expect(surface.isPrivate, isFalse);
-    expect(find.byKey(const ValueKey('strict-search-scope')), findsNothing);
-    expect(h.session.current.website, surface.url);
-    await expectNotStored(h, repository, marker);
-    expect(tester.takeException(), isNull);
-  });
+  shellTest(
+    'Web defaults on, typing stays local, submitted words use Wingman gateway',
+    (tester) async {
+      final (:h, :repository) = await mount(tester);
+      const marker = 'WINGMAN_QUERY_ONLY_6137';
+      final calls = <MethodCall>[];
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(ProtectedWebBridge.channel, (
+        call,
+      ) async {
+        calls.add(call);
+        return null;
+      });
+      addTearDown(
+        () => messenger.setMockMethodCallHandler(
+          ProtectedWebBridge.channel,
+          null,
+        ),
+      );
+      await enter(tester, '$marker moon phases');
+      final webChip = tester.widget<ChoiceChip>(
+        find.ancestor(of: find.text('Web'), matching: find.byType(ChoiceChip)),
+      );
+      expect(webChip.selected, isTrue);
+      expect(h.session.current.website, isNull);
+      expect(find.byType(ProtectedWebSurface), findsNothing);
+      expect(calls, isEmpty);
+      await expectNotStored(h, repository, marker);
+      await submit(tester);
+      expect(find.byType(WingmanSearchView), findsOneWidget);
+      expect(find.byType(ProtectedWebSurface), findsNothing);
+      expect(requests.single.query, '$marker moon phases');
+      expect(requests.single.context, SearchContext.normal);
+      expect(h.session.current.website, isNull);
+      await expectNotStored(h, repository, marker);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   shellTest(
     'ordinary colon punctuation and site operators remain web queries',
@@ -217,10 +285,7 @@ void main() {
       final (:h, :repository) = await mount(tester);
       await enter(tester, 'site:python.org documentation');
       await submit(tester);
-      expect(
-        h.session.current.website!.queryParameters['q'],
-        'site:python.org documentation',
-      );
+      expect(h.session.current.search!.query, 'site:python.org documentation');
       expect(find.byType(PolicyStateView), findsNothing);
       await expectNotStored(h, repository, 'site:python.org documentation');
     },
@@ -233,13 +298,9 @@ void main() {
     const marker = 'WINGMAN_PASTED_QUERY_6137';
     await enter(tester, 'https://duckduckgo.com/?q=$marker&kp=-2&k1=-1#kp=-2');
     await submit(tester);
-    final surface = tester.widget<ProtectedWebSurface>(
-      find.byType(ProtectedWebSurface),
-    );
-    expect(surface.url.queryParameters['q'], marker);
-    expect(surface.url.queryParameters['kp'], '1');
-    expect(surface.url.host, 'safe.duckduckgo.com');
-    expect(surface.url.queryParameters['k1'], '-1');
+    expect(find.byType(WingmanSearchView), findsOneWidget);
+    expect(requests.single.query, marker);
+    expect(h.session.current.website, isNull);
     await expectNotStored(h, repository, marker);
   });
 
@@ -249,6 +310,7 @@ void main() {
       final (:h, :repository) = await mount(tester);
       await enter(tester, 'moon phases');
       await submit(tester);
+      await shared.tap(tester, find.text('Example moon guide'));
       var surface = tester.widget<ProtectedWebSurface>(
         find.byType(ProtectedWebSurface),
       );
@@ -287,13 +349,6 @@ void main() {
     const marker = 'WINGMAN_PIN_QUERY_6137';
     await enter(tester, marker);
     await submit(tester);
-    final surface = tester.widget<ProtectedWebSurface>(
-      find.byType(ProtectedWebSurface),
-    );
-    surface.onStatus(
-      ProtectedWebStatus(url: surface.url, title: marker, progress: 100),
-    );
-    await tester.pump();
     await shared.tap(tester, find.byTooltip('Menu'));
     final pin = tester
         .widgetList<WingmanSettingsRow>(find.byType(WingmanSettingsRow))
@@ -315,7 +370,7 @@ void main() {
     const marker = 'WINGMAN_REVOKED_QUERY_6137';
     await enter(tester, marker);
     await submit(tester);
-    expect(find.byType(ProtectedWebSurface), findsOneWidget);
+    expect(find.byType(WingmanSearchView), findsOneWidget);
     await h.state.saveAdditionalRestrictions(
       AdditionalRestrictions(blockedCollections: ['web-search']),
     );
@@ -323,10 +378,10 @@ void main() {
     expect(find.byType(ProtectedWebSurface), findsNothing);
     expect(
       tester.widget<BrowserDock>(find.byType(BrowserDock)).resourceTitle,
-      'Unavailable website',
+      'Search unavailable',
     );
     await shared.tap(tester, find.byTooltip('Page information'));
-    expect(find.text('Page information unavailable'), findsOneWidget);
+    expect(find.text('Wingman Search'), findsWidgets);
     expect(find.textContaining(marker), findsNothing);
     await expectNotStored(h, repository, marker);
   });
@@ -379,11 +434,9 @@ void main() {
     const marker = 'WINGMAN_PRIVATE_QUERY_6137';
     await enter(tester, 'https://duckduckgo.com/?q=$marker&kp=-2');
     await submit(tester);
-    final surface = tester.widget<ProtectedWebSurface>(
-      find.byType(ProtectedWebSurface),
-    );
-    expect(surface.isPrivate, isTrue);
-    expect(surface.url, policy.buildQuery(marker));
+    expect(find.byType(WingmanSearchView), findsOneWidget);
+    expect(requests.single.context, SearchContext.private);
+    expect(requests.single.query, marker);
     expect(h.session.current.isPrivate, isTrue);
     await expectNotStored(h, repository, marker);
     await h.state.saveAdditionalRestrictions(
@@ -400,4 +453,210 @@ void main() {
     );
     await expectNotStored(h, repository, marker);
   });
+  shellTest(
+    'result Back restores transient results without another provider request',
+    (tester) async {
+      final (:h, :repository) = await mount(tester);
+      await enter(tester, 'BACK_QUERY_MARKER');
+      await submit(tester);
+      final search = h.session.current.search;
+      await shared.tap(tester, find.text('NASA Moon facts'));
+      expect(h.session.current.website.toString(), nasa);
+      final dock = tester.widget<BrowserDock>(find.byType(BrowserDock));
+      dock.onBack!();
+      await tester.pumpAndSettle();
+      expect(h.session.current.search, same(search));
+      expect(find.byType(WingmanSearchView), findsOneWidget);
+      expect(requests, hasLength(1));
+      await expectNotStored(h, repository, 'BACK_QUERY_MARKER');
+    },
+  );
+  shellTest('ordinary explicit address causes no search request', (
+    tester,
+  ) async {
+    final (:h, :repository) = await mount(tester);
+    await enter(tester, nasa);
+    await submit(tester);
+    expect(requests, isEmpty);
+    expect(h.session.current.website.toString(), nasa);
+    expect(find.byType(ProtectedWebSurface), findsOneWidget);
+    await expectNotStored(h, repository, 'NOT_A_QUERY');
+  });
+  shellTest('closing active last private tab safely discards search session', (
+    tester,
+  ) async {
+    final (:h, :repository) = await mount(tester);
+    await shared.tap(tester, find.byTooltip('Tabs (1)'));
+    await shared.tap(tester, find.text('New private tab'));
+    await enter(tester, 'PRIVATE_CLOSE_MARKER');
+    await submit(tester);
+    final removed = h.session.current;
+    await shared.tap(tester, find.byTooltip('Tabs (2)'));
+    await shared.tap(tester, find.byTooltip('Close tab 2'));
+    expect(h.session.tabs, hasLength(1));
+    expect(h.session.active, 0);
+    expect(removed.searches, isEmpty);
+    expect(tester.takeException(), isNull);
+    await expectNotStored(h, repository, 'PRIVATE_CLOSE_MARKER');
+  });
+  shellTest(
+    'private data clear safely removes active search and preserves normal tab',
+    (tester) async {
+      final (:h, :repository) = await mount(tester);
+      await shared.tap(tester, find.byTooltip('Tabs (1)'));
+      await shared.tap(tester, find.text('New private tab'));
+      await enter(tester, 'PRIVATE_CLEAR_MARKER');
+      await submit(tester);
+      final removed = h.session.current;
+      await shared.tap(tester, find.byTooltip('Home'));
+      await shared.tap(tester, find.byTooltip('Settings'));
+      final settings = tester.widget<SettingsScreen>(
+        find.byType(SettingsScreen),
+      );
+      await settings.actions.onClearData({PrivacyDataCategory.session});
+      await tester.pumpAndSettle();
+      expect(h.session.tabs, hasLength(1));
+      expect(h.session.current.isPrivate, isFalse);
+      expect(removed.searches, isEmpty);
+      expect(tester.takeException(), isNull);
+      await expectNotStored(h, repository, 'PRIVATE_CLEAR_MARKER');
+    },
+  );
+  shellTest(
+    'private transition ignores delayed normal result without another call',
+    (tester) async {
+      final client = _DelayedSearchClient();
+      final (:h, :repository) = await mount(tester, factory: () => client);
+      await enter(tester, 'LATE_NORMAL_MARKER');
+      await tester.testTextInput.receiveAction(TextInputAction.search);
+      await tester.pump(const Duration(milliseconds: 500));
+      final original = h.session.current.search!;
+      tester.widget<BrowserDock>(find.byType(BrowserDock)).onTabs();
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.ensureVisible(find.text('New private tab'));
+      await tester.tap(find.text('New private tab'));
+      await tester.pumpAndSettle();
+      client.pending.complete(
+        SearchResponse(
+          kind: SearchKind.web,
+          status: 'ok',
+          results: [
+            SearchResult(
+              title: 'LATE_RESULT',
+              url: Uri.parse('https://nasa.gov/'),
+              description: 'late',
+              source: 'nasa.gov',
+            ),
+          ],
+          moreAvailable: false,
+          fixture: true,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(h.session.current.isPrivate, isTrue);
+      expect(original.results, isEmpty);
+      expect(find.text('LATE_RESULT'), findsNothing);
+      expect(client.calls, 1);
+      await expectNotStored(h, repository, 'LATE_NORMAL_MARKER');
+    },
+  );
+  shellTest(
+    'actual shell ads default off ignores even a supplied search grant',
+    (tester) async {
+      final ads = ad_fixtures.FakeAdsClient();
+      await mount(
+        tester,
+        factory: () => _FixtureSearchClient(requests, withGrant: true),
+        adsFactory: () => ads,
+      );
+      await enter(tester, 'office tools');
+      await submit(tester);
+      expect(ads.decisions, isEmpty);
+      expect(find.byType(SponsoredPlacement), findsNothing);
+    },
+  );
+  shellTest(
+    'actual shell has finite Home/search sponsorship and suppresses News and private ads',
+    (tester) async {
+      final ads = ad_fixtures.FakeAdsClient();
+      final (:h, :repository) = await mount(
+        tester,
+        factory: () => _FixtureSearchClient(requests, withGrant: true),
+        adsFactory: () => ads,
+        adsEnabled: true,
+      );
+      expect(ads.decisions.map((v) => v['placement']), ['newtab']);
+      await enter(tester, 'AD_QUERY_MEMORY_ONLY');
+      await submit(tester);
+      expect(ads.decisions.map((v) => v['placement']), ['newtab', 'search']);
+      expect(find.byType(SponsoredPlacement), findsOneWidget);
+      for (final width in [320.0, 390.0, 1024.0]) {
+        tester.view.physicalSize = Size(width, 1000);
+        tester.platformDispatcher.textScaleFactorTestValue = 2;
+        await tester.pumpAndSettle();
+        await tester.ensureVisible(find.text('Why this ad?'));
+        expect(tester.takeException(), isNull);
+      }
+      tester.platformDispatcher.clearTextScaleFactorTestValue();
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const ValueKey('search-news')));
+      await tester.pumpAndSettle();
+      await shared.tap(tester, find.byKey(const ValueKey('search-news')));
+      expect(find.byType(SponsoredPlacement), findsNothing);
+      expect(ads.decisions, hasLength(2));
+      await shared.tap(tester, find.byTooltip('Tabs (1)'));
+      await shared.tap(tester, find.text('New private tab'));
+      expect(h.session.current.homeAds, isNull);
+      await enter(tester, 'PRIVATE_AD_QUERY_MEMORY_ONLY');
+      await submit(tester);
+      expect(h.session.current.search!.sponsored, isNull);
+      expect(ads.decisions, hasLength(2));
+      expect(find.byType(SponsoredPlacement), findsNothing);
+      await expectNotStored(h, repository, 'AD_QUERY_MEMORY_ONLY');
+      await expectNotStored(h, repository, 'transient-grant-token');
+    },
+  );
+  shellTest(
+    'late ad decision cannot follow a normal search into private Home',
+    (tester) async {
+      final pending = Completer<SponsoredAd?>();
+      final ads = ad_fixtures.FakeAdsClient()
+        ..onDecision = (request) => request['placement'] == 'search'
+            ? pending.future
+            : Future.value(null);
+      final (:h, :repository) = await mount(
+        tester,
+        factory: () => _FixtureSearchClient(requests, withGrant: true),
+        adsFactory: () => ads,
+        adsEnabled: true,
+      );
+      await enter(tester, 'LATE_AD_MEMORY_ONLY');
+      await submit(tester);
+      final original = h.session.current.search!.sponsored!;
+      await shared.tap(tester, find.byTooltip('Tabs (1)'));
+      await shared.tap(tester, find.text('New private tab'));
+      pending.complete(ad_fixtures.ad());
+      await tester.pumpAndSettle();
+      expect(h.session.current.isPrivate, isTrue);
+      expect(original.ad, isNull);
+      expect(find.byType(SponsoredPlacement), findsNothing);
+      expect(ads.events, isEmpty);
+      await expectNotStored(h, repository, 'LATE_AD_MEMORY_ONLY');
+    },
+  );
+  for (final width in [320.0, 390.0, 1024.0]) {
+    shellTest('search reflows at $width width and large text', (tester) async {
+      await mount(tester);
+      await enter(tester, 'moon');
+      await submit(tester);
+      tester.view.physicalSize = Size(width, 900);
+      tester.platformDispatcher.textScaleFactorTestValue = 2;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      await tester.pumpAndSettle();
+      expect(find.byType(WingmanSearchView), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.ensureVisible(find.text('NASA Moon facts'));
+      expect(tester.takeException(), isNull);
+    });
+  }
 }

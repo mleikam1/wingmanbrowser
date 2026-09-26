@@ -168,10 +168,7 @@ class _SearchSettingsScreenState extends State<SearchSettingsScreen> {
           additional.blockedCollections.contains('web-search') ||
           additional.blockedResourceIds.contains('web-search');
       final available =
-          widget.policy?.searchAvailable(
-            isPrivate: widget.isPrivate,
-            additional: additional,
-          ) ??
+          widget.policy?.brandedSearchAvailable(additional: additional) ??
           false;
       return WingmanPage(
         title: 'Search',
@@ -181,8 +178,8 @@ class _SearchSettingsScreenState extends State<SearchSettingsScreen> {
             const WingmanSection(title: 'Web search'),
             const WingmanSettingsRow(
               icon: Icons.lock_outline,
-              title: 'DuckDuckGo · Adult filtering: Strict',
-              subtitle: 'Publisher-fixed. There is no Moderate or Off setting.',
+              title: 'Wingman Search · Strict filtering',
+              subtitle: 'Always required. There is no Moderate or Off setting.',
             ),
             WingmanStatus(
               title: blocked
@@ -193,18 +190,18 @@ class _SearchSettingsScreenState extends State<SearchSettingsScreen> {
               message: blocked
                   ? 'Your additional boundary disables web search. Private tabs inherit this choice. Local library search remains available.'
                   : available
-                  ? 'Search opens DuckDuckGo with required Strict adult filtering. Native browsing supports refinement, subsequent results and ordinary permitted destinations. Search previews and ads can contain filtering misses.'
-                  : 'Native search requires a working browser engine and protection baseline. The web companion opens the strict provider in the host browser, whose protections Wingman cannot control. Windows and Linux native browsing are unavailable.',
+                  ? 'Wingman displays Brave-powered All and News results after explicit submission. Query, result and destination checks apply. A configured Wingman gateway is required; filtering can miss content.'
+                  : 'Wingman Search requires an available protection baseline and consumer context. Selected destinations use the supported native browser or leave the web companion for its host browser.',
               tone: WingmanTone.info,
             ),
             const WingmanStatus(
               title: 'Search previews have limited coverage',
               message:
-                  'DuckDuckGo filters adult results. Wingman does not classify every result snippet or advertisement against all six content rules. Strict filtering can miss content; a result is not permission to open its destination.',
+                  'Brave Strict and Wingman’s additional query, preview and destination checks reduce restricted results. These checks can miss content; a result is not verified safe or permission to bypass navigation protection.',
               tone: WingmanTone.caution,
             ),
             const Text(
-              'Web search requests send your submitted query to DuckDuckGo, which also receives your connection’s IP address. Wingman sends no remote suggestions while you type. Search uses the provider’s ordinary website without a paid search service.',
+              'Submitted queries go through Wingman’s gateway to Brave without forwarding consumer IP, cookies or account identifiers. Queries may contain identifying words. Brave’s standard API notice permits retention up to 90 days. Wingman retains results only in the active session and sends no remote suggestions while you type.',
             ),
             if (widget.policy != null)
               WingmanSettingsRow(

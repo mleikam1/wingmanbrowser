@@ -159,10 +159,7 @@ void main() {
         );
         await tap(tester, 'Search');
         expect(find.text('Web search disabled'), findsOneWidget);
-        expect(
-          find.text('DuckDuckGo · Adult filtering: Strict'),
-          findsOneWidget,
-        );
+        expect(find.text('Wingman Search · Strict filtering'), findsOneWidget);
         final suggestions = tester.widget<SwitchListTile>(
           find.byType(SwitchListTile),
         );
@@ -189,7 +186,7 @@ void main() {
   );
 
   testWidgets(
-    'search availability responds to restrictions and native capability loss',
+    'search availability responds to restrictions and protection loss',
     (tester) async {
       final (state, policy, _) = await fixture(tester);
       try {
@@ -227,6 +224,9 @@ void main() {
           privateAvailable: true,
           strictSearchAvailable: false,
         );
+        policy.configureConsumerProtection(
+          const ConsumerProtectionPolicy.unavailable(),
+        );
         await tester.pumpAndSettle();
         expect(
           find.text('Web search unavailable in this session'),
@@ -234,7 +234,7 @@ void main() {
         );
         expect(
           find.textContaining(
-            'Native search requires a working browser engine and protection baseline',
+            'Wingman Search requires an available protection baseline',
           ),
           findsOneWidget,
         );
@@ -248,10 +248,13 @@ void main() {
   );
 
   testWidgets(
-    'missing policy and absent private capability never claim search available',
+    'missing policy and unavailable baseline never claim search available',
     (tester) async {
       final (state, policy, _) = await fixture(tester, privateAvailable: false);
       try {
+        policy.configureConsumerProtection(
+          const ConsumerProtectionPolicy.unavailable(),
+        );
         for (final configured in [null, policy]) {
           await mount(
             tester,
