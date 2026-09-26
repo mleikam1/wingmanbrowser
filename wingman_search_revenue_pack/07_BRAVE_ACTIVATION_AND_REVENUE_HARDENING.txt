@@ -1,0 +1,26 @@
+V2 ADDENDUM — ACTIVATE BRAVE AND HARDEN REVENUE WITHOUT COMPROMISING WINGMAN
+Prepared September 26, 2026. Apply with 00_MASTER_CODEX_PROMPT.txt and phases 01–06.
+
+WHY THIS UPDATE EXISTS
+The owner already obtained a Brave API credential and authorized using it for this integration. The credential is deliberately absent from this package. This is not a new-account task. Do not print, request through conversation, copy from chat logs, commit or package the credential. Use the existing authorized local secret mechanism or provide hidden terminal entry. Replace the chat-shared credential for continued development/production. Do not claim this environment validated it: CONNECTIVITY_CHECK.json records connection failures, not an API authorization response.
+
+EXECUTION MODE
+Inspect the actual local branch/working tree first. When any previous phases are complete or in progress, preserve them, identify gaps and apply this delta rather than rebuilding or resetting. Implement all independent local phases in sequence, with status checkpoints but no unnecessary confirmation loops. Missing news-cache rights do not block web-search development; missing advertiser demand does not block the ad server, campaign workflow or fixtures. Keep the affected live capability disabled and state exactly what is missing. Never disguise a fixture as a successful live integration.
+
+LIVE ACCESS
+The launcher prompt authorizes only one local smoke-test run of up to two requests, at most one Web Search and one News Search, with no retries. Implement/read a durable attempt allowance before either request. Use synthetic nonsensitive queries. Stop on the first failure; do not automatically try another key, endpoint, transport or account. Require an explicitly approved new allowance for further attempts. All other tests use fixtures until the owner approves a separate live-development budget. The proposed $25 cap in earlier planning remains a proposal. No automatic replenishment, subscriptions, paid infrastructure or production deployment is authorized by this test permission.
+
+CONCRETE CONTRACT
+Use the official Web Search and News Search endpoints specified in BRAVE_API_CONTRACT.md with server-side X-Subscription-Token. Return Wingman DTOs, not provider credentials/headers/raw error objects. The frontend calls only the Wingman gateway. Strict filtering is set by the server and cannot be lowered by any caller or admin feature flag. Web and news responses have different array paths. An official API-reference route may display /v1/...; use the documented full host and /res/v1/... request URL rather than guessing the base path. Do not copy the AI-focused quickstart into a human results page. Disable ordinary LLM/context/Answers usage and chargeable unrequested enrichment.
+
+PRIVACY AND CONTRACTS
+Read the public terms/privacy and any actual owner agreement. Treat ordinary application display separately from expanded storage, shared feeds, media rights and advertising-syndication rights; do not invent an enterprise requirement for every API call. Document the applicable basis and unresolved permissions honestly. Shared Brave news storage/fan-out and unlicensed images remain gated. First-party presentation can remain Wingman-branded; provider disclosure must be truthful and any elected provider mark must comply with its conditions. Do not claim endorsement by Brave.
+
+ADS THAT CAN EARN
+Finish a real approved direct campaign path: sponsor/creative review, permitted contextual matching, funded CPC/impression campaigns, pacing, visible rendering, deliberate-click handling, anti-replay, exact settlement, credits/refunds and aggregate reporting. Implement the advertiser inquiry page, operator admin UI and finance dashboard, not just an empty ad widget. External demand stays an optional contracted adapter, not an invented endpoint or assumed Brave entitlement. Preserve sponsored labels, organic-rank independence, no third-party trackers and mandatory destination checks.
+
+REVENUE OPTIMIZATION
+Optimize net contribution per eligible opportunity and per 1,000 ALL searches after provider/delivery/transaction/invalid-traffic costs. Improve approved-demand coverage, relevance, contract pacing, bid/rate yield, layout and unnecessary API-call reduction before increasing ad density. Use adequately populated campaign/placement aggregates, never retained user data or exact consumer searches. Keep one search ad as default, one New Tab sponsor, and news placements within the existing finite density policy. A bounded second-search-ad experiment stays disabled until the owner approves measured quality and commercial acceptance. No experiment can change privacy, core security or content restrictions. Test no-fill collapse and nonblocking ad delivery.
+
+DONE MEANS EVIDENCE
+Produce code/tests in the existing repository and a precise final report covering implemented files, passed/failed/skipped tests, real versus fixture evidence, platform screenshots, attempted/billed/unknown API costs, secret location status without its value, rights status, real demand status, production blockers and rollback. No production-ready or revenue-live claim without evidence. A compliant browser can be built before a commercial agreement arrives, but an ad slot cannot earn money without genuine paying demand.

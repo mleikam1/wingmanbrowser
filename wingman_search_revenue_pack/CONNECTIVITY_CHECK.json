@@ -1,0 +1,36 @@
+{
+  "documentation_review_date": "2026-09-26",
+  "test_type": "bounded_authenticated_connectivity",
+  "max_requests": 2,
+  "automatic_retries": 0,
+  "redirects_followed": 0,
+  "result_content_persisted": false,
+  "credential_persisted_to_artifacts": false,
+  "tests": [
+    {
+      "endpoint": "/res/v1/web/search",
+      "synthetic_query_used": true,
+      "status": "connection_or_parse_failed",
+      "exception_type": "ConnectionError",
+      "elapsed_ms": 2
+    },
+    {
+      "endpoint": "/res/v1/web/search",
+      "synthetic_query_used": true,
+      "transport": "configured_environment_proxy",
+      "status": "connection_or_parse_failed",
+      "exception_type": "ConnectionError",
+      "elapsed_ms": 2
+    }
+  ],
+  "requests_attempted": 2,
+  "successful_http_responses": 0,
+  "limits": "Connectivity evidence only. Does not verify account balance, custom rights, production deployment, complete safety filtering, or advertiser demand.",
+  "news_endpoint_tested": false,
+  "authentication_verified": false,
+  "requests_remaining_under_this_test_limit": 0,
+  "network_attempts": 2,
+  "manual_transport_diagnostic_attempts": 1,
+  "account_balance_verified": false,
+  "interpretation": "No API response was received. Neither credential validity nor an account/entitlement failure is established. Local verification is required."
+}
