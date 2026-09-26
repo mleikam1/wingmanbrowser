@@ -8,6 +8,8 @@ COPY backend/requirements*.txt /app/backend/
 RUN pip install --no-cache-dir -r backend/requirements-cloud.txt && \
     groupadd --system wingman && useradd --system --gid wingman wingman
 COPY backend/wingman_content /app/backend/wingman_content
+COPY backend/wingman_search /app/backend/wingman_search
+COPY backend/config/brave_rights.json /app/backend/config/brave_rights.json
 COPY backend/sources.json /app/backend/sources.json
 COPY assets/policy/consumer_protection.json /app/assets/policy/consumer_protection.json
 USER wingman

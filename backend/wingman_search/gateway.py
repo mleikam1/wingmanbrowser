@@ -45,9 +45,21 @@ class BurstGuard:
             return self._count <= self.limit
 
 class SearchApplication:
-    def __init__(self, provider=None, metrics=None):
+    def __init__(self, provider=None, metrics=None, ads=None):
         self.provider, self.metrics = provider, metrics or AggregateMetrics()
+        self.ads = ads
         self.slots = threading.BoundedSemaphore(8)
+        self.ad_slots = threading.BoundedSemaphore(4)
+        self.outcome_metrics_degraded = False
+
+    def outcome_metric(self, name):
+        try:
+            self.metrics.add(name)
+        except Exception:
+            # A completed paid request still returns its usable results. Keep
+            # this operator-health signal separate from financial accounting;
+            # never turn a reporting outage into another paid consumer retry.
+            self.outcome_metrics_degraded = True
 
     def search(self, raw):
         self.metrics.add('submitted')
@@ -62,17 +74,47 @@ class SearchApplication:
                 dto, intent = self.provider.search(request)
             finally:
                 self.slots.release()
-            self.metrics.add('completed')
+            if (self.ads is not None and request.kind == 'web' and request.offset == 0
+                    and request.context == 'normal' and intent and dto.get('results')):
+                try:
+                    grant = self.ads.issue_context(intent=intent, country=request.country,
+                        language=request.search_lang, context='normal', fixture=dto.get('fixture') is True)
+                    if grant:
+                        dto = dict(dto, adContext=grant)
+                except Exception:
+                    pass  # Local context signing must never fail organic search.
+            self.outcome_metric('completed')
             return dto
-        except BudgetError:
-            self.metrics.add('failed')
-            raise SearchError('budget-exhausted', 503) from None
+        except BudgetError as exc:
+            self.outcome_metric('failed')
+            code = ('budget-exhausted' if exc.code in ('attempt_budget_exhausted', 'shared_ledger_capacity_exhausted')
+                    else 'provider-rate-limited' if exc.code in ('provider_quota_exhausted', 'shared_backoff')
+                    else 'service-busy' if exc.code == 'shared_ledger_contention'
+                    else 'service-unavailable')
+            raise SearchError(code, 503) from None
         except SearchError:
-            self.metrics.add('failed')
+            self.outcome_metric('failed')
             raise
         except Exception:
-            self.metrics.add('failed')
+            self.outcome_metric('failed')
             raise SearchError('service-unavailable', 503) from None
+
+    def ad_request(self, path, raw):
+        if self.ads is None:
+            if path == '/v1/ads/decision':
+                return {'schemaVersion': 1, 'status': 'no-fill', 'fixture': False,
+                        'noFillReason': 'configuration-required', 'ad': None}
+            return {'schemaVersion': 1, 'status': 'rejected', 'fixture': False,
+                    'billable': False, 'chargedMicros': 0, 'testChargedMicros': 0,
+                    'landingUrl': None, 'errorCode': 'configuration-required'}
+        if not self.ad_slots.acquire(blocking=False):
+            raise SearchError('service-busy', 503)
+        try:
+            return self.ads.decision(raw) if path == '/v1/ads/decision' else self.ads.event(raw)
+        except Exception:
+            raise SearchError('service-unavailable', 503) from None
+        finally:
+            self.ad_slots.release()
 
 def valid_local_origin(value):
     try:
@@ -138,7 +180,7 @@ def handler_for(app, origins=()):
         def do_OPTIONS(self):
             try:
                 self.boundary()
-                if self.path != '/v1/search':
+                if self.path not in ('/v1/search', '/v1/ads/decision', '/v1/ads/event'):
                     raise SearchError('not-found', 404)
                 self.reply(200, {'status': 'ok'})
             except SearchError as exc:
@@ -155,7 +197,7 @@ def handler_for(app, origins=()):
         def do_POST(self):
             try:
                 self.boundary()
-                if self.path != '/v1/search':
+                if self.path not in ('/v1/search', '/v1/ads/decision', '/v1/ads/event'):
                     raise SearchError('not-found', 404)
                 lengths = self.headers.get_all('Content-Length') or []
                 if (len(lengths) != 1 or not lengths[0].isdigit() or len(lengths[0]) > 5
@@ -170,7 +212,7 @@ def handler_for(app, origins=()):
                     raw = decode_json(body, 8192)
                 except SearchError:
                     raise SearchError('invalid-request') from None
-                self.reply(200, app.search(raw))
+                self.reply(200, app.search(raw) if self.path == '/v1/search' else app.ad_request(self.path, raw))
             except SearchError as exc:
                 self.reply(exc.http_status, {'schemaVersion': 1, 'status': 'error', 'error': {'code': exc.code}})
             except Exception:

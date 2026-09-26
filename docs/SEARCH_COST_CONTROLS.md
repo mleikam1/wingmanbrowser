@@ -70,13 +70,57 @@ is not useful-result acceptance. An HTTP failure/transport error is not labeled
 a confirmed invoice charge. Private operator reconciliation never restores
 attempt capacity, even when the reconciled charge is zero.
 
-## Production dependency and recovery
+## Shared production adapter and remaining approval
 
-SQLite is explicitly refused in production. The deployment target is unapproved;
-there is no claim that ephemeral container storage is a global ceiling. An
-approved shared datastore must provide serializable reservation/settlement,
-durable ceiling configuration, contention tests, restore procedures and a cost
-review before production can activate. No quota-block leasing is implemented.
+`backend/wingman_search/shared_budget.py` implements `GCSBudgetLedger` with the
+same `reserve`, `complete`, `snapshot` and private `reconcile` boundary. The
+constructor requires explicit project, private bucket, an operations object and
+a nonsecret owner spending approval reference. Importing the module constructs
+no cloud client. Tests inject an in-memory generation-CAS store; no actual cloud
+client, account, bucket or production allowance was created for verification.
+
+Explicit installation creates a separate initialization marker followed by the
+initial state using `if_generation_match=0`. Every read compares immutable policy
+fields to that marker. State mutations use generation compare-and-swap with at
+most 12 retries for confirmed conflicts. Retried callbacks contain accounting
+only; the provider call happens after the durable reservation returns. Missing,
+corrupt or partly initialized state blocks dispatch. A write timeout is an
+unknown commit outcome and is never automatically retried. If that write reserved
+an attempt, another worker sees it pending and cannot dispatch again. Completed
+or mismatched reservation IDs cannot settle a later worker's attempt.
+
+Global/endpoint ceilings, one in-flight attempt, shared QPS, all rate windows,
+auth pauses and conservative/reconciled amounts persist in one private object.
+The marker is never overwritten by application code. Deployment must use
+separate installer/runtime permissions so the runtime cannot delete or rewrite
+the marker or alter authorization; no IAM changes were made here. Restore must
+preserve the newest valid accounting generation, not replay an earlier allowance.
+
+This is a bounded initial pilot implementation: maximum 10,000 attempt records
+and 4 MiB per object. Capacity exhaustion blocks new provider attempts and does
+not clear history. Each transaction has cloud storage operation cost; no price
+or measured deployment cost has been reconciled, so reporting exposes that cost
+as unknown rather than zero. Shared datastore latency, workload contention,
+logging/IAM, restore and cost must be measured in the approved target before
+launch. Scale beyond the bound requires a reviewed partitioned transactional
+design; no leased quota blocks or automatically renewed budgets exist.
+
+`record_search_event()` accepts only submitted/completed/failed/web/news counters;
+`search_metrics()` exposes durable aggregate counts for the ALL-search denominator.
+It retains at most 90 UTC daily buckets plus rolled-up totals, with no query,
+locale, consumer ID or address. Request counts are not verified unique users,
+paid demand or earned revenue. The local-process metrics remain explicitly
+separate from these production aggregates.
+
+The shared-ledger fixture suite covers generation conflicts, concurrent workers,
+partial/uncertain commits, missing state, immutable ceilings, stale completions,
+provider windows, reconciliation and bounded metrics. SQLite remains explicitly
+refused in production. `SearchConfig` now validates an approved GCS configuration,
+HTTPS approved domain, secret-manager reference, deployment approval, provider
+spending approval and nonzero hard cap. The live-search rights gate is separate
+from advertiser `production_billing`: organic search does not require enabling
+advertiser charges. Unknown news/media/ads/partner permissions stay disabled.
+The committed register still has every live gate closed and no production target.
 
 Keep operational accounting outside content-cache cleanup. Rollbacks restore
 code while retaining ledger/marker and finance records. A lost/corrupt ledger

@@ -439,6 +439,8 @@ class ApprovedLiveSource {
     this.publisherId,
     this.providerId,
     this.articleHostPolicy = 'pinned',
+    this.sharedGrantReference,
+    this.sharedGrantRetentionSeconds,
     String? displayMode,
   }) : displayMode =
            displayMode ??
@@ -446,6 +448,25 @@ class ApprovedLiveSource {
                ? 'sponsored-syndication'
                : 'publisher-link');
   factory ApprovedLiveSource.fromJson(Map<String, dynamic> json) {
+    final isBrave = json['providerId'] == 'brave' && json['id'] == 'brave-news';
+    final grant = json['sharedNewsGrant'];
+    String? grantReference;
+    int? grantRetention;
+    if (isBrave && json['enabled'] == true) {
+      if (grant is! Map ||
+          grant['status'] != 'approved' ||
+          grant['retentionSeconds'] is! int ||
+          (grant['retentionSeconds'] as int) < 3600 ||
+          (grant['retentionSeconds'] as int) > 86400 ||
+          feedMap(json['rights'])['images'] != false ||
+          json['imagePolicy'] != null) {
+        throw const FormatException(
+          'Brave shared news requires its pinned grant.',
+        );
+      }
+      grantReference = feedId(grant['reference']);
+      grantRetention = grant['retentionSeconds'] as int;
+    }
     final hosts = feedIds(json['allowedArticleHosts'], max: 20);
     if (hosts.any(
       (host) => !RegExp(r'^[a-z0-9-]+(\.[a-z0-9-]+)+$').hasMatch(host),
@@ -544,10 +565,12 @@ class ApprovedLiveSource {
           : feedId(json['providerId']),
       articleHostPolicy:
           json['articleHostPolicy'] == 'validated-public' &&
-              json['providerId'] == 'currents' &&
-              json['id'] == 'currents'
+              ((json['providerId'] == 'currents' && json['id'] == 'currents') ||
+                  (isBrave && grantReference != null))
           ? 'validated-public'
           : 'pinned',
+      sharedGrantReference: grantReference,
+      sharedGrantRetentionSeconds: grantRetention,
       publisherId: json['publisherId'] == null
           ? null
           : feedId(json['publisherId']),
@@ -555,7 +578,12 @@ class ApprovedLiveSource {
       articleUrlFormat: format as String,
       feedUri: feed,
       feedRedirectHosts: redirects,
-      minRefreshSeconds: bound('minRefreshSeconds', 1800, 1800, 31622400),
+      minRefreshSeconds: bound(
+        'minRefreshSeconds',
+        1800,
+        isBrave ? 900 : 1800,
+        31622400,
+      ),
       retentionSeconds: bound('retentionSeconds', 604800, 3600, 2592000),
       verifiedAt: json['verifiedAt'] == null
           ? null
@@ -579,6 +607,8 @@ class ApprovedLiveSource {
   final String? feedCompatibility;
   final String? publisherId, providerId;
   final String articleHostPolicy;
+  final String? sharedGrantReference;
+  final int? sharedGrantRetentionSeconds;
   final String displayMode;
   bool get isSponsoredSyndication => displayMode == 'sponsored-syndication';
 }
@@ -699,6 +729,11 @@ class LiveContentItem {
     this.publisherId,
     this.publisherName,
     this.providerCategories = const {},
+    this.discoveredAt,
+    this.pageDate,
+    this.providerFetchedAt,
+    this.sharedGrantReference,
+    this.sharedGrantRetentionSeconds,
   });
   factory LiveContentItem.fromJson(Map<String, dynamic> json) {
     final eligibility = feedMap(json['eligibility']);
@@ -757,6 +792,19 @@ class LiveContentItem {
           ? null
           : feedArticleUri(json['outboundUrl']),
       updatedAt: json['updatedAt'] == null ? null : feedDate(json['updatedAt']),
+      discoveredAt: json['discoveredAt'] == null
+          ? null
+          : feedDate(json['discoveredAt']),
+      pageDate: json['pageDate'] == null ? null : feedDate(json['pageDate']),
+      providerFetchedAt: json['providerFetchedAt'] == null
+          ? null
+          : feedDate(json['providerFetchedAt']),
+      sharedGrantReference: json['sharedGrantReference'] == null
+          ? null
+          : feedId(json['sharedGrantReference']),
+      sharedGrantRetentionSeconds: json['sharedGrantRetentionSeconds'] is int
+          ? json['sharedGrantRetentionSeconds'] as int
+          : null,
       excerptProvenance: provenance,
       publishedAt: json['publishedAt'] == null
           ? null
@@ -799,6 +847,11 @@ class LiveContentItem {
   final Uri? originalUrl, outboundUrl;
   Uri get openingUrl => outboundUrl ?? canonicalUrl;
   final DateTime? publishedAt, reviewedAt, updatedAt;
+  final DateTime? discoveredAt, pageDate, providerFetchedAt;
+  final String? sharedGrantReference;
+  final int? sharedGrantRetentionSeconds;
+  bool get isProviderPreview =>
+      providerId == 'currents' || providerId == 'brave';
   final LiveExcerptProvenance? excerptProvenance;
   final DateTime fetchedAt, expiresAt;
   final Set<String> topics;
@@ -826,6 +879,14 @@ class LiveContentItem {
     if (originalUrl != null) 'originalUrl': originalUrl.toString(),
     if (outboundUrl != null) 'outboundUrl': outboundUrl.toString(),
     if (updatedAt != null) 'updatedAt': updatedAt?.toIso8601String(),
+    if (discoveredAt != null) 'discoveredAt': discoveredAt?.toIso8601String(),
+    if (pageDate != null) 'pageDate': pageDate?.toIso8601String(),
+    if (providerFetchedAt != null)
+      'providerFetchedAt': providerFetchedAt?.toIso8601String(),
+    if (sharedGrantReference != null)
+      'sharedGrantReference': sharedGrantReference,
+    if (sharedGrantRetentionSeconds != null)
+      'sharedGrantRetentionSeconds': sharedGrantRetentionSeconds,
     if (excerptProvenance != null)
       'excerptProvenance': excerptProvenance!.toJson(),
     'publishedAt': publishedAt?.toIso8601String(),

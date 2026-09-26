@@ -1,11 +1,17 @@
 **
 !backend/
 !backend/Dockerfile
+!backend/Dockerfile.search
 !backend/requirements.txt
 !backend/requirements-cloud.txt
+!backend/requirements-search.txt
 !backend/sources.json
 !backend/wingman_content/
 !backend/wingman_content/*.py
+!backend/wingman_search/
+!backend/wingman_search/*.py
+!backend/config/
+!backend/config/brave_rights.json
 !assets/
 !assets/policy/
 !assets/policy/consumer_protection.json

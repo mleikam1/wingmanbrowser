@@ -33,6 +33,7 @@ def main():
     parser.add_argument('--secret-file', default=os.environ.get('CURRENTS_SECRET_FILE', 'backend/.env.currents'))
     parser.add_argument('--replace-credential', action='store_true',
                         help='Deliberate one-time credential replacement; never resets the daily ledger')
+    parser.add_argument('--brave-runtime-config', help='Owner-approved production search configuration; no secret values')
     args = parser.parse_args()
     if args.command == "registry":
         target = Path(args.output or "assets/live_content/sources.json")
@@ -78,7 +79,21 @@ def main():
     if args.command == 'currents-bootstrap' and currents is None:
         parser.error('Set the backend secret using python3 backend/setup_currents_secret.py first')
     config = load_config(args.config)
-    provider = CompositeNewsProvider(RssAtomProvider(policy), currents)
+    from .brave import BraveNewsProvider
+    def brave_factory():
+        if not args.brave_runtime_config:
+            return None
+        from wingman_search.runtime import create_brave_provider, read_config
+        from wingman_search.config import ConfigurationError
+        settings = read_config(args.brave_runtime_config)
+        if not settings.cached_news:
+            raise ConfigurationError('shared_news_runtime_gate_closed')
+        common_rights = Path(__file__).absolute().parents[1] / 'config' / 'brave_rights.json'
+        if Path(settings.rights_register_path).resolve() != common_rights.resolve():
+            raise ConfigurationError('shared_reader_writer_rights_mount_required')
+        return create_brave_provider(settings)
+    provider = CompositeNewsProvider(RssAtomProvider(policy), currents,
+                                      BraveNewsProvider(provider_factory=brave_factory))
     if args.command == 'currents-bootstrap':
         class BootstrapProvider:
             def bind_writer_guard(self, guard):

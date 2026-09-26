@@ -87,9 +87,13 @@ redaction and no cache for query-bearing responses. Budget alerts complement
 dispatch enforcement; they do not replace it.
 
 No cloud resource, DNS/IAM change, subscription, recharge, production deployment
-or advertiser charge is authorized by these commands. `SearchConfig` rejects
-production activation and `BudgetLedger` rejects production SQLite until those
-dependencies are implemented and approved.
+or advertiser charge is authorized by these commands. `SearchConfig` requires
+explicit approved deployment/provider-spend references, a nonzero cap, approved
+domain, secret-manager reference and shared GCS ledger configuration before its
+production profile validates. `BudgetLedger` always rejects production SQLite.
+The GCS adapter is implemented and fixture-tested; its production target and
+measured operating costs remain unapproved/unverified. Advertiser billing is a
+separate gate and need not be enabled for organic search.
 
 Rollback closes live feature gates and restores the previous application build,
 preserving budget ledgers/markers, advertiser finance records and user data.

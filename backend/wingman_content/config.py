@@ -5,13 +5,13 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 SCOPES = {"technology-reporting", "science-reporting", "public-information",
-          "sports-reporting", "general-reporting", "lifestyle-education", "sponsored-features", "health-reporting", "currents-preview"}
+          "sports-reporting", "general-reporting", "lifestyle-education", "sponsored-features", "health-reporting", "currents-preview", "brave-preview"}
 REGISTRY_KEYS = ("id", "name", "homepageUrl", "language", "topics", "allowedArticleHosts",
                  "articlePathPrefixes", "eligibilityScope", "rights", "enabled", "verifiedAt",
                  "feedUrl", "feedRedirectHosts", "minRefreshSeconds", "retentionSeconds",
                  "articleUrlFormat", "requiredTopicTerms", "requiresAttribution",
                  "imagePolicy", "preserveFeedText", "displayMode", "branding", "publisherId", "feedCompatibility",
-                 "providerId", "articleHostPolicy", "providerAttribution")
+                 "providerId", "articleHostPolicy", "providerAttribution", "sharedNewsGrant")
 
 
 def load_config(path):
@@ -19,22 +19,24 @@ def load_config(path):
     if raw.get("schemaVersion") != 1 or not 1 <= len(raw.get("sources", [])) <= 256:
         raise ValueError("Invalid source configuration")
     seen = set()
+    if raw.get("primarySharedProvider", "currents") not in {"currents", "brave"}:
+        raise ValueError("Unreviewed primary shared provider")
     for source in raw["sources"]:
         sid = source["id"]
         if not re.fullmatch(r"[a-z0-9-]{1,80}", sid) or sid in seen:
             raise ValueError("Invalid or duplicate source id")
         seen.add(sid)
         provider = source.get("providerId", "rss")
-        if provider not in ("rss", "currents"):
+        if provider not in ("rss", "currents", "brave"):
             raise ValueError("Unreviewed content provider")
-        if source.get("articleHostPolicy") and not (provider == "currents" and sid == "currents"
+        if source.get("articleHostPolicy") and not (provider in ("currents", "brave") and sid == ("currents" if provider == "currents" else "brave-news")
                 and source["articleHostPolicy"] == "validated-public"
-                and source["eligibilityScope"] == "currents-preview"):
+                and source["eligibilityScope"] == ("currents-preview" if provider == "currents" else "brave-preview")):
             raise ValueError("Unreviewed article host policy")
         if source["eligibilityScope"] not in SCOPES or source["language"] != "en":
             raise ValueError("Unreviewed source scope/language")
         for field in ("feedRedirectHosts", "allowedArticleHosts"):
-            if (not source.get(field) and not (provider == "currents" and field == "allowedArticleHosts")) or any(not re.fullmatch(r"[a-z0-9.-]+", host)
+            if (not source.get(field) and not (provider in ("currents", "brave") and field == "allowedArticleHosts")) or any(not re.fullmatch(r"[a-z0-9.-]+", host)
                                             for host in source[field]):
                 raise ValueError("Invalid source hosts")
         feed = urlsplit(source["feedUrl"])
@@ -42,13 +44,14 @@ def load_config(path):
                 or feed.username or feed.password or feed.port not in (None, 443)):
             raise ValueError("Invalid configured feed")
         rights = source["rights"]
-        if rights["titles"] is not True or not isinstance(rights.get("images"), bool):
+        unknown_brave = provider == "brave" and source.get("enabled") is False and rights.get("titles") is False
+        if (rights["titles"] is not True and not unknown_brave) or not isinstance(rights.get("images"), bool):
             raise ValueError("Title and image reuse require explicit reviewed decisions")
         if not isinstance(rights.get("excerpts"), bool):
             raise ValueError("Excerpt reuse must be an explicit reviewed boolean")
         if not rights.get("attribution") or not rights.get("licenseUrl", "").startswith("https://"):
             raise ValueError("Missing rights provenance")
-        if not 1800 <= source["minRefreshSeconds"] <= 31622400:
+        if not (900 if provider == "brave" else 1800) <= source["minRefreshSeconds"] <= 31622400:
             raise ValueError("Invalid refresh interval")
         if not 3600 <= source["retentionSeconds"] <= 604800:
             raise ValueError("Invalid cache retention")
@@ -57,6 +60,17 @@ def load_config(path):
                 source["feedRedirectHosts"] != ["api.currentsapi.services"] or
                 source.get("articleHostPolicy") != "validated-public"):
             raise ValueError("Invalid Currents provider contract")
+        if provider == "brave":
+            grant = source.get("sharedNewsGrant", {})
+            if (sid != "brave-news" or source["retentionSeconds"] > 86400
+                    or source["feedUrl"] != "https://api.search.brave.com/res/v1/news/search"
+                    or source["feedRedirectHosts"] != ["api.search.brave.com"]
+                    or source.get("articleHostPolicy") != "validated-public"
+                    or rights["images"] or source.get("imagePolicy")
+                    or (source["enabled"] and (grant.get("status") != "approved" or not grant.get("reference")
+                        or type(grant.get("retentionSeconds")) is not int
+                        or not 3600 <= grant["retentionSeconds"] <= source["retentionSeconds"]))):
+                raise ValueError("Invalid Brave shared preview contract")
         if not isinstance(source["enabled"], bool) or not source.get("articlePathPrefixes"):
             raise ValueError("Missing explicit article scope")
         if source.get("articleUrlFormat", "path-prefix") not in ("path-prefix", "dated-story"):

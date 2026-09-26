@@ -26,6 +26,10 @@ MICROS_PER_SECOND = 1_000_000
 LIST_RATE_MICROS = 5_000  # USD: $5 / 1,000 successful calls, reviewed 2026-09-26.
 STATUSES = frozenset({"success", "auth_error", "rate_limited", "http_error",
                       "transport_error", "malformed_response", "unknown"})
+NEWS_SLOTS = frozenset("brave-" + name for name in (
+    "general", "sport", "arts_culture_entertainment", "science_technology",
+    "economy_business_finance", "education", "environment", "health"))
+NEWS_INTERVAL_MICROS = 7_200_000_000
 
 
 def utc_microseconds() -> int:
@@ -215,6 +219,7 @@ class BudgetLedger:
                         reserved_at INTEGER NOT NULL, reserved_cost INTEGER NOT NULL,
                         status_class TEXT NOT NULL DEFAULT 'pending', http_status INTEGER,
                         reconciled_cost INTEGER);
+                    CREATE TABLE news_schedule (slot TEXT PRIMARY KEY, next_due INTEGER NOT NULL);
                 """)
                 db.execute("INSERT INTO state(id,version,identity,profile,approval,global_cap,unit_cost,caps,created) VALUES(1,1,?,?,?,?,?,?,?)",
                            (identity, profile, approval, cap, unit, json.dumps(caps), created))
@@ -274,12 +279,36 @@ class BudgetLedger:
         return state, caps
 
     def reserve(self, endpoint: str) -> Reservation:
+        return self._reserve(endpoint)
+
+    def reserve_scheduled(self, slot_id: str, interval_micros: int) -> Reservation:
+        if slot_id not in NEWS_SLOTS or type(interval_micros) is not int or interval_micros != NEWS_INTERVAL_MICROS:
+            raise BudgetError("unreviewed_news_schedule")
+        return self._reserve("news", schedule_slot=slot_id, interval_micros=interval_micros)
+
+    def schedule_due(self, slot_id: str):
+        if slot_id not in NEWS_SLOTS:
+            raise BudgetError("unreviewed_news_schedule")
+        with self._transaction() as db:
+            state, _ = self._state(db)
+            if state["profile"] == "smoke":
+                raise BudgetError("smoke_cannot_schedule_news")
+            row = db.execute("SELECT next_due FROM news_schedule WHERE slot=?", (slot_id,)).fetchone()
+            return row[0] if row else None
+
+    def _reserve(self, endpoint, schedule_slot=None, interval_micros=None) -> Reservation:
         if endpoint not in {"web", "news"}:
             raise BudgetError("unclassified_endpoint")
         now = _now(self.clock)
         day = datetime.fromtimestamp(now / MICROS_PER_SECOND, timezone.utc).date().isoformat()
         with self._transaction() as db:
             state, caps = self._state(db)
+            if schedule_slot is not None:
+                if state["profile"] == "smoke":
+                    raise BudgetError("smoke_cannot_schedule_news")
+                due = db.execute("SELECT next_due FROM news_schedule WHERE slot=?", (schedule_slot,)).fetchone()
+                if due and now < due[0]:
+                    raise BudgetError("scheduled_news_not_due")
             if state["halted"]:
                 raise BudgetError("operator_intervention_required")
             if db.execute("SELECT COUNT(*) FROM attempts WHERE status_class='pending'").fetchone()[0]:
@@ -303,6 +332,9 @@ class BudgetLedger:
                                 (endpoint, day, now, state["unit_cost"]))
             db.execute("UPDATE state SET next_allowed=?,windows=? WHERE id=1",
                        (now + MICROS_PER_SECOND, json.dumps(windows)))
+            if schedule_slot is not None:
+                db.execute("INSERT INTO news_schedule(slot,next_due) VALUES(?,?) ON CONFLICT(slot) DO UPDATE SET next_due=excluded.next_due",
+                           (schedule_slot, now + interval_micros))
             return Reservation(cursor.lastrowid, endpoint, state["unit_cost"])
 
     def complete(self, reservation: Reservation, *, status_class: str,

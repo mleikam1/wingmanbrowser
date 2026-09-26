@@ -25,12 +25,13 @@ class BraveTransport:
                 raise ValueError()
             connection = self.connector(HOST, addresses[0], 5)
             def stop():
-                if connection.sock:
+                sock = connection.sock
+                if sock:
                     try:
-                        connection.sock.shutdown(socket.SHUT_RDWR)
+                        sock.shutdown(socket.SHUT_RDWR)
                     except OSError:
                         pass
-                    connection.sock.close()
+                    sock.close()
             timer = threading.Timer(max(.01, deadline - time.monotonic()), stop)
             timer.daemon = True
             timer.start()
@@ -41,11 +42,14 @@ class BraveTransport:
             status = response.status
             pairs = response.getheaders()
             if sum(len(k) + len(v) for k, v in pairs) > 32768:
-                return FetchResult(status, {}, b'')
+                # Ambiguous/discarded metadata cannot mean "no rate limit".
+                # This reviewed sentinel makes both ledgers halt while retaining
+                # the received status for conservative versus confirmed charges.
+                return FetchResult(status, {'x-ratelimit-limit': 'invalid'}, b'')
             for k, v in pairs:
                 k = k.lower()
                 if k in headers:
-                    return FetchResult(status, {}, b'')
+                    return FetchResult(status, {'x-ratelimit-limit': 'invalid'}, b'')
                 # Keep only operational metadata. Do not retain cookies or locations.
                 if k in ('content-type', 'content-length', 'content-encoding', 'retry-after',
                          'x-ratelimit-limit', 'x-ratelimit-policy', 'x-ratelimit-remaining', 'x-ratelimit-reset'):

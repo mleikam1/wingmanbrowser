@@ -1,0 +1,2 @@
+-r requirements-cloud.txt
+gunicorn==26.2.0

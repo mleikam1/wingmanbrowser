@@ -25,15 +25,29 @@ class LiveContentEligibility {
         !host.endsWith('.internal') &&
         !host.endsWith('.test') &&
         !host.endsWith('.currentsapi.services') &&
-        host != 'currentsapi.services';
+        host != 'currentsapi.services' &&
+        host != 'api.search.brave.com' &&
+        !host.endsWith('.api.search.brave.com');
   }
 
   bool _providerPreview(LiveContentItem item, ApprovedLiveSource approved) =>
       trustedProviderPreviews &&
       approved.articleHostPolicy == 'validated-public' &&
-      approved.providerId == 'currents' &&
-      item.providerId == 'currents' &&
-      item.sourceId == 'currents' &&
+      ((approved.providerId == 'currents' &&
+              item.providerId == 'currents' &&
+              item.sourceId == 'currents') ||
+          (approved.providerId == 'brave' &&
+              item.providerId == 'brave' &&
+              item.sourceId == 'brave-news' &&
+              approved.sharedGrantReference != null &&
+              item.sharedGrantReference == approved.sharedGrantReference &&
+              item.sharedGrantRetentionSeconds != null &&
+              approved.sharedGrantRetentionSeconds != null &&
+              item.sharedGrantRetentionSeconds! >= 3600 &&
+              item.sharedGrantRetentionSeconds! <=
+                  approved.sharedGrantRetentionSeconds! &&
+              item.expiresAt.difference(item.fetchedAt) <=
+                  Duration(seconds: item.sharedGrantRetentionSeconds!))) &&
       item.publisherId != null &&
       item.publisherName?.isNotEmpty == true &&
       _publicArticleHost(item.canonicalUrl) &&
@@ -43,6 +57,9 @@ class LiveContentEligibility {
   /// origin/license/rendition and association consistency; provenance comes from
   /// the direct RSS provider, not from a self-asserted JSON image object.
   LiveArticleImage? imageFor(LiveContentItem item) {
+    if (item.providerId == 'brave') {
+      return null; // Shared Brave release is text-only.
+    }
     final approved = registry.sources[item.sourceId];
     final policy = approved?.imagePolicy, image = item.image;
     if (approved == null ||
@@ -148,8 +165,13 @@ class LiveContentEligibility {
         (item.updatedAt?.isAfter(now.add(const Duration(hours: 24))) ??
             false) ||
         !item.expiresAt.isAfter(item.fetchedAt) ||
-        ((!saved || item.providerId == 'currents') &&
-            !now.isBefore(item.expiresAt)) ||
+        ((!saved || item.isProviderPreview) && !now.isBefore(item.expiresAt)) ||
+        (item.providerId == 'brave' &&
+            (item.discoveredAt == null ||
+                item.discoveredAt!.isAfter(item.fetchedAt) ||
+                item.fetchedAt.isAfter(now.add(const Duration(minutes: 5))) ||
+                (item.pageDate?.isAfter(now) ?? false) ||
+                (item.providerFetchedAt?.isAfter(now) ?? false))) ||
         item.expiresAt.difference(item.fetchedAt) > const Duration(days: 30)) {
       return false;
     }

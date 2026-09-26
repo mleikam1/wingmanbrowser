@@ -1,5 +1,8 @@
 import json
+from pathlib import Path
+import tempfile
 import unittest
+from wingman_search.budget import BudgetError, BudgetLedger
 from wingman_search.contracts import SearchError, SearchRequest, parse_results
 from wingman_search.policy import SearchPolicy, query_allowed, ad_context
 from wingman_search.provider import BraveProvider, BraveTransport, FixtureProvider
@@ -164,6 +167,49 @@ class BraveContractTests(unittest.TestCase):
         self.assertEqual('api.search.brave.com', events[0][0])
         self.assertIn('safesearch=strict', events[1][1])
         self.assertFalse({'Cookie', 'Authorization', 'X-Forwarded-For', 'Referer'} & events[1][2])
+
+    def test_ambiguous_headers_halt_approved_ledger_and_preserve_http_evidence(self):
+        cases = [
+            [('Content-Type', 'application/json'), ('X-RateLimit-Limit', '1'),
+             ('X-RateLimit-Remaining', '0'), ('x-ratelimit-remaining', '0'),
+             ('X-RateLimit-Reset', '60')],
+            [('X-Oversized', 'x' * 32768), ('Retry-After', '60')],
+        ]
+        for headers in cases:
+            for status in (200, 429):
+                with self.subTest(status=status, oversized=len(headers) == 2):
+                    now = [1_790_380_800_000_000]
+                    with tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parents[2] / 'work') as folder:
+                        ledger = BudgetLedger.initialize_approved(Path(folder) / 'ledger.sqlite3',
+                            approval_reference='fixture-only-no-live-approval', global_cap_micros=10_000,
+                            endpoint_daily_caps={'web': 2, 'news': 0}, clock=lambda: now[0])
+                        class Reply:
+                            def getheaders(self):
+                                return headers
+                        reply = Reply()
+                        reply.status = status
+                        class Connection:
+                            sock = None
+                            def __init__(self, *args):
+                                pass
+                            def request(self, *args, **kwargs):
+                                pass
+                            def getresponse(self):
+                                return reply
+                            def close(self):
+                                pass
+                        transport = BraveTransport(resolver=lambda *_: ['8.8.8.8'], connector=Connection)
+                        provider = BraveProvider(ledger, 'fixture-only-token', transport=transport, policy=self.policy)
+                        with self.assertRaises(SearchError):
+                            provider.search(SearchRequest('science'))
+                        snapshot = ledger.snapshot()
+                        self.assertTrue(snapshot['halted'])
+                        self.assertEqual(1, snapshot['attempts'])
+                        self.assertEqual(int(status == 200), snapshot['confirmed_successes'])
+                        self.assertEqual(0, snapshot['unknown_outcomes'])
+                        now[0] += 120_000_000
+                        with self.assertRaisesRegex(BudgetError, 'operator_intervention_required'):
+                            ledger.reserve('web')
 
 if __name__ == '__main__':
     unittest.main()
