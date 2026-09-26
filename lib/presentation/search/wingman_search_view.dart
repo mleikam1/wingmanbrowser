@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../search/controller.dart';
+import 'search_result_preview.dart';
 import '../ads/sponsored_placement.dart';
 import '../browser_shell.dart' show safeTextContextMenu;
 import '../components/wingman_components.dart';
@@ -24,11 +25,27 @@ class WingmanSearchView extends StatefulWidget {
   State<WingmanSearchView> createState() => _WingmanSearchViewState();
 }
 
-class _WingmanSearchViewState extends State<WingmanSearchView> {
+class _WingmanSearchViewState extends State<WingmanSearchView>
+    with WidgetsBindingObserver {
   late final _text = TextEditingController(text: widget.controller.query);
   late SearchLocale _locale = widget.controller.locale;
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) {
+      widget.controller.cancelThumbnails();
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    widget.controller.cancelThumbnails();
     _text.dispose();
     super.dispose();
   }
@@ -181,65 +198,74 @@ class _WingmanSearchViewState extends State<WingmanSearchView> {
                     ),
                   for (final (index, result) in results.indexed) ...[
                     Padding(
+                      key: ValueKey(result),
                       padding: const EdgeInsets.symmetric(vertical: 12),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            result.source,
-                            style: Theme.of(context).textTheme.labelMedium,
-                          ),
-                          const SizedBox(height: 4),
-                          Semantics(
-                            link: true,
-                            child: TextButton(
-                              style: TextButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 8,
+                      child: SearchResultPreview(
+                        result: result,
+                        controller: model,
+                        scrollController: widget.scrollController,
+                        canContinue: () =>
+                            widget.canContinue() &&
+                            widget.resultAllowed(result.url),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              result.source,
+                              style: Theme.of(context).textTheme.labelMedium,
+                            ),
+                            const SizedBox(height: 4),
+                            Semantics(
+                              link: true,
+                              child: TextButton(
+                                style: TextButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 8,
+                                  ),
+                                  alignment: Alignment.centerLeft,
                                 ),
-                                alignment: Alignment.centerLeft,
+                                onPressed: () {
+                                  if (widget.canContinue() &&
+                                      widget.resultAllowed(result.url)) {
+                                    widget.onOpen(result.url);
+                                  }
+                                },
+                                child: Text(
+                                  result.title,
+                                  style: Theme.of(context).textTheme.titleLarge
+                                      ?.copyWith(
+                                        color: WingmanTokens.of(context).action,
+                                      ),
+                                ),
                               ),
+                            ),
+                            if (result.description.isNotEmpty)
+                              Text(result.description),
+                            if (result.publishedAt case final date?)
+                              Text(
+                                'Published ${date.toIso8601String().substring(0, 10)}',
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            TextButton.icon(
                               onPressed: () {
                                 if (widget.canContinue() &&
                                     widget.resultAllowed(result.url)) {
-                                  widget.onOpen(result.url);
+                                  Clipboard.setData(
+                                    ClipboardData(text: result.url.toString()),
+                                  );
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Result link copied'),
+                                    ),
+                                  );
                                 }
                               },
-                              child: Text(
-                                result.title,
-                                style: Theme.of(context).textTheme.titleLarge
-                                    ?.copyWith(
-                                      color: WingmanTokens.of(context).action,
-                                    ),
-                              ),
+                              icon: const Icon(Icons.copy_outlined, size: 18),
+                              label: const Text('Copy link'),
                             ),
-                          ),
-                          if (result.description.isNotEmpty)
-                            Text(result.description),
-                          if (result.publishedAt case final date?)
-                            Text(
-                              'Published ${date.toIso8601String().substring(0, 10)}',
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                          TextButton.icon(
-                            onPressed: () {
-                              if (widget.canContinue() &&
-                                  widget.resultAllowed(result.url)) {
-                                Clipboard.setData(
-                                  ClipboardData(text: result.url.toString()),
-                                );
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Result link copied'),
-                                  ),
-                                );
-                              }
-                            },
-                            icon: const Icon(Icons.copy_outlined, size: 18),
-                            label: const Text('Copy link'),
-                          ),
-                          const Divider(),
-                        ],
+                            const Divider(),
+                          ],
+                        ),
                       ),
                     ),
                     if (index == 2 && model.secondSponsored != null)
@@ -282,7 +308,7 @@ class _WingmanSearchViewState extends State<WingmanSearchView> {
                       ),
                       const SizedBox(height: 8),
                       const Text(
-                        'Strict provider filtering and Wingman’s query, result and destination checks are always applied. Filtering can miss content. A listed destination is not verified safe. Result previews do not load publisher images or trackers.',
+                        'Strict provider filtering and Wingman’s query, result and destination checks are always applied. Filtering can miss content. A listed destination is not verified safe. Visible News thumbnails, when available, load through Wingman’s gateway from Brave’s image proxy. Your device does not contact publishers for these previews. Images stay in temporary memory for up to five minutes; private search stays text-only.',
                       ),
                       const SizedBox(height: 8),
                       Text(

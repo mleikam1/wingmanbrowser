@@ -12,6 +12,7 @@ headers and stable identifiers are removed.
 | Brave request | Necessary query/locale/country, server-fixed strict filter, count/offset; constant service identity | Server-to-server only; no consumer IP, cookie, Authorization, account identifier or complete browser headers forwarded |
 | Brave provider | Processes the submitted query and server network metadata | Reviewed standard notice permits query retention up to 90 days; enterprise zero retention is unverified |
 | Result display | Sanitized Wingman DTOs; publisher attribution and destination | Transient response; no shared Brave result cache, CDN fan-out or offline preview archive without documented rights |
+| Explicit normal News thumbnail | Returned Brave thumbnail reference, opaque five-minute token, lazy POST to Wingman and one CDN fetch per token | Bounded transient token lookup; small PNG held only in originating normal-search memory until expiry/clear; no disk or server image-byte cache; private/managed contexts text-only |
 | Budget ledger | Endpoint, local environment, UTC date/time, attempt outcome and integer money | Durable purpose-limited accounting; no query/result/consumer identifier fields; retained across rollback and credential rotation |
 | Secret file | Replacement provider token | Ignored owner-only backend file for local development; never delivered to app; approved Secret Manager required for production |
 | Direct ad decision | Current nonsensitive context only | No consumer history, retained interests, external segments, fingerprinting or raw query reports |
@@ -50,10 +51,19 @@ person typed inside a query.
 ## Rights and deletion boundaries
 
 An arbitrary short cache TTL is not storage permission. Brave shared-news cache,
-image downloading, media caching and full-text retention remain disabled under
-`backend/config/brave_rights.json`. Existing separately approved content sources
-retain their own rights and independent pipeline. The source/publisher is
+shared image downloading/caching and full-text retention remain disabled under
+`backend/config/brave_rights.json`. The owner's separate request authorizes
+[transient thumbnails in explicit normal News Search](BRAVE_NEWS_THUMBNAILS.md):
+only returned HTTPS `imgs.search.brave.com` references, a five-minute opaque
+lookup, lazy first-party POST and a small re-encoded PNG. Image delivery makes
+no additional Search API call. It forwards no consumer cookie/referrer or
+subscription token and has no direct publisher/original-image fallback.
+
+This narrow result-display path does not authorize shared feed storage, offline
+images or shared or retained production media rights. Existing separately
+approved content sources retain their own rights and independent pipeline. The source/publisher is
 identified without presenting API permission as a publisher image license.
+Live thumbnail verification is recorded in the linked feature record.
 
 Deleting content caches must not delete cost/finance records or replenish a
 provider allowance. A local key replacement changes credential material only.

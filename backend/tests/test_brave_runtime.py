@@ -94,6 +94,50 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual('submitted', ledger.name)
         self.assertTrue(metrics.snapshot()['durable'])
 
+    def test_wsgi_thumbnail_routes_are_post_only_and_do_not_consume_search_guard(self):
+        from unittest.mock import Mock
+        from wingman_search.gateway import BurstGuard
+        from wingman_search.thumbnails import THUMBNAIL_PATH, RELEASE_PATH
+        application = SearchApplication(FixtureProvider())
+        application.thumbnail_request = Mock(return_value=(b'bounded-png-fixture', 'image/png'))
+        app = SearchWSGI(application, self.config)
+        app.guard = BurstGuard(limit=1)
+        body = json.dumps({'token': 'a' * 64}).encode()
+        base = {'REQUEST_METHOD': 'POST', 'PATH_INFO': THUMBNAIL_PATH, 'QUERY_STRING': '',
+            'HTTP_HOST': 'gateway.wingman.org', 'wsgi.url_scheme': 'https',
+            'CONTENT_TYPE': 'application/json', 'CONTENT_LENGTH': str(len(body))}
+        def call(**updates):
+            output = []
+            result = app(dict(base, **{'wsgi.input': io.BytesIO(body)}, **updates),
+                lambda status, headers: output.append((status, dict(headers))))
+            return output[0], b''.join(result)
+        (status, headers), data = call(HTTP_ORIGIN='https://gateway.wingman.org')
+        self.assertTrue(status.startswith('200'))
+        self.assertEqual('image/png', headers['Content-Type'])
+        self.assertEqual('no-store, private', headers['Cache-Control'])
+        self.assertEqual('no-referrer', headers['Referrer-Policy'])
+        self.assertEqual(b'bounded-png-fixture', data)
+        self.assertEqual(1, application.thumbnail_request.call_count)
+        for update in ({'REQUEST_METHOD': 'GET'}, {'REQUEST_METHOD': 'HEAD'},
+                       {'HTTP_ORIGIN': 'https://evil.org'}, {'HTTP_HOST': 'evil.org'},
+                       {'HTTP_COOKIE': 'session=fixture'}, {'HTTP_AUTHORIZATION': 'Bearer fixture'},
+                       {'HTTP_SEC_FETCH_SITE': 'cross-site'}, {'QUERY_STRING': 'token=fixture'},
+                       {'CONTENT_TYPE': 'text/plain'}, {'HTTP_TRANSFER_ENCODING': 'chunked'}):
+            self.assertFalse(call(**update)[0][0].startswith('200'))
+        self.assertTrue(call(REQUEST_METHOD='OPTIONS')[0][0].startswith('200'))
+        self.assertEqual(1, application.thumbnail_request.call_count)
+        application.thumbnail_request.return_value = ({'schemaVersion': 1, 'status': 'ok'},
+                                                      'application/json; charset=utf-8')
+        (status, headers), data = call(PATH_INFO=RELEASE_PATH)
+        self.assertTrue(status.startswith('200'))
+        self.assertEqual('application/json; charset=utf-8', headers['Content-Type'])
+        self.assertEqual('ok', json.loads(data)['status'])
+        self.assertEqual({}, {key: value for key, value in application.metrics.snapshot().items()
+                             if key not in ('scope', 'durable')})
+        self.assertTrue(app.guard.allow(None))
+        self.assertFalse(app.guard.allow(None))
+        application.close()
+
     def test_live_ads_require_billing_durable_host_and_independent_rights(self):
         for updates in ({'live_ads': True}, {'approved_ads_store_path': '/data/ads.sqlite3'},
                         {'live_ads': True, 'production_billing': True,

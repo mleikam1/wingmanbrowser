@@ -184,6 +184,33 @@ String _plain(Object? value, int maximum) {
   return String.fromCharCodes(text.runes.take(maximum));
 }
 
+/// A short-lived opaque handle; provider/publisher image URLs never reach UI.
+class SearchThumbnail {
+  const SearchThumbnail({required this.token, required this.expiresAt});
+  final String token;
+  final DateTime expiresAt;
+  static bool validToken(String value) =>
+      RegExp(r'^[a-f0-9]{64}$').hasMatch(value);
+  static SearchThumbnail? parse(Object? value) {
+    if (value is! Map ||
+        value['token'] is! String ||
+        value['expiresAt'] is! String) {
+      return null;
+    }
+    final token = value['token'] as String;
+    final expiry = DateTime.tryParse(value['expiresAt'] as String);
+    final now = DateTime.now().toUtc();
+    if (!validToken(token) ||
+        expiry == null ||
+        !expiry.isUtc ||
+        !expiry.isAfter(now) ||
+        expiry.isAfter(now.add(const Duration(minutes: 5, seconds: 5)))) {
+      return null;
+    }
+    return SearchThumbnail(token: token, expiresAt: expiry);
+  }
+}
+
 class SearchResult {
   const SearchResult({
     required this.title,
@@ -191,11 +218,13 @@ class SearchResult {
     required this.description,
     required this.source,
     this.publishedAt,
+    this.thumbnail,
   });
   final String title, description, source;
   final Uri url;
   final DateTime? publishedAt;
-  static SearchResult? parse(Object? value) {
+  final SearchThumbnail? thumbnail;
+  static SearchResult? parse(Object? value, {bool allowThumbnail = false}) {
     if (value is! Map || value['url'] is! String) {
       throw const SearchFailure('malformed-response');
     }
@@ -211,6 +240,9 @@ class SearchResult {
       url: url,
       description: description,
       source: url.host,
+      thumbnail: allowThumbnail
+          ? SearchThumbnail.parse(value['thumbnail'])
+          : null,
       publishedAt:
           published != null && !published.isAfter(DateTime.now().toUtc())
           ? published
@@ -246,7 +278,12 @@ class SearchResponse {
       throw const SearchFailure('malformed-response');
     }
     final results = (value['results'] as List)
-        .map(SearchResult.parse)
+        .map(
+          (row) => SearchResult.parse(
+            row,
+            allowThumbnail: expected == SearchKind.news,
+          ),
+        )
         .whereType<SearchResult>()
         .toList();
     return SearchResponse(

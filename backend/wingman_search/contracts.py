@@ -83,7 +83,7 @@ def decode_json(body, limit=1024 * 1024):
     except (ValueError, UnicodeError, RecursionError):
         raise SearchError('malformed-response', 502) from None
 
-def parse_results(body, request, policy, *, count=20, fixture=False, now=None):
+def parse_results(body, request, policy, *, count=20, fixture=False, now=None, thumbnail_register=None):
     raw = decode_json(body)
     if not isinstance(raw, dict):
         raise SearchError('malformed-response', 502)
@@ -102,7 +102,7 @@ def parse_results(body, request, policy, *, count=20, fixture=False, now=None):
     query = {} if query is None else query
     if not isinstance(query, dict):
         raise SearchError('malformed-response', 502)
-    results, seen, filtered = [], set(), 0
+    results, seen, filtered, thumbnail_candidates = [], set(), 0, []
     for row in rows:
         if (not isinstance(row, dict) or not isinstance(row.get('title'), str)
                 or not isinstance(row.get('url'), str)
@@ -132,6 +132,8 @@ def parse_results(body, request, policy, *, count=20, fixture=False, now=None):
             item.update(publishedAt=None, discoveredAt=None,
                         pageDate=iso(page_date) if page_date and page_date <= current else None,
                         providerFetchedAt=iso(fetched) if fetched and fetched <= current else None)
+            if request.context == 'normal' and isinstance(row.get('thumbnail'), dict):
+                thumbnail_candidates.append((item, row['thumbnail'].get('src')))
         results.append(item)
     more = (query.get('more_results_available') is True if request.kind == 'web' else len(rows) == count)
     # A supplied alteration is reevaluated only in memory and never returned.
@@ -139,6 +141,18 @@ def parse_results(body, request, policy, *, count=20, fixture=False, now=None):
     intent = (ad_context(request.query, altered=altered)
               if results and request.context == 'normal'
               and (altered is None or isinstance(altered, str)) else None)
+    # Registration performs no fetching. Run only after the complete organic
+    # response passed validation; malformed optional metadata cannot fail it.
+    if thumbnail_register is not None:
+        for item, source in thumbnail_candidates:
+            try:
+                grant = thumbnail_register(source)
+                if (isinstance(grant, dict) and isinstance(grant.get('token'), str)
+                        and re.fullmatch(r'[a-f0-9]{64}', grant['token'])
+                        and isinstance(grant.get('expiresAt'), str)):
+                    item['thumbnail'] = {'token': grant['token'], 'expiresAt': grant['expiresAt']}
+            except Exception:
+                pass
     return dict(schemaVersion=1, kind=request.kind, status='ok' if results else 'filtered' if filtered else 'empty',
                 results=results, moreAvailable=bool(more and request.offset < 9),
                 provider='Brave Search', fixture=fixture), intent

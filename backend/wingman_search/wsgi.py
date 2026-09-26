@@ -9,6 +9,7 @@ from .contracts import SearchError, decode_json
 from .config import load_rights
 from .runtime import read_config, create_search_application
 from .gateway import BurstGuard
+from .thumbnails import THUMBNAIL_PATHS
 
 
 class SearchWSGI:
@@ -20,6 +21,7 @@ class SearchWSGI:
         self.host = urlsplit(config.production_gateway_url).hostname
         self.guard = BurstGuard(limit=60)
         self.ad_guard = BurstGuard(limit=120)
+        self.thumbnail_guard = BurstGuard(limit=120)
 
     def __call__(self, environ, start_response):
         headers = [('Content-Type', 'application/json; charset=utf-8'),
@@ -34,9 +36,15 @@ class SearchWSGI:
                     or environ.get('wsgi.url_scheme') != 'https'):
                 raise SearchError('invalid-host', 403)
             path = environ.get('PATH_INFO', '')
-            if not (self.ad_guard if path.startswith('/v1/ads/') else self.guard).allow(None):
+            guard = (self.thumbnail_guard if path in THUMBNAIL_PATHS else
+                     self.ad_guard if path.startswith('/v1/ads/') else self.guard)
+            if not guard.allow(None):
                 raise SearchError('service-busy', 429)
             origin = environ.get('HTTP_ORIGIN')
+            if path in THUMBNAIL_PATHS and (
+                    environ.get('HTTP_COOKIE') or environ.get('HTTP_AUTHORIZATION')
+                    or not origin and any(key.startswith('HTTP_SEC_FETCH_') for key in environ)):
+                raise SearchError('origin-not-allowed', 403)
             rights = load_rights(__import__('pathlib').Path(self.config.rights_register_path))
             if origin:
                 if origin not in {'https://' + host for host in rights.get('approved_domains', [])}:
@@ -54,9 +62,9 @@ class SearchWSGI:
                 headers[0] = ('Content-Type', mime)
             elif method == 'GET' and path == '/healthz':
                 status, value = 200, {'status': 'ok', 'service': 'Wingman Search'}
-            elif method == 'OPTIONS' and path in ('/v1/search', '/v1/ads/decision', '/v1/ads/event'):
+            elif method == 'OPTIONS' and path in ('/v1/search', '/v1/ads/decision', '/v1/ads/event', *THUMBNAIL_PATHS):
                 status, value = 200, {'status': 'ok'}
-            elif method == 'POST' and path in ('/v1/search', '/v1/ads/decision', '/v1/ads/event'):
+            elif method == 'POST' and path in ('/v1/search', '/v1/ads/decision', '/v1/ads/event', *THUMBNAIL_PATHS):
                 length = environ.get('CONTENT_LENGTH', '')
                 if (not length.isascii() or not length.isdecimal() or len(length) > 5
                         or not 2 <= int(length) <= 8192 or environ.get('HTTP_TRANSFER_ENCODING')):
@@ -70,7 +78,13 @@ class SearchWSGI:
                     raw = decode_json(body, 8192)
                 except SearchError:
                     raise SearchError('invalid-request') from None
-                value = self.app.search(raw) if path == '/v1/search' else self.app.ad_request(path, raw)
+                if path in THUMBNAIL_PATHS:
+                    value, mime = self.app.thumbnail_request(path, raw)
+                    if isinstance(value, bytes):
+                        binary = value
+                        headers[0] = ('Content-Type', mime)
+                else:
+                    value = self.app.search(raw) if path == '/v1/search' else self.app.ad_request(path, raw)
                 status = 200
             else:
                 raise SearchError('not-found', 404)
