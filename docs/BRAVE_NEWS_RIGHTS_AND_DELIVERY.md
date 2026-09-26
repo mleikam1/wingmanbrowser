@@ -1,16 +1,24 @@
 # Wingman News — shared delivery and rights
 
 September 26, 2026. Shared Brave news is implemented and fixture-tested, with
-its committed source disabled and caching/media rights unapproved. No real
-Brave response, licensed image, production scheduler or paid news allowance
-has been verified. Existing approved RSS, Currents and separately authorized
-NewsUSA content remain available under their existing contracts.
+its committed source disabled and shared caching/media rights unapproved. No
+live shared-Brave ingestion, shared-media grant, production scheduler or
+shared-news paid allowance has been verified. Explicit query-result acceptance
+is recorded separately in [local live activation](BRAVE_LIVE_ACTIVATION.md).
+Existing approved RSS, Currents and separately authorized NewsUSA content remain
+available under their existing contracts.
 
 ## Two distinct entry points
 
 Explicit News Search accepts an intentional submitted query through Wingman's
 search gateway and returns a transient protected DTO. It does not store that
-query, silently fetch another page, download images or populate a shared feed.
+query, silently fetch another page or populate a shared feed. The owner has now
+authorized [transient thumbnails for explicit normal News Search](BRAVE_NEWS_THUMBNAILS.md):
+only returned Brave thumbnail URLs, fetched lazily through Wingman using an
+opaque five-minute token and displayed from session memory. This media request
+makes no second Search API call. Private/managed contexts remain text-only;
+image-byte persistence and publisher-original fallback remain excluded. Live
+thumbnail verification is recorded in that separate feature record.
 
 `BraveNewsProvider` supplies the existing `NewsProvider`/`CompositeNewsProvider`
 and Home/Discover snapshot path. It accepts reviewed source/prior-state/time,
@@ -98,8 +106,10 @@ This Brave shared release is text-only. Unlicensed thumbnail URLs are discarded
 before content persistence; no image fetch, Open Graph scrape, guessed stock
 art, generated news image or publisher logo partnership is introduced. Existing
 individually approved sources retain their separate media controls. Broader
-Brave image support needs explicit article-associated rights and another reviewed
-configuration change; a generic API token or remote-media boolean is insufficient.
+Brave image support in shared snapshots needs explicit article-associated rights
+and another reviewed configuration change; a generic API token or remote-media
+boolean is insufficient. The separately authorized transient search-thumbnail
+path does not change these shared-source or production-media gates.
 
 Rights revocation clears retained pools even before their next scheduled poll.
 The reader rechecks current rights before returning an in-memory snapshot, and

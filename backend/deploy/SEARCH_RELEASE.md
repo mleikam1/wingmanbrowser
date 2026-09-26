@@ -65,6 +65,11 @@ Prepare `approved-service.yaml` only after the target is identified. Use private
 canary ingress initially, 0 minimum/1 maximum instance, 8 maximum concurrency,
 a 30-second timeout and no platform request retries. These infrastructure
 limits are not hard spend caps; the shared reserve-before-dispatch ledger is.
+The image uses one worker with four threads. Explicit News thumbnail tokens
+remain in that process for at most five minutes; keep this single-instance
+canary topology or separately review routing affinity before scaling it.
+Restarts or requests reaching another instance leave text results usable and
+images absent; clients never repeat the paid search to recover a thumbnail.
 Explicitly validate proxy TLS handling: WSGI requires HTTPS and the approved
 Host. Forwarded headers must be accepted only from the actual trusted TLS
 terminator; never trust arbitrary client-supplied headers. Reject duplicate

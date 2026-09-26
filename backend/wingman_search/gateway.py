@@ -13,6 +13,7 @@ from urllib.parse import urlsplit
 from wingman_content.server import HeaderBudget
 from .budget import BudgetError
 from .contracts import SearchRequest, SearchError, decode_json
+from .thumbnails import ThumbnailService, THUMBNAIL_PATH, RELEASE_PATH, THUMBNAIL_PATHS, MAX_PNG_BYTES
 
 class AggregateMetrics:
     """Fixture/local aggregate counters. No query, address, token or consumer key.
@@ -54,6 +55,27 @@ class SearchApplication:
         self.slots = threading.BoundedSemaphore(8)
         self.ad_slots = threading.BoundedSemaphore(4)
         self.outcome_metrics_degraded = False
+        self.thumbnails = None
+        if provider is not None:
+            from .provider import FixtureProvider
+            existing = getattr(provider, 'thumbnails', None)
+            self.thumbnails = existing if isinstance(existing, ThumbnailService) else ThumbnailService(
+                fixture=isinstance(provider, FixtureProvider))
+            provider.thumbnails = self.thumbnails
+
+    def thumbnail_request(self, path, raw):
+        if self.thumbnails is None or path not in THUMBNAIL_PATHS:
+            raise SearchError('thumbnail-unavailable', 404)
+        if path == RELEASE_PATH:
+            return self.thumbnails.release(raw), 'application/json; charset=utf-8'
+        body, mime = self.thumbnails.fetch(raw)
+        if mime != 'image/png' or not isinstance(body, bytes) or not 0 < len(body) <= MAX_PNG_BYTES:
+            raise SearchError('thumbnail-unavailable', 404)
+        return body, mime
+
+    def close(self):
+        if self.thumbnails is not None:
+            self.thumbnails.close()
 
     def outcome_metric(self, name):
         try:
@@ -151,6 +173,7 @@ def handler_for(app, origins=()):
         raise ValueError('local-origin-required')
     guard = BurstGuard()
     ad_guard = BurstGuard(limit=120)
+    thumbnail_guard = BurstGuard(limit=120)
     class Handler(BaseHTTPRequestHandler):
         server_version = 'WingmanSearch/1.0'
         sys_version = ''
@@ -209,13 +232,14 @@ def handler_for(app, origins=()):
                 raise SearchError('credentials-not-accepted', 403)
             # Readiness and health polling must not consume submission capacity.
             if self.command == 'POST':
-                limiter = ad_guard if self.path.startswith('/v1/ads/') else guard
+                limiter = (ad_guard if self.path.startswith('/v1/ads/') else
+                           thumbnail_guard if self.path in THUMBNAIL_PATHS else guard)
                 if not limiter.allow(self.client_address[0]):
                     raise SearchError('service-busy', 429)
         def do_OPTIONS(self):
             try:
                 self.boundary()
-                if self.path not in ('/v1/search', '/v1/ads/decision', '/v1/ads/event'):
+                if self.path not in ('/v1/search', '/v1/ads/decision', '/v1/ads/event', *THUMBNAIL_PATHS):
                     raise SearchError('not-found', 404)
                 methods = self.headers.get_all('Access-Control-Request-Method') or []
                 headers = self.headers.get_all('Access-Control-Request-Headers') or []
@@ -240,6 +264,8 @@ def handler_for(app, origins=()):
                          'mode': app.mode}
                 if self.path == '/statusz' and app.local_status is not None:
                     value.update(app.local_status())
+                if self.path == '/statusz' and app.thumbnails is not None:
+                    value['thumbnailMetrics'] = app.thumbnails.snapshot()
                 self.reply(200, value)
             except SearchError as exc:
                 self.reply(exc.http_status, {'status': 'error', 'error': {'code': exc.code}})
@@ -249,7 +275,7 @@ def handler_for(app, origins=()):
         def do_POST(self):
             try:
                 self.boundary()
-                if self.path not in ('/v1/search', '/v1/ads/decision', '/v1/ads/event'):
+                if self.path not in ('/v1/search', '/v1/ads/decision', '/v1/ads/event', *THUMBNAIL_PATHS):
                     raise SearchError('not-found', 404)
                 lengths = self.headers.get_all('Content-Length') or []
                 if (len(lengths) != 1 or not lengths[0].isdigit() or len(lengths[0]) > 5
@@ -268,7 +294,11 @@ def handler_for(app, origins=()):
                     raw = decode_json(body, 8192)
                 except SearchError:
                     raise SearchError('invalid-request') from None
-                self.reply(200, app.search(raw) if self.path == '/v1/search' else app.ad_request(self.path, raw))
+                if self.path in THUMBNAIL_PATHS:
+                    value, mime = app.thumbnail_request(self.path, raw)
+                    self.reply(200, value, mime)
+                else:
+                    self.reply(200, app.search(raw) if self.path == '/v1/search' else app.ad_request(self.path, raw))
             except SearchError as exc:
                 error = {'code': exc.code}
                 if type(exc.provider_status) is int and 100 <= exc.provider_status <= 599:
@@ -289,5 +319,8 @@ class LocalServer(ThreadingHTTPServer):
 def serve(app, *, host='127.0.0.1', port=8895, origins=()):
     if host != '127.0.0.1':
         raise ValueError('development-runner-requires-loopback')
-    with LocalServer((host, port), handler_for(app, origins)) as server:
-        server.serve_forever()
+    try:
+        with LocalServer((host, port), handler_for(app, origins)) as server:
+            server.serve_forever()
+    finally:
+        app.close()

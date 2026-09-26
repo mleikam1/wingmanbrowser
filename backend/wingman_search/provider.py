@@ -150,10 +150,11 @@ class BraveTransport:
                     pass
 
 class BraveProvider:
-    def __init__(self, ledger, key, *, transport=None, policy=None, default_count=20):
+    def __init__(self, ledger, key, *, transport=None, policy=None, default_count=20, thumbnails=None):
         self.ledger, self._key = ledger, key
         self.transport, self.policy = transport or BraveTransport(), policy or SearchPolicy()
         self.before_request = None
+        self.thumbnails = thumbnails
         if type(default_count) is not int or not 1 <= default_count <= 20:
             raise SearchError('invalid-count')
         self.default_count = default_count
@@ -192,7 +193,8 @@ class BraveProvider:
                                  rate_limit_headers=headers)
             raise SearchError(reply.failure_code, 503, reply.status)
         try:
-            result = parse_results(reply.body, request, self.policy, count=count)
+            result = parse_results(reply.body, request, self.policy, count=count,
+                                   thumbnail_register=self.thumbnails.register if self.thumbnails else None)
         except Exception:
             self.ledger.complete(reservation, status_class='malformed_response', http_status=200,
                                  rate_limit_headers=headers)
@@ -204,6 +206,7 @@ class FixtureProvider:
     """Synthetic contract fixtures; never creates transport or loads a secret."""
     def __init__(self, policy=None):
         self.policy = policy or SearchPolicy()
+        self.thumbnails = None
 
     def search(self, request, *, count=20):
         request = SearchRequest.parse(dict(query=request.query, kind=request.kind, country=request.country,
@@ -213,10 +216,13 @@ class FixtureProvider:
                 dict(title='Fixture: NASA Moon science', url='https://www.nasa.gov/moon/',
                      description='Synthetic integration fixture for protected Wingman navigation.')]
         if request.kind == 'news':
+            from .thumbnails import FIXTURE_SOURCE
             rows = [dict(title='Fixture: Space research update', url='https://www.nasa.gov/news/',
-                         description='Synthetic news card. Publication time is unknown.')]
+                         description='Synthetic news card. Publication time is unknown.',
+                         thumbnail={'src': FIXTURE_SOURCE})]
         if request.offset:
             rows = []
         raw = {'query': {'more_results_available': False}}
         raw.update({'web': {'results': rows[:count]}} if request.kind == 'web' else {'results': rows[:count]})
-        return parse_results(json.dumps(raw).encode(), request, self.policy, count=count, fixture=True)
+        return parse_results(json.dumps(raw).encode(), request, self.policy, count=count, fixture=True,
+                             thumbnail_register=self.thumbnails.register if self.thumbnails else None)
