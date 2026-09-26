@@ -397,6 +397,8 @@ class GCSBudgetLedger:
                 "unknown_outcomes": len(unknown),
                 "unknown_reserved_micros": sum(row["reserved_cost"] for row in unknown),
                 "reconciled_attempts": sum(row["reconciled_cost"] is not None for row in rows),
+                "reconciled_billed_requests": sum((row["reconciled_cost"] or 0) > 0 for row in rows),
+                "billing_reconciliation_complete": all(row["reconciled_cost"] is not None for row in rows),
                 "reconciled_billed_micros": sum(row["reconciled_cost"] or 0 for row in rows),
                 "halted": state["halted"], "next_allowed_utc_micros": state["next_allowed"],
                 "datastore_cost_status": "not_reconciled", "datastore_cost_micros": None,

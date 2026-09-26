@@ -209,6 +209,11 @@ class SharedBudgetTests(unittest.TestCase):
         ledger.reconcile(web.id, 0)
         self.assertEqual(ledger.snapshot()["conservative_reserved_micros"], 10_000)
         self.assertEqual(ledger.snapshot()["reconciled_attempts"], 1)
+        self.assertEqual(ledger.snapshot()["reconciled_billed_requests"], 0)
+        self.assertFalse(ledger.snapshot()["billing_reconciliation_complete"])
+        ledger.reconcile(news.id, 5000)
+        self.assertEqual(ledger.snapshot()["reconciled_billed_requests"], 1)
+        self.assertTrue(ledger.snapshot()["billing_reconciliation_complete"])
 
     def test_rate_windows_and_backoff_are_shared(self):
         ledger = self.initialize()

@@ -74,6 +74,12 @@ class BudgetTests(SecureTemporaryTest):
         self.assertEqual(result["reconciled_billed_micros"], 0)
         self.assertEqual(result["reconciled_attempts"], 0)
         self.assertEqual(result["unknown_outcomes"], 0)
+        self.assertFalse(result["billing_reconciliation_complete"])
+        restarted.reconcile(web.id, 5000)
+        self.assertEqual(restarted.snapshot()["reconciled_billed_requests"], 1)
+        self.assertFalse(restarted.snapshot()["billing_reconciliation_complete"])
+        restarted.reconcile(news.id, 0)
+        self.assertTrue(restarted.snapshot()["billing_reconciliation_complete"])
 
     def test_first_failure_stops_smoke_and_unknown_is_not_confirmed_charge(self):
         ledger = self.ledger()
@@ -87,9 +93,12 @@ class BudgetTests(SecureTemporaryTest):
         self.assertEqual(report["unknown_reserved_micros"], 5_000)
         self.assertEqual(report["confirmed_successes"], 0)
         self.assertEqual(report["estimated_success_cost_micros"], 0)
+        self.assertFalse(report["billing_reconciliation_complete"])
         ledger.reconcile(attempt.id, 0)
         self.assertEqual(ledger.snapshot()["conservative_reserved_micros"], 5_000)
         self.assertEqual(ledger.snapshot()["reconciled_attempts"], 1)
+        self.assertEqual(ledger.snapshot()["reconciled_billed_requests"], 0)
+        self.assertTrue(ledger.snapshot()["billing_reconciliation_complete"])
 
     def test_received_success_with_bad_schema_is_estimated_billed_and_stops(self):
         ledger = self.ledger()
