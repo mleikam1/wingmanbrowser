@@ -46,9 +46,11 @@ class BurstGuard:
             return self._count <= self.limit
 
 class SearchApplication:
-    def __init__(self, provider=None, metrics=None, ads=None):
+    def __init__(self, provider=None, metrics=None, ads=None, *, mode=None):
         self.provider, self.metrics = provider, metrics or AggregateMetrics()
         self.ads = ads
+        self.mode = mode or ('disabled' if provider is None else 'configured')
+        self.local_status = None
         self.slots = threading.BoundedSemaphore(8)
         self.ad_slots = threading.BoundedSemaphore(4)
         self.outcome_metrics_degraded = False
@@ -90,6 +92,10 @@ class SearchApplication:
         except BudgetError as exc:
             self.outcome_metric('failed')
             code = ('budget-exhausted' if exc.code in ('attempt_budget_exhausted', 'shared_ledger_capacity_exhausted')
+                    else 'automated-limit-reached' if exc.code == 'automated_attempt_budget_exhausted'
+                    else 'allowance-expired' if exc.code == 'local_evaluation_expired'
+                    else 'allowance-paused' if exc.code == 'previous_attempt_unresolved'
+                        or exc.code.startswith('local_evaluation_paused_')
                     else 'provider-rate-limited' if exc.code in ('provider_quota_exhausted', 'shared_backoff')
                     else 'service-busy' if exc.code == 'shared_ledger_contention'
                     else 'service-unavailable')
@@ -136,7 +142,7 @@ def valid_local_origin(value):
         return (p.scheme == 'http' and p.hostname in ('127.0.0.1', 'localhost', '::1')
                 and not p.path and not p.query and not p.fragment and not p.username
                 and p.port is not None and 1 <= p.port <= 65535)
-    except ValueError:
+    except (ValueError, TypeError):
         return False
 
 def handler_for(app, origins=()):
@@ -189,16 +195,35 @@ def handler_for(app, origins=()):
                     self.headers.get('Host') not in (f'127.0.0.1:{port}', f'localhost:{port}', f'[::1]:{port}')):
                 raise SearchError('invalid-host', 403)
             origin = self.headers.get('Origin')
-            if len(self.headers.get_all('Origin') or []) > 1 or (origin and origin not in allowed_origins):
+            origins = self.headers.get_all('Origin') or []
+            if len(origins) > 1 or (origins and origin not in allowed_origins):
                 raise SearchError('origin-not-allowed', 403)
-            limiter = ad_guard if self.path.startswith('/v1/ads/') else guard
-            if not limiter.allow(self.client_address[0]):
-                raise SearchError('service-busy', 429)
+            # Browsers identify cross-origin writes with Origin; native clients
+            # legitimately omit it. A browser fetch-metadata marker without an
+            # approved Origin never grants the native exception for a write.
+            if (self.command == 'POST' and not origins and
+                    any(self.headers.get_all(name) for name in
+                        ('Sec-Fetch-Site', 'Sec-Fetch-Mode', 'Sec-Fetch-Dest'))):
+                raise SearchError('origin-not-allowed', 403)
+            if self.headers.get_all('Cookie') or self.headers.get_all('Authorization'):
+                raise SearchError('credentials-not-accepted', 403)
+            # Readiness and health polling must not consume submission capacity.
+            if self.command == 'POST':
+                limiter = ad_guard if self.path.startswith('/v1/ads/') else guard
+                if not limiter.allow(self.client_address[0]):
+                    raise SearchError('service-busy', 429)
         def do_OPTIONS(self):
             try:
                 self.boundary()
                 if self.path not in ('/v1/search', '/v1/ads/decision', '/v1/ads/event'):
                     raise SearchError('not-found', 404)
+                methods = self.headers.get_all('Access-Control-Request-Method') or []
+                headers = self.headers.get_all('Access-Control-Request-Headers') or []
+                if (len(methods) != 1 or methods[0] != 'POST' or len(headers) > 1
+                        or any(h.strip().lower() != 'content-type'
+                               for value in headers for h in value.split(','))
+                        or not self.headers.get_all('Origin')):
+                    raise SearchError('invalid-preflight', 403)
                 self.reply(200, {'status': 'ok'})
             except SearchError as exc:
                 self.reply(exc.http_status, {'status': 'error', 'error': {'code': exc.code}})
@@ -209,11 +234,17 @@ def handler_for(app, origins=()):
                     body, mime = app.ad_asset(self.path)
                     self.reply(200, body, mime)
                     return
-                if self.path != '/healthz':
+                if self.path not in ('/healthz', '/statusz'):
                     raise SearchError('not-found', 404)
-                self.reply(200, {'status': 'ok', 'service': 'Wingman Search', 'localOnly': True})
+                value = {'status': 'ok', 'service': 'Wingman Search', 'localOnly': True,
+                         'mode': app.mode}
+                if self.path == '/statusz' and app.local_status is not None:
+                    value.update(app.local_status())
+                self.reply(200, value)
             except SearchError as exc:
                 self.reply(exc.http_status, {'status': 'error', 'error': {'code': exc.code}})
+            except Exception:
+                self.reply(503, {'status': 'error', 'error': {'code': 'service-unavailable'}})
         do_HEAD = do_GET
         def do_POST(self):
             try:
@@ -222,9 +253,13 @@ def handler_for(app, origins=()):
                     raise SearchError('not-found', 404)
                 lengths = self.headers.get_all('Content-Length') or []
                 if (len(lengths) != 1 or not lengths[0].isdigit() or len(lengths[0]) > 5
-                        or not 2 <= int(lengths[0]) <= 8192 or self.headers.get('Transfer-Encoding')):
+                        or not 2 <= int(lengths[0]) <= 8192 or self.headers.get_all('Transfer-Encoding')):
                     raise SearchError('request-size', 413)
-                if self.headers.get_content_type() != 'application/json':
+                types = self.headers.get_all('Content-Type') or []
+                if (len(types) != 1 or self.headers.get_content_type() != 'application/json'
+                        or self.headers.get_content_charset('utf-8').lower() != 'utf-8'
+                        or self.headers.get_all('Content-Encoding')
+                        or self.headers.get_all('Expect')):
                     raise SearchError('json-required', 415)
                 body = self.rfile.read(int(lengths[0]))
                 if len(body) != int(lengths[0]):
@@ -235,7 +270,12 @@ def handler_for(app, origins=()):
                     raise SearchError('invalid-request') from None
                 self.reply(200, app.search(raw) if self.path == '/v1/search' else app.ad_request(self.path, raw))
             except SearchError as exc:
-                self.reply(exc.http_status, {'schemaVersion': 1, 'status': 'error', 'error': {'code': exc.code}})
+                error = {'code': exc.code}
+                if type(exc.provider_status) is int and 100 <= exc.provider_status <= 599:
+                    error['providerStatus'] = exc.provider_status
+                if exc.provider_code in ('INTERNAL', 'QUOTA_LIMITED', 'RATE_LIMITED'):
+                    error['providerCode'] = exc.provider_code
+                self.reply(exc.http_status, {'schemaVersion': 1, 'status': 'error', 'error': error})
             except Exception:
                 self.reply(503, {'schemaVersion': 1, 'status': 'error', 'error': {'code': 'service-unavailable'}})
     return Handler
@@ -249,4 +289,5 @@ class LocalServer(ThreadingHTTPServer):
 def serve(app, *, host='127.0.0.1', port=8895, origins=()):
     if host != '127.0.0.1':
         raise ValueError('development-runner-requires-loopback')
-    LocalServer((host, port), handler_for(app, origins)).serve_forever()
+    with LocalServer((host, port), handler_for(app, origins)) as server:
+        server.serve_forever()

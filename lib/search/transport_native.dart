@@ -33,23 +33,25 @@ class _NativeSearchTransport implements SearchTransport {
             (response.headers.value(HttpHeaders.contentEncodingHeader) ??
                     'identity') !=
                 'identity') {
-          throw const SearchFailure('malformed-response');
+          throw const SearchFailure('gateway-response-invalid');
         }
         final bytes = BytesBuilder(copy: false);
         await for (final chunk in response) {
           if (bytes.length + chunk.length > maximumSearchBytes) {
-            throw const SearchFailure('malformed-response');
+            throw const SearchFailure('gateway-response-invalid');
           }
           bytes.add(chunk);
         }
         return SearchTransportResponse(response.statusCode, bytes.takeBytes());
       })().timeout(searchTimeout);
     } on TimeoutException {
-      throw const SearchFailure('timeout');
+      throw const SearchFailure('gateway-timeout');
+    } on TlsException {
+      throw const SearchFailure('gateway-tls');
     } on SearchFailure {
       rethrow;
     } catch (_) {
-      throw const SearchFailure('transport-error');
+      throw const SearchFailure('gateway-connection');
     } finally {
       client.close(force: true);
       if (identical(_client, client)) _client = null;

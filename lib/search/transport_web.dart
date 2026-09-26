@@ -61,7 +61,7 @@ class _WebSearchTransport implements SearchTransport {
       ).toDart;
       final bytes = BytesBuilder(copy: false);
       final reader = response.body?.getReader();
-      if (reader == null) throw const SearchFailure('malformed-response');
+      if (reader == null) throw const SearchFailure('gateway-response-invalid');
       while (true) {
         final chunk = await reader.read().toDart;
         if (chunk.done) break;
@@ -69,7 +69,7 @@ class _WebSearchTransport implements SearchTransport {
         if (value == null) continue;
         if (bytes.length + value.length > maximumSearchBytes) {
           await reader.cancel().toDart;
-          throw const SearchFailure('malformed-response');
+          throw const SearchFailure('gateway-response-invalid');
         }
         bytes.add(value);
       }
@@ -77,7 +77,9 @@ class _WebSearchTransport implements SearchTransport {
     } on SearchFailure {
       rethrow;
     } catch (_) {
-      throw SearchFailure(timedOut ? 'timeout' : 'transport-error');
+      // Fetch deliberately does not expose DNS/TLS/CORS details to JavaScript.
+      // Do not misdiagnose an app-to-gateway failure as rejected credentials.
+      throw SearchFailure(timedOut ? 'gateway-timeout' : 'gateway-connection');
     } finally {
       timer.cancel();
       controller.abort();

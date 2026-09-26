@@ -1,9 +1,10 @@
-# Brave setup — fixtures first
+# Brave setup — bounded local evaluation and separate production
 
 Run all commands from the Wingman repository root. The owner already has a
 Brave account. Do not create a replacement account or paste credentials into a
-conversation. The existing chat-exposed key should be replaced within that
-account before continued development/production.
+conversation. Rotation of a chat-exposed key is recommended. The owner explicitly permits
+using the existing key for the bounded local evaluation; replacement is not a
+prerequisite for that grant. Production secrets remain separate.
 
 ## Hidden local key entry
 
@@ -13,7 +14,7 @@ In your own interactive Terminal:
 python3 backend/setup_brave_secret.py
 ```
 
-Enter the replacement key at the hidden prompt. No key argument is accepted.
+Enter the existing authorized key at the “Brave API key (hidden)” prompt. No key argument is accepted.
 The command writes only `backend/.env.brave` with mode 0600 after verifying
 that it is ignored and untracked. It rejects symlinks, hard links, non-owner
 files, unsafe ancestor directories and group/world file permissions. Atomic
@@ -42,9 +43,31 @@ The foundation module itself uses only the standard library. Provider/contracts
 also reuse the existing backend parsing dependency (`defusedxml`). Package
 installation is local development setup, not permission to buy infrastructure.
 
-## One bounded smoke allowance
+## Current local-live evaluation
 
-After hidden entry, initialize the launcher-authorized allowance exactly once:
+The current grant is `wingman-brave-local-live-v3-20260926`: at most 100 total
+attempts, $0.50 conservatively reserved, 20 automated verification attempts within
+that total, and seven days from first initialization. Repeated prompts, launches,
+restarts and key changes do not renew it. Existing smoke usage is consolidated;
+unused smoke capacity is retired instead of added. All worktrees/processes use
+the repository's common Git operations directory. Never delete its ledgers or
+initialization markers.
+
+The explicit `serve-live-local` mode connects the actual application to Brave.
+`serve-fixtures` remains synthetic and `serve` remains disabled. Production still
+requires the independent approved cloud configuration below. See
+[local activation and actual-app evidence](BRAVE_LIVE_ACTIVATION.md) for exact
+initialization, status, launch, stop and correction-based resume commands.
+Startup, readiness and health checks never make provider calls. Use the launch
+helper to compile the selected actual app with the matching loopback gateway URL.
+Do not run the older smoke runner in addition to this grant.
+
+## Earlier two-request smoke allowance (superseded for this evaluation)
+
+The original implementation supported the following launcher allowance. These
+commands document that earlier workflow; do not initialize or run it alongside
+the current local-live grant. Its accounting and markers must be preserved:
+
 
 ```sh
 PYTHONPATH=backend work/brave-venv/bin/python backend/brave_smoke_test.py --status

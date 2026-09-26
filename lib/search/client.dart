@@ -15,17 +15,27 @@ abstract interface class WingmanSearchClient {
 
 class GatewaySearchClient implements WingmanSearchClient {
   GatewaySearchClient({required this.endpoint, SearchTransport? transport})
-    : _transport = transport ?? createSearchTransport();
+    : _transport = transport ?? createSearchTransport(),
+      _configurationFailureCode = 'gateway-not-configured';
+  GatewaySearchClient.fromConfiguration(
+    String value, {
+    bool allowDevelopment = false,
+    SearchTransport? transport,
+  }) : endpoint = endpointFrom(value, allowDevelopment: allowDevelopment),
+       _transport = transport ?? createSearchTransport(),
+       _configurationFailureCode = value.trim().isEmpty
+           ? 'gateway-not-configured'
+           : 'gateway-invalid-configuration';
   final Uri? endpoint;
   final SearchTransport _transport;
-  static WingmanSearchClient configured() => GatewaySearchClient(
-    endpoint: endpointFrom(
-      const String.fromEnvironment('WINGMAN_SEARCH_URL'),
-      allowDevelopment:
-          kDebugMode &&
-          const bool.fromEnvironment('WINGMAN_SEARCH_DEVELOPMENT'),
-    ),
-  );
+  final String _configurationFailureCode;
+  static WingmanSearchClient configured() =>
+      GatewaySearchClient.fromConfiguration(
+        const String.fromEnvironment('WINGMAN_SEARCH_URL'),
+        allowDevelopment:
+            kDebugMode &&
+            const bool.fromEnvironment('WINGMAN_SEARCH_DEVELOPMENT'),
+      );
   static Uri? endpointFrom(String value, {bool allowDevelopment = false}) {
     try {
       final uri = Uri.tryParse(value);
@@ -79,14 +89,14 @@ class GatewaySearchClient implements WingmanSearchClient {
   @override
   Future<SearchResponse> search(SearchRequest request) async {
     final target = endpoint;
-    if (target == null) throw const SearchFailure('configuration-required');
+    if (target == null) throw SearchFailure(_configurationFailureCode);
     try {
       final response = await _transport.post(
         target,
         jsonEncode(request.toJson()),
       );
       if (response.body.length > maximumSearchBytes) {
-        throw const SearchFailure('malformed-response');
+        throw const SearchFailure('gateway-response-invalid');
       }
       final value = jsonDecode(utf8.decode(response.body));
       if (response.statusCode != 200) {
@@ -96,24 +106,41 @@ class GatewaySearchClient implements WingmanSearchClient {
           'configuration-required',
           'provider-authentication',
           'provider-entitlement',
+          'provider-request-invalid',
           'provider-rate-limited',
           'provider-unavailable',
           'transport-error',
+          'transport-dns',
+          'transport-tls',
+          'transport-connection',
+          'transport-timeout',
+          'malformed-response',
           'budget-exhausted',
+          'allowance-expired',
+          'verification-limit',
+          'automated-limit-reached',
+          'allowance-paused',
           'service-busy',
+          'service-unavailable',
           'managed-search-unavailable',
         };
-        final error = value is Map ? value['error'] : null;
+        final error = value is Map && value['schemaVersion'] == 1
+            ? value['error']
+            : null;
         final code = error is Map ? error['code'] : null;
         throw SearchFailure(
-          codes.contains(code) ? code as String : 'provider-unavailable',
+          codes.contains(code) ? code as String : 'gateway-response-invalid',
         );
       }
-      return SearchResponse.parse(value, request.kind);
+      try {
+        return SearchResponse.parse(value, request.kind);
+      } on SearchFailure {
+        throw const SearchFailure('gateway-response-invalid');
+      }
     } on SearchFailure {
       rethrow;
     } catch (_) {
-      throw const SearchFailure('malformed-response');
+      throw const SearchFailure('gateway-response-invalid');
     }
   }
 

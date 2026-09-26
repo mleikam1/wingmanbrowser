@@ -23,7 +23,21 @@ Use the hidden replacement-key utility in your own terminal:
 python3 backend/setup_brave_secret.py
 ```
 
-Run the real app with the synthetic gateway while credentials/rights are pending:
+For the separately authorized bounded local evaluation, follow
+[local-live setup and activation evidence](docs/BRAVE_LIVE_ACTIVATION.md). After
+hidden key entry, initialize the same grant idempotently and start the actual app:
+
+```sh
+PYTHONPATH=backend work/brave-venv/bin/python -m wingman_search initialize-local
+work/brave-venv/bin/python scripts/run_brave_local.py --platform web
+```
+
+The helper prints its matching app URL and live gateway endpoint. Ctrl-C stops
+its own processes and preserves accounting and app data. Startup makes no Brave
+request; deliberate manual search uses the remaining grant. No production or
+advertiser billing gate is enabled by local testing.
+
+For synthetic development instead, explicitly choose the fixture gateway:
 
 ```sh
 PYTHONPATH=backend work/brave-venv/bin/python -m wingman_search serve-fixtures --port 8895 --origin http://127.0.0.1:8894
@@ -154,7 +168,7 @@ Normal consumer preferences persist locally. Private customization uses separate
 
 Opening an eligible page contacts that website and its permitted asset hosts. When an approved live Search gateway is configured, explicitly submitted search queries go to Wingman’s backend and then Brave; typing does not request suggestions. Brave receives the query and server connection metadata, and its retention policy applies. Wingman keeps query/result state transient and excludes raw queries from its accounting and aggregate ad reports. Existing approved news sources still receive their normal connection metadata. Private mode does not make network traffic anonymous. See [current data flow and retention](docs/DATA_FLOW_AND_RETENTION.md) for the boundaries and unverified infrastructure paths.
 
-Brave Search can incur per-request provider charges, plus separately budgeted gateway and infrastructure costs. Durable accounting reserves each attempt before dispatch, and all ongoing live gates and budgets remain closed. This implementation made zero provider calls and created no production resources. Direct campaigns use verified prepaid funds only after separate approval; fixture delivery is test money, not earned revenue. Existing account spending was not audited. See [current release evidence and launch gates](docs/WINGMAN_SEARCH_RELEASE_REPORT.md) and [deployment preparation](backend/deploy/SEARCH_RELEASE.md); the earlier [cloud cost plan](docs/CLOUD_COST_PLAN.md) is historical.
+Brave Search can incur per-request provider charges, plus separately budgeted gateway and infrastructure costs. Durable accounting reserves each attempt before dispatch. The separately authorized, finite local evaluation is recorded in [local activation and accounting](docs/BRAVE_LIVE_ACTIVATION.md); production gates remain closed and no production resources were created. Direct campaigns use verified prepaid funds only after separate approval; fixture delivery is test money, not earned revenue. Existing account spending was not audited. See [the earlier fixture release evidence](docs/WINGMAN_SEARCH_RELEASE_REPORT.md) and [deployment preparation](backend/deploy/SEARCH_RELEASE.md); the earlier [cloud cost plan](docs/CLOUD_COST_PLAN.md) is historical.
 
 ## Validation and maintenance
 
@@ -170,7 +184,7 @@ flutter test integration_test/protected_live_native_test.dart --no-uninstall -d 
 flutter test integration_test/protected_live_app_test.dart --no-uninstall -d <device-id>
 ```
 
-The bridge fixture exercises independent request denials, supported public journeys and renderer cleanup. The actual-app fixture covers address entry, a completed-page Launchpad pin, reopening in a new tab and additional-restriction revocation. See [Protected visual browsing QA](docs/PROTECTED_VISUAL_BROWSING_QA.md) for measured results. Public sites and network conditions can change; an enabled manifest entry alone is not proof of a passed device run. `--no-uninstall` preserves the installation. Native integration tests also require the installed target/toolchain; consult individual fixtures before running them against personal state.
+The bridge fixture exercises independent request denials, supported public journeys and renderer cleanup. The actual-app fixture covers address entry, a completed-page Launchpad pin, reopening in a new tab and additional-restriction revocation. See [Protected visual browsing QA](docs/PROTECTED_VISUAL_BROWSING_QA.md) for measured results. Public sites and network conditions can change; an enabled manifest entry alone is not proof of a passed device run. Use dedicated test simulators for these commands: Flutter's Android replacement-install fallback can uninstall after failure even with `--no-uninstall`. The [local-live launcher](scripts/run_brave_local.py) instead uses one explicit `adb install -r` and stops if it fails. Native integration tests also require the installed target/toolchain; consult individual fixtures before running them against personal state.
 
 The signed offline article catalog separately expires on March 10, 2027 and uses a development signing key whose private seed is outside Git. The live network scope is pinned into the reviewed application build; it is not a remotely signed production publisher. Renewal requires review and a rebuilt app. See [Content policy](docs/CONTENT_POLICY.md) and [Live browsing policy](docs/LIVE_BROWSING_POLICY.md).
 

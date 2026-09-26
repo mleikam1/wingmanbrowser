@@ -77,8 +77,13 @@ class _RecordingRepository extends MemoryBrowserRepository {
 
 class _FixtureSearchClient implements WingmanSearchClient {
   final List<SearchRequest> requests;
-  _FixtureSearchClient(this.requests, {this.withGrant = false});
+  _FixtureSearchClient(
+    this.requests, {
+    this.withGrant = false,
+    this.extraResults = 0,
+  });
   final bool withGrant;
+  final int extraResults;
   @override
   Future<SearchResponse> search(SearchRequest request) async {
     requests.add(request);
@@ -98,6 +103,13 @@ class _FixtureSearchClient implements WingmanSearchClient {
           description: 'Synthetic NASA fixture',
           source: 'science.nasa.gov',
         ),
+        for (var index = 0; index < extraResults; index++)
+          SearchResult(
+            title: 'Synthetic result $index',
+            url: Uri.parse('https://science.nasa.gov/synthetic/$index/'),
+            description: 'A local-only navigation and scrolling fixture.',
+            source: 'science.nasa.gov',
+          ),
       ],
       moreAvailable: false,
       fixture: true,
@@ -244,6 +256,9 @@ void main() {
     (tester) async {
       final (:h, :repository) = await mount(tester);
       const marker = 'WINGMAN_QUERY_ONLY_6137';
+      expect(requests, isEmpty);
+      await tester.pump(const Duration(seconds: 5));
+      expect(requests, isEmpty);
       final calls = <MethodCall>[];
       final messenger =
           TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
@@ -260,6 +275,8 @@ void main() {
         ),
       );
       await enter(tester, '$marker moon phases');
+      await tester.pump(const Duration(seconds: 5));
+      expect(requests, isEmpty);
       final webChip = tester.widget<ChoiceChip>(
         find.ancestor(of: find.text('Web'), matching: find.byType(ChoiceChip)),
       );
@@ -454,19 +471,39 @@ void main() {
     await expectNotStored(h, repository, marker);
   });
   shellTest(
-    'result Back restores transient results without another provider request',
+    'result Back restores transient results and scroll without another provider request',
     (tester) async {
-      final (:h, :repository) = await mount(tester);
+      final (:h, :repository) = await mount(
+        tester,
+        factory: () => _FixtureSearchClient(requests, extraResults: 20),
+      );
       await enter(tester, 'BACK_QUERY_MARKER');
       await submit(tester);
       final search = h.session.current.search;
-      await shared.tap(tester, find.text('NASA Moon facts'));
-      expect(h.session.current.website.toString(), nasa);
+      await tester.ensureVisible(find.text('Synthetic result 12'));
+      await tester.pumpAndSettle();
+      final scroll = tester
+          .widget<WingmanSearchView>(find.byType(WingmanSearchView))
+          .scrollController;
+      final offset = scroll.offset;
+      expect(offset, greaterThan(500));
+      await shared.tap(tester, find.text('Synthetic result 12'));
+      expect(
+        h.session.current.website.toString(),
+        'https://science.nasa.gov/synthetic/12/',
+      );
       final dock = tester.widget<BrowserDock>(find.byType(BrowserDock));
       dock.onBack!();
       await tester.pumpAndSettle();
       expect(h.session.current.search, same(search));
       expect(find.byType(WingmanSearchView), findsOneWidget);
+      expect(
+        tester
+            .widget<WingmanSearchView>(find.byType(WingmanSearchView))
+            .scrollController
+            .offset,
+        closeTo(offset, 0.1),
+      );
       expect(requests, hasLength(1));
       await expectNotStored(h, repository, 'BACK_QUERY_MARKER');
     },
@@ -614,6 +651,68 @@ void main() {
       expect(find.byType(SponsoredPlacement), findsNothing);
       await expectNotStored(h, repository, 'AD_QUERY_MEMORY_ONLY');
       await expectNotStored(h, repository, 'transient-grant-token');
+    },
+  );
+  shellTest(
+    'rebuilds, lifecycle resume and independent ad updates do not repeat search',
+    (tester) async {
+      final pendingAd = Completer<SponsoredAd?>();
+      final ads = ad_fixtures.FakeAdsClient()
+        ..onDecision = (request) => request['placement'] == 'search'
+            ? pendingAd.future
+            : Future.value(null);
+      final (:h, :repository) = await mount(
+        tester,
+        factory: () => _FixtureSearchClient(requests, withGrant: true),
+        adsFactory: () => ads,
+        adsEnabled: true,
+      );
+      expect(requests, isEmpty);
+      await enter(tester, 'NO_AUTOMATIC_SEARCH_MARKER');
+      await submit(tester);
+      final search = h.session.current.search!;
+      expect(search.results, isNotEmpty);
+      expect(search.sponsored!.ad, isNull);
+      expect(requests, hasLength(1));
+      pendingAd.complete(ad_fixtures.ad());
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Why this ad?'));
+      await tester.pump(const Duration(seconds: 2));
+      expect(search.sponsored!.ad, isNotNull);
+      expect(
+        ads.events.where((event) => event['kind'] == 'render'),
+        isNotEmpty,
+      );
+      await h.state.saveSettingsPatch(themeMode: ThemeMode.dark);
+      await tester.pumpAndSettle();
+      for (final state in [
+        AppLifecycleState.inactive,
+        AppLifecycleState.hidden,
+        AppLifecycleState.paused,
+      ]) {
+        tester.binding.handleAppLifecycleStateChanged(state);
+        await tester.pump();
+      }
+      await tester.pump(const Duration(seconds: 3));
+      for (final state in [
+        AppLifecycleState.hidden,
+        AppLifecycleState.inactive,
+        AppLifecycleState.resumed,
+      ]) {
+        tester.binding.handleAppLifecycleStateChanged(state);
+        await tester.pump();
+      }
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(seconds: 5));
+      expect(h.session.current.search, same(search));
+      expect(search.results, isNotEmpty);
+      expect(requests, hasLength(1));
+      expect(
+        ads.decisions.where((request) => request['placement'] == 'search'),
+        hasLength(1),
+      );
+      await expectNotStored(h, repository, 'NO_AUTOMATIC_SEARCH_MARKER');
+      expect(tester.takeException(), isNull);
     },
   );
   shellTest(

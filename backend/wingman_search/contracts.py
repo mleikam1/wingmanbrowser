@@ -8,10 +8,11 @@ from wingman_content.normalize import plain, date_value, iso
 from .policy import query_allowed, ad_context
 
 class SearchError(Exception):
-    def __init__(self, code, http_status=400, provider_status=None):
+    def __init__(self, code, http_status=400, provider_status=None, *, provider_code=None):
         super().__init__(code)
         self.code, self.http_status = code, http_status
         self.provider_status = provider_status
+        self.provider_code = provider_code if isinstance(provider_code, str) and provider_code in {'INTERNAL', 'QUOTA_LIMITED', 'RATE_LIMITED'} else None
 
 # An intentionally bounded initial supported-locale subset, not arbitrary input.
 LOCALES = {'US': ('en', 'en-US'), 'GB': ('en', 'en-GB'), 'CA': ('en', 'en-CA'),
