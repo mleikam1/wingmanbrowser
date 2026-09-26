@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../search/controller.dart';
+import '../ads/sponsored_placement.dart';
 import '../browser_shell.dart' show safeTextContextMenu;
 import '../components/wingman_components.dart';
 
@@ -169,7 +170,16 @@ class _WingmanSearchViewState extends State<WingmanSearchView> {
                           ? 'The returned results did not meet Wingman’s protection checks. Try a different search.'
                           : 'No matching results were returned for this request. Try different words.',
                     ),
-                  for (final result in results)
+                  if (model.sponsored case final sponsored?)
+                    SponsoredPlacement(
+                      session: sponsored,
+                      scrollController: widget.scrollController,
+                      canContinue: widget.canContinue,
+                      onOpen: (uri) {
+                        if (widget.resultAllowed(uri)) widget.onOpen(uri);
+                      },
+                    ),
+                  for (final (index, result) in results.indexed) ...[
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       child: Column(
@@ -232,6 +242,17 @@ class _WingmanSearchViewState extends State<WingmanSearchView> {
                         ],
                       ),
                     ),
+                    if (index == 2 && model.secondSponsored != null)
+                      SponsoredPlacement(
+                        key: const ValueKey('second-search-sponsored'),
+                        session: model.secondSponsored!,
+                        scrollController: widget.scrollController,
+                        canContinue: widget.canContinue,
+                        onOpen: (uri) {
+                          if (widget.resultAllowed(uri)) widget.onOpen(uri);
+                        },
+                      ),
+                  ],
                   if (model.moreAvailable)
                     Align(
                       alignment: Alignment.centerLeft,

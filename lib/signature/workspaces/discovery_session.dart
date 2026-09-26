@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../../ads/session.dart';
 import '../../search/controller.dart';
 import '../../policy/strict_search_policy.dart';
 import '../storage/document_store.dart';
@@ -20,6 +21,7 @@ class DiscoveryTab {
   final Map<String, double> scrollOffsets = {};
   String? get currentEntry => trail[position];
   final Map<String, WingmanSearchController> searches = {};
+  AdsPageSession? homeAds;
   WingmanSearchController? get search => searches[currentEntry];
   String? get resourceId =>
       currentEntry?.startsWith('web:') == true ||
@@ -36,6 +38,7 @@ class DiscoveryTab {
   }
 
   void cancelSearches() {
+    homeAds?.cancel();
     for (final search in searches.values) {
       search.cancel();
     }
@@ -74,6 +77,8 @@ class DiscoveryTab {
   }
 
   void dispose() {
+    homeAds?.dispose();
+    homeAds = null;
     scrollOffsets.clear();
     for (final search in searches.values) {
       search.dispose();

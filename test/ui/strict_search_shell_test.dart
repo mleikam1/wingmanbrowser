@@ -1,5 +1,8 @@
 import 'dart:convert';
 import 'dart:async';
+import 'package:wingman_browser/ads/session.dart';
+import 'package:wingman_browser/presentation/ads/sponsored_placement.dart';
+import '../ads/ads_test.dart' as ad_fixtures;
 import 'package:wingman_browser/search/controller.dart';
 import 'package:wingman_browser/presentation/search/wingman_search_view.dart';
 
@@ -74,7 +77,8 @@ class _RecordingRepository extends MemoryBrowserRepository {
 
 class _FixtureSearchClient implements WingmanSearchClient {
   final List<SearchRequest> requests;
-  _FixtureSearchClient(this.requests);
+  _FixtureSearchClient(this.requests, {this.withGrant = false});
+  final bool withGrant;
   @override
   Future<SearchResponse> search(SearchRequest request) async {
     requests.add(request);
@@ -97,6 +101,12 @@ class _FixtureSearchClient implements WingmanSearchClient {
       ],
       moreAvailable: false,
       fixture: true,
+      adContext: withGrant
+          ? AdContextGrant(
+              'transient-grant-token',
+              DateTime.now().toUtc().add(const Duration(minutes: 10)),
+            )
+          : null,
     );
   }
 
@@ -138,6 +148,8 @@ void main() {
   Future<({shared.Harness h, _RecordingRepository repository})> mount(
     WidgetTester tester, {
     SearchClientFactory? factory,
+    AdsClientFactory? adsFactory,
+    bool adsEnabled = false,
   }) async {
     requests.clear();
     tester.view.physicalSize = const Size(1024, 1000);
@@ -187,6 +199,8 @@ void main() {
         signatures: services,
         session: session,
         searchClientFactory: factory ?? () => _FixtureSearchClient(requests),
+        adsClientFactory: adsFactory,
+        adsEnabled: adsEnabled,
       ),
     );
     await tester.pumpAndSettle();
@@ -544,6 +558,90 @@ void main() {
       expect(find.text('LATE_RESULT'), findsNothing);
       expect(client.calls, 1);
       await expectNotStored(h, repository, 'LATE_NORMAL_MARKER');
+    },
+  );
+  shellTest(
+    'actual shell ads default off ignores even a supplied search grant',
+    (tester) async {
+      final ads = ad_fixtures.FakeAdsClient();
+      await mount(
+        tester,
+        factory: () => _FixtureSearchClient(requests, withGrant: true),
+        adsFactory: () => ads,
+      );
+      await enter(tester, 'office tools');
+      await submit(tester);
+      expect(ads.decisions, isEmpty);
+      expect(find.byType(SponsoredPlacement), findsNothing);
+    },
+  );
+  shellTest(
+    'actual shell has finite Home/search sponsorship and suppresses News and private ads',
+    (tester) async {
+      final ads = ad_fixtures.FakeAdsClient();
+      final (:h, :repository) = await mount(
+        tester,
+        factory: () => _FixtureSearchClient(requests, withGrant: true),
+        adsFactory: () => ads,
+        adsEnabled: true,
+      );
+      expect(ads.decisions.map((v) => v['placement']), ['newtab']);
+      await enter(tester, 'AD_QUERY_MEMORY_ONLY');
+      await submit(tester);
+      expect(ads.decisions.map((v) => v['placement']), ['newtab', 'search']);
+      expect(find.byType(SponsoredPlacement), findsOneWidget);
+      for (final width in [320.0, 390.0, 1024.0]) {
+        tester.view.physicalSize = Size(width, 1000);
+        tester.platformDispatcher.textScaleFactorTestValue = 2;
+        await tester.pumpAndSettle();
+        await tester.ensureVisible(find.text('Why this ad?'));
+        expect(tester.takeException(), isNull);
+      }
+      tester.platformDispatcher.clearTextScaleFactorTestValue();
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const ValueKey('search-news')));
+      await tester.pumpAndSettle();
+      await shared.tap(tester, find.byKey(const ValueKey('search-news')));
+      expect(find.byType(SponsoredPlacement), findsNothing);
+      expect(ads.decisions, hasLength(2));
+      await shared.tap(tester, find.byTooltip('Tabs (1)'));
+      await shared.tap(tester, find.text('New private tab'));
+      expect(h.session.current.homeAds, isNull);
+      await enter(tester, 'PRIVATE_AD_QUERY_MEMORY_ONLY');
+      await submit(tester);
+      expect(h.session.current.search!.sponsored, isNull);
+      expect(ads.decisions, hasLength(2));
+      expect(find.byType(SponsoredPlacement), findsNothing);
+      await expectNotStored(h, repository, 'AD_QUERY_MEMORY_ONLY');
+      await expectNotStored(h, repository, 'transient-grant-token');
+    },
+  );
+  shellTest(
+    'late ad decision cannot follow a normal search into private Home',
+    (tester) async {
+      final pending = Completer<SponsoredAd?>();
+      final ads = ad_fixtures.FakeAdsClient()
+        ..onDecision = (request) => request['placement'] == 'search'
+            ? pending.future
+            : Future.value(null);
+      final (:h, :repository) = await mount(
+        tester,
+        factory: () => _FixtureSearchClient(requests, withGrant: true),
+        adsFactory: () => ads,
+        adsEnabled: true,
+      );
+      await enter(tester, 'LATE_AD_MEMORY_ONLY');
+      await submit(tester);
+      final original = h.session.current.search!.sponsored!;
+      await shared.tap(tester, find.byTooltip('Tabs (1)'));
+      await shared.tap(tester, find.text('New private tab'));
+      pending.complete(ad_fixtures.ad());
+      await tester.pumpAndSettle();
+      expect(h.session.current.isPrivate, isTrue);
+      expect(original.ad, isNull);
+      expect(find.byType(SponsoredPlacement), findsNothing);
+      expect(ads.events, isEmpty);
+      await expectNotStored(h, repository, 'LATE_AD_MEMORY_ONLY');
     },
   );
   for (final width in [320.0, 390.0, 1024.0]) {

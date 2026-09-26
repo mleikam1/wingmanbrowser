@@ -1,4 +1,7 @@
+import 'state/tab_scroll_controller.dart';
 import 'dart:async';
+import '../ads/session.dart';
+import 'ads/sponsored_placement.dart';
 import '../search/controller.dart';
 import 'search/wingman_search_view.dart';
 import 'components/browser_find_dialog.dart';
@@ -77,6 +80,8 @@ class BrowserShell extends StatefulWidget {
     this.handoff,
     this.liveContent,
     this.searchClientFactory,
+    this.adsClientFactory,
+    this.adsEnabled = wingmanAdsEnabled,
   });
   final BrowserState state;
   final PolicyRuntime policy;
@@ -85,6 +90,8 @@ class BrowserShell extends StatefulWidget {
   final HandoffController? handoff;
   final LiveContentController? liveContent;
   final SearchClientFactory? searchClientFactory;
+  final AdsClientFactory? adsClientFactory;
+  final bool adsEnabled;
   @override
   State<BrowserShell> createState() => _BrowserShellState();
 }
@@ -209,18 +216,11 @@ class _BrowserShellState extends State<BrowserShell>
   final Map<String, ScrollController> _scrolls = {};
   ScrollController _scrollFor(String page) {
     final owner = _tab, key = '${_tab.id}:$page';
-    // A detached controller creates a new ScrollPosition from its original
-    // initial offset. Recreate it from this tab's latest saved position when
-    // returning from a native article or another Home tab.
-    final previous = _scrolls[key];
-    if (previous != null && !previous.hasClients) {
-      previous.dispose();
-      _scrolls.remove(key);
-    }
+    // Keep the controller valid while deferred desktop selection/lazy children
+    // mount. New ScrollPositions read the tab's current saved offset.
     return _scrolls.putIfAbsent(key, () {
-      final controller = ScrollController(
-        initialScrollOffset: owner.scrollOffsets[page] ?? 0,
-        keepScrollOffset: false,
+      final controller = TabScrollController(
+        readOffset: () => owner.scrollOffsets[page] ?? 0,
       );
       controller.addListener(() {
         if (controller.hasClients && _tabs.contains(owner)) {
@@ -1550,6 +1550,8 @@ class _BrowserShellState extends State<BrowserShell>
           _brandedSearchAllowed &&
           !_covered,
       resultAllowed: _searchResultAllowed,
+      adsEnabled: widget.adsEnabled,
+      adsClientFactory: widget.adsClientFactory ?? GatewayAdsClient.configured,
     );
     FocusScope.of(context).unfocus();
     _liveFeedReturns.remove(owner.id);
@@ -2071,8 +2073,10 @@ class _BrowserShellState extends State<BrowserShell>
     final service = _features;
     final launchpadActions = _launchpadActions();
     final homeOrigin = _tab;
+    final homeScroll = _scrollFor('home');
     return HomeScreen(
       key: ValueKey('home-${homeOrigin.id}'),
+      sponsor: _homeSponsor(homeOrigin, homeScroll),
       launchpad: service?.initialized == true
           ? LaunchpadSection(
               controller: service!.launchpad,
@@ -2158,7 +2162,47 @@ class _BrowserShellState extends State<BrowserShell>
           _features?.ui.storageError ??
           _features?.launchpad.storageError ??
           model?.storageError,
-      controller: _scrollFor('home'),
+      controller: homeScroll,
+    );
+  }
+
+  bool _homeAdsAllowed(DiscoveryTab owner) =>
+      widget.adsEnabled &&
+      !_ephemeral &&
+      _validOrigin(owner) &&
+      _featureRouteDepth == 0 &&
+      _destination == 0 &&
+      owner.currentEntry == null &&
+      _query.isEmpty &&
+      _collection == null &&
+      _notice == null &&
+      widget.state.storageError == null &&
+      _features?.ui.storageError == null &&
+      _features?.launchpad.storageError == null &&
+      _features?.workspaces.storageError == null &&
+      _features?.initialized == true &&
+      widget.policy.consumerProtection.isUsable;
+  Widget? _homeSponsor(DiscoveryTab owner, ScrollController scroll) {
+    if (!_homeAdsAllowed(owner)) return null;
+    final page = owner.homeAds ??= AdsPageSession(
+      placement: 'newtab',
+      factory: widget.adsClientFactory ?? GatewayAdsClient.configured,
+    );
+    final slot = page.slot(
+      0,
+      section: 'untargeted',
+      allowed: () => _homeAdsAllowed(owner),
+    );
+    if (slot == null) return null;
+    return SponsoredPlacement(
+      session: slot,
+      scrollController: scroll,
+      canContinue: () => _homeAdsAllowed(owner),
+      onOpen: (uri) {
+        if (_homeAdsAllowed(owner) && _searchResultAllowed(uri)) {
+          _navigateWebsite(uri);
+        }
+      },
     );
   }
 
@@ -3235,11 +3279,26 @@ class _BrowserShellState extends State<BrowserShell>
           owner: origin,
           controller: feed,
           epoch: _feedOwnerEpoch,
+          ads: AdsPageSession(
+            placement: 'news',
+            enabled: widget.adsEnabled,
+            factory: widget.adsClientFactory ?? GatewayAdsClient.configured,
+          ),
         );
     if (!_validFeedLocation(captured)) return;
     _pushFeature(
       LiveContentFeedScreen(
         controller: feed,
+        ads: captured.ads,
+        onOpenSponsor: (uri) {
+          if (_validFeedLocation(captured) && _searchResultAllowed(uri)) {
+            _navigateWebsite(
+              uri,
+              returnToFeed: captured,
+              companionArticle: true,
+            );
+          }
+        },
         initialScrollOffset: captured.offset,
         onScrollOffsetChanged: (offset) => captured.offset = offset,
         canContinue: () => _validFeedLocation(captured),
@@ -3971,7 +4030,9 @@ class _LiveFeedLocation {
     required this.owner,
     required this.controller,
     required this.epoch,
+    this.ads,
   });
+  final AdsPageSession? ads;
   final DiscoveryTab owner;
   final LiveContentController controller;
   final int epoch;

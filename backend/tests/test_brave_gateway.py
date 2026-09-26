@@ -93,7 +93,7 @@ class GatewayTests(unittest.TestCase):
         app = SearchApplication(FixtureProvider(), ads=ads)
         self.assertIn('adContext', app.search({'query': 'best office chairs'}))
         self.assertEqual([{'intent': 'office', 'country': 'US', 'language': 'en',
-            'context': 'normal', 'fixture': True}], ads.calls)
+            'context': 'normal', 'fixture': True, 'organic_count': 2}], ads.calls)
         for fields in ({'query': 'best office chairs', 'context': 'private'},
                        {'query': 'best office chairs', 'offset': 1},
                        {'query': 'best office chairs', 'kind': 'news'},
@@ -113,6 +113,24 @@ class GatewayTests(unittest.TestCase):
         self.assertEqual(404, self.call('GET', '/v1/ads/event')[0])
         self.assertEqual(404, self.call('HEAD', '/v1/ads/event')[0])
         self.assertEqual(0, json.loads(self.call(path='/v1/ads/event', raw={'kind': 'click'})[2])['chargedMicros'])
+
+    def test_asset_route_is_first_party_exact_and_nonbillable(self):
+        class Ads:
+            calls = []
+            def asset(self, asset_id):
+                self.calls.append(asset_id)
+                return b'fixture-png-bytes', 'image/png'
+        self.app.ads = Ads()
+        path = '/v1/ads/assets/' + 'a' * 64 + '.png'
+        status, headers, body = self.call('GET', path)
+        self.assertEqual(200, status)
+        self.assertEqual('image/png', headers['Content-Type'])
+        self.assertEqual('nosniff', headers['X-Content-Type-Options'])
+        self.assertEqual(b'fixture-png-bytes', body)
+        self.assertEqual(b'', self.call('HEAD', path)[2])
+        self.assertEqual(404, self.call('GET', path + '?q=forbidden')[0])
+        self.assertEqual(404, self.call('GET', '/v1/ads/assets/../secret.png')[0])
+        self.assertNotIn('submitted', self.app.metrics.snapshot())
 
 if __name__ == '__main__':
     unittest.main()

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../ads/session.dart';
+import '../ads/sponsored_placement.dart';
 
 import '../../live_content/live_content.dart';
 import '../components/wingman_components.dart';
@@ -100,8 +102,14 @@ class LiveContentSection extends StatefulWidget {
     this.showHeading = true,
     this.showTopics = true,
     this.showActions = true,
+    this.ads,
+    this.adScrollController,
+    this.onOpenSponsor,
   });
   final LiveContentController? controller;
+  final AdsPageSession? ads;
+  final ScrollController? adScrollController;
+  final ValueChanged<Uri>? onOpenSponsor;
   final ValueChanged<LiveContentItem> onOpen, onPin;
   final VoidCallback onPreferences, onReadingList;
   final bool preview, showHeading, showTopics, showActions;
@@ -164,9 +172,53 @@ class _LiveContentSectionState extends State<LiveContentSection> {
 
   Widget _content(BuildContext context, LiveContentController controller) {
     final enabled = controller.preferences.enabled;
-    final items = widget.preview
-        ? controller.items.take(3).toList()
+    final rawItems = widget.preview
+        ? controller.items
+              .where(
+                (item) =>
+                    item.syndicatedArticle == null &&
+                    item.sourceId != 'newsusa-features',
+              )
+              .take(3)
+              .toList()
         : controller.items;
+    final newsAds = widget.preview ? null : widget.ads;
+    final allowedSponsors = newsAds?.prepareNews([
+      for (final item in rawItems)
+        NewsInventoryItem(
+          item.id,
+          item.syndicatedArticle != null || item.sourceId == 'newsusa-features',
+        ),
+    ]);
+    bool sponsored(LiveContentItem item) =>
+        item.syndicatedArticle != null || item.sourceId == 'newsusa-features';
+    final items = <LiveContentItem>[];
+    final slotsAfter = <int, int>{};
+    if (newsAds == null) {
+      items.addAll(rawItems);
+    } else {
+      // Every sponsorship, including a supplied NewsUSA article, occupies one
+      // of the same finite slots after six or twelve actual organic cards.
+      var organicCount = 0;
+      for (final item in rawItems.where((item) => !sponsored(item))) {
+        items.add(item);
+        organicCount++;
+        if (organicCount == 6 || organicCount == 12) {
+          final slot = organicCount ~/ 6 - 1;
+          final supplied = rawItems.where(
+            (item) =>
+                sponsored(item) &&
+                allowedSponsors!.contains(item.id) &&
+                newsAds.newsSlot(item.id) == slot,
+          );
+          if (supplied.isNotEmpty) {
+            items.add(supplied.first);
+          } else {
+            slotsAfter[items.length - 1] = slot;
+          }
+        }
+      }
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -283,6 +335,8 @@ class _LiveContentSectionState extends State<LiveContentSection> {
           for (var index = 0; index < items.length; index++) ...[
             if (index > 0) const SizedBox(height: 12),
             _card(context, controller, items[index], featured: index == 0),
+            if (slotsAfter[index] case final slot?)
+              _newsSponsor(controller, slot),
           ],
           if (!widget.preview && controller.hasMore) ...[
             const SizedBox(height: 16),
@@ -301,6 +355,40 @@ class _LiveContentSectionState extends State<LiveContentSection> {
           ],
         ],
       ],
+    );
+  }
+
+  String? _adSection(LiveContentController controller) {
+    final topics = controller.preferences.selectedTopics;
+    if (topics.length != 1 || controller.preferences.language != 'en') {
+      return null;
+    }
+    final section = topics.single;
+    return const {'science', 'technology', 'arts', 'outdoors'}.contains(section)
+        ? section
+        : null;
+  }
+
+  Widget _newsSponsor(LiveContentController controller, int index) {
+    final page = widget.ads, section = _adSection(controller);
+    if (page == null || section == null || widget.onOpenSponsor == null) {
+      return const SizedBox.shrink();
+    }
+    bool allowed() =>
+        _current &&
+        controller.preferences.enabled &&
+        !controller.refreshing &&
+        controller.storageError == null &&
+        !controller.categoryHealth.showNotice &&
+        _adSection(controller) == section;
+    final slot = page.slot(index, section: section, allowed: allowed);
+    if (slot == null) return const SizedBox.shrink();
+    return SponsoredPlacement(
+      key: ValueKey('news-sponsored-$index'),
+      session: slot,
+      scrollController: widget.adScrollController,
+      canContinue: allowed,
+      onOpen: widget.onOpenSponsor!,
     );
   }
 
@@ -394,7 +482,7 @@ class _LiveContentSectionState extends State<LiveContentSection> {
           if (controller.canOpen(item)) widget.onPin(item);
         } else if (action == 'hide') {
           _change(
-            () => item.providerId == 'currents' && item.publisherId != null
+            () => item.isProviderPreview && item.publisherId != null
                 ? controller.hidePublisher(item.publisherId!)
                 : controller.hideSource(item.sourceId),
           );
@@ -430,12 +518,16 @@ class _LiveContentSectionState extends State<LiveContentSection> {
               ? approved?.branding
               : null,
         ),
-        if (item.providerId == 'currents')
+        if (item.isProviderPreview)
           TextButton(
-            key: ValueKey('live-currents-credit-${item.id}'),
+            key: ValueKey('live-${item.providerId}-credit-${item.id}'),
             onPressed: allowed && widget.onOpenUri != null
                 ? () {
-                    final uri = Uri.parse('https://currentsapi.services/');
+                    final uri = Uri.parse(
+                      item.providerId == 'brave'
+                          ? 'https://brave.com/search/api/'
+                          : 'https://currentsapi.services/',
+                    );
                     if (_current &&
                         controller.canOpen(item) &&
                         controller.eligibility.canOpenDestination(uri)) {
@@ -447,7 +539,11 @@ class _LiveContentSectionState extends State<LiveContentSection> {
               padding: EdgeInsets.zero,
               alignment: Alignment.centerLeft,
             ),
-            child: const Text('Powered by Currents News API'),
+            child: Text(
+              item.providerId == 'brave'
+                  ? 'Results supplied by Brave Search API'
+                  : 'Powered by Currents News API',
+            ),
           ),
         const SizedBox(height: 4),
         headline,

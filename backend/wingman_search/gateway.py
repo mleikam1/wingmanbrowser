@@ -6,6 +6,7 @@ approved authenticated operational plane, shared ledger and logging review.
 from collections import Counter
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
+import re
 import threading
 import time
 from urllib.parse import urlsplit
@@ -78,7 +79,8 @@ class SearchApplication:
                     and request.context == 'normal' and intent and dto.get('results')):
                 try:
                     grant = self.ads.issue_context(intent=intent, country=request.country,
-                        language=request.search_lang, context='normal', fixture=dto.get('fixture') is True)
+                        language=request.search_lang, context='normal', fixture=dto.get('fixture') is True,
+                        organic_count=len(dto['results']))
                     if grant:
                         dto = dict(dto, adContext=grant)
                 except Exception:
@@ -116,6 +118,18 @@ class SearchApplication:
         finally:
             self.ad_slots.release()
 
+    def ad_asset(self, path):
+        match = re.fullmatch(r'/v1/ads/assets/([a-f0-9]{64})\.png', path)
+        if not match or self.ads is None:
+            raise SearchError('not-found', 404)
+        try:
+            body, mime = self.ads.asset(match[1])
+            if mime != 'image/png' or not isinstance(body, bytes) or len(body) > 1024 * 1024:
+                raise ValueError()
+            return body, mime
+        except Exception:
+            raise SearchError('not-found', 404) from None
+
 def valid_local_origin(value):
     try:
         p = urlsplit(value)
@@ -130,6 +144,7 @@ def handler_for(app, origins=()):
     if any(not valid_local_origin(origin) for origin in allowed_origins):
         raise ValueError('local-origin-required')
     guard = BurstGuard()
+    ad_guard = BurstGuard(limit=120)
     class Handler(BaseHTTPRequestHandler):
         server_version = 'WingmanSearch/1.0'
         sys_version = ''
@@ -147,10 +162,10 @@ def handler_for(app, origins=()):
                 self.rfile = original
         def send_error(self, code, message=None, explain=None):
             self.reply(code, {'schemaVersion': 1, 'status': 'error', 'error': {'code': 'invalid-request'}})
-        def reply(self, status, value):
-            body = json.dumps(value, separators=(',', ':'), ensure_ascii=True).encode()
+        def reply(self, status, value, mime='application/json; charset=utf-8'):
+            body = value if isinstance(value, bytes) else json.dumps(value, separators=(',', ':'), ensure_ascii=True).encode()
             self.send_response(status)
-            self.send_header('Content-Type', 'application/json; charset=utf-8')
+            self.send_header('Content-Type', mime)
             self.send_header('Content-Length', str(len(body)))
             self.send_header('Cache-Control', 'no-store, private')
             self.send_header('Referrer-Policy', 'no-referrer')
@@ -170,12 +185,14 @@ def handler_for(app, origins=()):
             self.close_connection = True
         def boundary(self):
             port = self.server.server_address[1]
-            if self.headers.get('Host') not in (f'127.0.0.1:{port}', f'localhost:{port}', f'[::1]:{port}'):
+            if (len(self.headers.get_all('Host') or []) != 1 or
+                    self.headers.get('Host') not in (f'127.0.0.1:{port}', f'localhost:{port}', f'[::1]:{port}')):
                 raise SearchError('invalid-host', 403)
             origin = self.headers.get('Origin')
-            if origin and origin not in allowed_origins:
+            if len(self.headers.get_all('Origin') or []) > 1 or (origin and origin not in allowed_origins):
                 raise SearchError('origin-not-allowed', 403)
-            if not guard.allow(self.client_address[0]):
+            limiter = ad_guard if self.path.startswith('/v1/ads/') else guard
+            if not limiter.allow(self.client_address[0]):
                 raise SearchError('service-busy', 429)
         def do_OPTIONS(self):
             try:
@@ -188,6 +205,10 @@ def handler_for(app, origins=()):
         def do_GET(self):
             try:
                 self.boundary()
+                if self.path.startswith('/v1/ads/assets/'):
+                    body, mime = app.ad_asset(self.path)
+                    self.reply(200, body, mime)
+                    return
                 if self.path != '/healthz':
                     raise SearchError('not-found', 404)
                 self.reply(200, {'status': 'ok', 'service': 'Wingman Search', 'localOnly': True})

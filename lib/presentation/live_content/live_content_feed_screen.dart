@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../ads/session.dart';
 
 import '../../live_content/live_content.dart';
 import '../components/wingman_components.dart';
@@ -16,10 +17,14 @@ class LiveContentFeedScreen extends StatefulWidget {
     required this.onReadingList,
     required this.canContinue,
     this.onOpenUri,
+    this.ads,
+    this.onOpenSponsor,
     this.initialScrollOffset = 0,
     this.onScrollOffsetChanged,
   });
   final LiveContentController controller;
+  final AdsPageSession? ads;
+  final ValueChanged<Uri>? onOpenSponsor;
   final ValueChanged<LiveContentItem> onOpen, onPin;
   final ValueChanged<Uri>? onOpenUri;
   final VoidCallback onPreferences, onReadingList;
@@ -45,6 +50,7 @@ class _LiveContentFeedScreenState extends State<LiveContentFeedScreen> {
 
   @override
   void dispose() {
+    widget.ads?.cancel();
     _scroll.dispose();
     super.dispose();
   }
@@ -106,6 +112,9 @@ class _LiveContentFeedScreenState extends State<LiveContentFeedScreen> {
                       constraints: const BoxConstraints(maxWidth: 720),
                       child: LiveContentSection(
                         controller: controller,
+                        ads: widget.ads,
+                        adScrollController: _scroll,
+                        onOpenSponsor: widget.onOpenSponsor,
                         onOpen: widget.onOpen,
                         onPin: widget.onPin,
                         onPreferences: widget.onPreferences,

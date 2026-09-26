@@ -8,6 +8,8 @@ RssFeedTransport createRssTransport() => NativeRssFeedTransport();
 ArticleImageTransport createArticleImageTransport() => NativeRssFeedTransport();
 
 typedef RssResolver = Future<List<InternetAddress>> Function(String host);
+typedef RssConnector =
+    Future<ConnectionTask<Socket>> Function(InternetAddress address, int port);
 
 /// Reject the entire DNS answer set, including mapped and translation ranges.
 bool isPublicRssAddress(InternetAddress address) {
@@ -46,9 +48,11 @@ bool isPublicRssAddress(InternetAddress address) {
 
 class NativeRssFeedTransport
     implements RssFeedTransport, ArticleImageTransport {
-  NativeRssFeedTransport({RssResolver? resolver})
-    : _resolver = resolver ?? InternetAddress.lookup;
+  NativeRssFeedTransport({RssResolver? resolver, RssConnector? connector})
+    : _resolver = resolver ?? InternetAddress.lookup,
+      _connector = connector ?? Socket.startConnect;
   final RssResolver _resolver;
+  final RssConnector _connector;
   final Set<HttpClient> _clients = {};
   final Set<void Function()> _cancelConnections = {};
   int _epoch = 0;
@@ -199,9 +203,13 @@ class NativeRssFeedTransport
               proxyPort != null) {
             throw const RssFailure('connection-origin');
           }
-          final tcp = await Socket.startConnect(address, 443);
+          final tcp = await _connector(address, 443);
           Socket? connected;
           final completion = Completer<Socket>();
+          // HttpClient may close while waiting for this factory and never
+          // subscribe to the returned task. Observe errors immediately; the
+          // original future still delivers cancellation to any later listener.
+          completion.future.ignore();
           void stop() {
             tcp.cancel();
             try {

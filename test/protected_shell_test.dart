@@ -50,6 +50,7 @@ void main() {
 
   Future<void> search(WidgetTester tester, String query) async {
     await focusSearch(tester);
+    await tapVisible(tester, find.widgetWithText(ChoiceChip, 'Library'));
     await tester.enterText(
       find.byKey(const ValueKey('protected-search')),
       query,

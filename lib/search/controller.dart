@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'client.dart';
+import '../ads/session.dart';
 export 'client.dart';
 
 /// Operational, memory-only result state. It has no repository or analytics path.
@@ -9,8 +10,14 @@ class WingmanSearchController extends ChangeNotifier {
     required this.context,
     required this.permitted,
     required this.resultAllowed,
+    this.adsClientFactory,
+    this.adsEnabled = false,
+    this.secondSearchAdExperiment = secondSearchAdExperimentEnabled,
   });
   final WingmanSearchClient client;
+  final AdsClientFactory? adsClientFactory;
+  final bool adsEnabled, secondSearchAdExperiment;
+  AdSession? sponsored, secondSponsored;
   final SearchContext context;
   bool Function() permitted;
   bool Function(Uri) resultAllowed;
@@ -38,6 +45,10 @@ class WingmanSearchController extends ChangeNotifier {
         context: context,
       );
       client.cancel();
+      sponsored?.dispose();
+      secondSponsored?.dispose();
+      sponsored = null;
+      secondSponsored = null;
       _generation++;
       query = value;
       kind = newKind;
@@ -113,6 +124,38 @@ class WingmanSearchController extends ChangeNotifier {
       status = results.isEmpty && response.results.isNotEmpty
           ? 'filtered'
           : response.status;
+      final grant = response.adContext;
+      if (!append &&
+          adsEnabled &&
+          adsClientFactory != null &&
+          context == SearchContext.normal &&
+          kind == SearchKind.web &&
+          results.isNotEmpty &&
+          grant != null &&
+          grant.expiresAt.isAfter(DateTime.now().toUtc())) {
+        AdSession createSlot(int index) => AdSession(
+          client: adsClientFactory!(),
+          request: {
+            'placement': 'search',
+            'context': 'normal',
+            'contextToken': grant.token,
+            'foreground': true,
+            if (index != 0) 'slotIndex': index,
+          },
+          allowed: () =>
+              permitted() &&
+              context == SearchContext.normal &&
+              kind == SearchKind.web &&
+              grant.expiresAt.isAfter(DateTime.now().toUtc()) &&
+              failure == null,
+        );
+        sponsored = createSlot(0);
+        if (secondSearchAdExperiment &&
+            grant.secondSlotAllowed &&
+            results.length >= 3) {
+          secondSponsored = createSlot(1);
+        }
+      }
     } on SearchFailure catch (error) {
       if (_disposed || generation != _generation) return;
       failure = error;
@@ -134,6 +177,8 @@ class WingmanSearchController extends ChangeNotifier {
   void cancel() {
     _generation++;
     client.cancel();
+    sponsored?.cancel();
+    secondSponsored?.cancel();
     if (loading) {
       loading = false;
       moreAvailable = false;
@@ -150,6 +195,10 @@ class WingmanSearchController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    sponsored?.dispose();
+    secondSponsored?.dispose();
+    sponsored = null;
+    secondSponsored = null;
     _generation++;
     client.cancel();
     query = '';

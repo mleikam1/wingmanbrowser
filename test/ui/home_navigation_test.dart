@@ -88,6 +88,7 @@ void main() {
           );
           expect(find.byType(FocusedSearchScreen), findsOneWidget);
           expect(find.byType(TextField), findsOneWidget);
+          await shared.tap(tester, find.widgetWithText(ChoiceChip, 'Library'));
           await tester.enterText(
             find.byKey(const ValueKey('protected-search')),
             'moon',

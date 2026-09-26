@@ -1,4 +1,5 @@
 import 'dart:convert';
+import '../ads/models.dart' show AdContextGrant;
 import 'package:html/parser.dart' as html;
 import '../domain/search.dart';
 import '../policy/strict_search_policy.dart';
@@ -185,7 +186,9 @@ class SearchResponse {
     required this.results,
     required this.moreAvailable,
     required this.fixture,
+    this.adContext,
   });
+  final AdContextGrant? adContext;
   final SearchKind kind;
   final String status;
   final List<SearchResult> results;
@@ -214,6 +217,7 @@ class SearchResponse {
       results: List.unmodifiable(results),
       moreAvailable: value['moreAvailable'] as bool,
       fixture: value['fixture'] as bool,
+      adContext: AdContextGrant.parse(value['adContext']),
     );
   }
 }
